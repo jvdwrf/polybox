@@ -1,0 +1,12 @@
+[package]
+name = "zestors-protocols"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { workspace = true, features = ["full"] }
+thiserror.workspace = true
+futures.workspace = true
+type-sets.workspace = true
+derive_more.workspace = true
+zestors-codegen.workspace = true
