@@ -7,5 +7,9 @@ edition = "2024"
 tokio = { workspace = true, features = ["full"] }
 type-sets = { workspace = true }
 async-trait = { workspace = true }
-zestors-protocols.workspace = true
 paste.workspace = true
+disjoint_impls.workspace = true
+thiserror.workspace = true
+dynosaur.workspace = true
+zestors-codegen.workspace = true
+futures.workspace = true

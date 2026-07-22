@@ -1,10 +1,7 @@
-use crate::{
-    new_request,
-    oneshot::{Rx, Tx},
-};
+use crate::*;
 use std::marker::PhantomData;
 
-pub trait InvocationSpecifier<I>: sealed::Sealed {
+pub trait MessageSpecifier<I>: sealed::Sealed {
     type Output;
     type Payload;
 
@@ -12,10 +9,18 @@ pub trait InvocationSpecifier<I>: sealed::Sealed {
     fn from_payload(payload: Self::Payload) -> I;
 }
 
+pub trait SimpleSpecifier<I> {
+    type Payload;
+}
+
+impl<T> SimpleSpecifier<T> for FireAndForget {
+    type Payload = T;
+}
+
 pub struct Request<T>(PhantomData<T>);
 pub struct FireAndForget(());
 
-impl<I, R> InvocationSpecifier<I> for Request<R> {
+impl<I, R> MessageSpecifier<I> for Request<R> {
     type Output = Rx<R>;
     type Payload = (I, Tx<R>);
 
@@ -30,7 +35,7 @@ impl<I, R> InvocationSpecifier<I> for Request<R> {
     }
 }
 
-impl<I> InvocationSpecifier<I> for FireAndForget {
+impl<I> MessageSpecifier<I> for FireAndForget {
     type Output = ();
     type Payload = I;
 
@@ -51,38 +56,45 @@ pub(crate) mod sealed {
 
 /// A trait for types that can be invoked, either as a request (with a response),
 /// or as a fire-and-forget cast.
-pub trait Invocation: Send + 'static + Sized {
-    type Kind: InvocationSpecifier<Self>;
+pub trait Message: Send + 'static + Sized {
+    type Kind: MessageSpecifier<Self>;
 }
 
-/// The output type of an [`Invocation`].
-pub type Output<I> = <<I as Invocation>::Kind as InvocationSpecifier<I>>::Output;
+/// The output type of an [`Message`].
+pub type Output<I> = <<I as Message>::Kind as MessageSpecifier<I>>::Output;
 
-/// The payload type of an [`Invocation`].
-pub type Payload<I> = <<I as Invocation>::Kind as InvocationSpecifier<I>>::Payload;
+/// The payload type of an [`Message`].
+pub type Payload<I> = <<I as Message>::Kind as MessageSpecifier<I>>::Payload;
 
 /// A trait for types that can be invoked as a fire-and-forget cast.
 ///
-/// This trait is implemented for all types that implement [`Invocation`] with a [`FireAndForget`] kind.
-pub trait Cast: Invocation<Kind = FireAndForget> {}
-impl<I> Cast for I where I: Invocation<Kind = FireAndForget> {}
+/// This trait is implemented for all types that implement [`Message`] with a [`FireAndForget`] kind.
+pub trait Cast: Message<Kind = FireAndForget> {}
+impl<I> Cast for I where I: Message<Kind = FireAndForget> {}
 
 /// A trait for types that can be invoked as a request (with a response).
 ///
-/// This trait is implemented for all types that implement [`Invocation`] with a [`Request<T>`] kind.
-pub trait Call<T>: Invocation<Kind = Request<T>> {}
-impl<I, T> Call<T> for I where I: Invocation<Kind = Request<T>> {}
+/// This trait is implemented for all types that implement [`Message`] with a [`Request<T>`] kind.
+pub trait Call<T>: Message<Kind = Request<T>> {}
+impl<I, T> Call<T> for I where I: Message<Kind = Request<T>> {}
 
-pub trait InvocationExt: Invocation {
+pub trait MessageExt: Message {
     fn into_payload(self) -> (Payload<Self>, Output<Self>)
     where
         Self: Sized,
     {
-        <Self::Kind as InvocationSpecifier<Self>>::into_payload(self)
+        <Self::Kind as MessageSpecifier<Self>>::into_payload(self)
+    }
+
+    fn from_payload(payload: Payload<Self>) -> Self
+    where
+        Self: Sized,
+    {
+        <Self::Kind as MessageSpecifier<Self>>::from_payload(payload)
     }
 }
 
-impl<I> InvocationExt for I where I: Invocation {}
+impl<I> MessageExt for I where I: Message {}
 
 //------------------------------------------------------------------------------------------------
 //  Message: Default implementations
@@ -93,7 +105,7 @@ macro_rules! implement_message_for_base_types {
         $ty:ty
     ),*) => {
         $(
-            impl Invocation for $ty {
+            impl Message for $ty {
                 type Kind = FireAndForget;
             }
         )*
@@ -112,8 +124,8 @@ macro_rules! implement_message_for_wrappers {
         $(where $_:ty: $where:ident)*
     ,)*) => {
         $(
-            impl<M> Invocation for $wrapper
-                where M: Invocation + Send + 'static + $($where +)*
+            impl<M> Message for $wrapper
+                where M: Send + 'static + $($where +)*
             {
                 type Kind = FireAndForget;
             }
@@ -132,9 +144,9 @@ macro_rules! implement_message_kind_and_message_for_tuples {
         ($($id:ident: $na:ident + $na2:ident),*),
     )*) => {
         $(
-            impl<$($id),*> Invocation for ($($id,)*)
+            impl<$($id),*> Message for ($($id,)*)
             where
-                $($id: Invocation + Send + 'static,)*
+                $($id: Message + Send + 'static,)*
             {
                 type Kind = FireAndForget;
             }

@@ -1,14 +1,14 @@
-use crate::{Payload, invocation::Invocation};
+use crate::*;
 use std::any::Any;
 
-/// Holds a [`InvocationSpecifier::Payload`]
+/// Holds a [`MessageSpecifier::Payload`]
 #[derive(Debug)]
 pub struct AnyPayload(Box<dyn Any + Send>);
 
 impl AnyPayload {
     pub fn new<I>(payload: Payload<I>) -> Self
     where
-        I: Invocation,
+        I: Message,
         Payload<I>: Send + 'static,
     {
         Self(Box::new(payload))
@@ -16,7 +16,7 @@ impl AnyPayload {
 
     pub fn downcast<I>(self) -> Result<Payload<I>, Self>
     where
-        I: Invocation,
+        I: Message,
         Payload<I>: 'static,
     {
         match self.0.downcast() {

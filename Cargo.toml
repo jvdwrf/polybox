@@ -1,9 +1,8 @@
 [workspace]
 resolver = "3"
-members = ["zestors", "zestors-protocols", "zestors-codegen"]
+members = ["zestors", "zestors-codegen"]
 
 [workspace.dependencies]
-zestors-protocols = { path = "zestors-protocols" }
 zestors-codegen = { path = "zestors-codegen" }
 
 
@@ -13,4 +12,6 @@ async-trait = "0.1"
 futures = "0.3"
 thiserror = "2"
 derive_more = { version = "2", features = ["full"] }
-paste = "1.0"
+paste = "1"
+disjoint_impls = "1"
+dynosaur = "0.3"

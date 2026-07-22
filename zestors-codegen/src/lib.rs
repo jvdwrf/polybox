@@ -87,6 +87,18 @@ pub fn derive_interface(input: TokenStream) -> TokenStream {
                             Self::#variant_name(payload)
                         }
                     }
+
+                    impl TryFrom<#enum_name> for #field_type {
+                        type Error = #enum_name;
+
+                        fn try_from(value: #enum_name) -> Result<Self, Self::Error> {
+                            if let #enum_name::#variant_name(payload) = value {
+                                Ok(payload)
+                            } else {
+                                Err(value)
+                            }
+                        }
+                    }
                 });
             }
             _ => panic!("Interface derive only supports variants with a single unnamed field, e.g., A(Payload<T>)"),
@@ -101,7 +113,7 @@ pub fn derive_interface(input: TokenStream) -> TokenStream {
             }
 
             // Could be added to improve performance, but would require unsafe transmute to avoid double downcasting.
-            // fn try_into_payload<I: #base_path::Invocation>(self) -> Result<#base_path::Payload<I>, Self> {
+            // fn try_into_payload<I: #base_path::Message>(self) -> Result<#base_path::Payload<I>, Self> {
             //     let id = std::any::TypeId::of::<I>();
             //     #(#try_into_matches)*
             //     Err(self)
@@ -112,6 +124,10 @@ pub fn derive_interface(input: TokenStream) -> TokenStream {
                     #(#into_matches)*
                 }
             }
+        }
+
+        impl #base_path::Message for #enum_name {
+            type Kind = #base_path::FireAndForget;
         }
 
         impl #base_path::AsSet for #enum_name {
@@ -138,7 +154,7 @@ fn extract_inner_type(ty: &Type) -> Option<&Type> {
     None
 }
 
-#[proc_macro_derive(Invocation, attributes(zestors, invoke))]
+#[proc_macro_derive(Message, attributes(zestors, invoke))]
 pub fn derive_invocation(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
@@ -206,7 +222,7 @@ pub fn derive_invocation(input: TokenStream) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
     let expanded = quote! {
-        impl #impl_generics #base_path::Invocation for #name #ty_generics #where_clause {
+        impl #impl_generics #base_path::Message for #name #ty_generics #where_clause {
             type Kind = #kind_type;
         }
     };

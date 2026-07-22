@@ -11,7 +11,7 @@ enum MyActorProtocol {
 
 struct TestMessage;
 
-impl Invocation for TestMessage {
+impl Message for TestMessage {
     type Kind = Request<String>;
 }
 
