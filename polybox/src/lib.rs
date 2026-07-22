@@ -1,3 +1,7 @@
+//! Message-passing abstractions to make working with channels and actors a more seamless experience.
+//!
+//! See [GitHub](https://github.com/jvdwrf/polybox) for more information.
+
 #[cfg(feature = "flume")]
 mod flume_inbox;
 #[cfg(feature = "flume")]

@@ -1,7 +1,15 @@
 [package]
 name = "polybox-core"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
+repository = "https://github.com/jvdwrf/polybox"
+homepage = "https://github.com/jvdwrf/polybox"
+authors = ["Jasper van der Werf"]
+license = "MIT OR Apache-2.0"
+description = "Message-passing abstractions to make working with channels and actors a more seamless experience"
+keywords = ["actor", "actor-system", "tokio"]
+categories = ["concurrency"]
+readme = "README.md"
 
 [dependencies]
 type-sets = { workspace = true }

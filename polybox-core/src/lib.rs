@@ -1,4 +1,7 @@
-#[doc = include_str!("../../README.md")]
+//! The core library for the `polybox` crate.
+//!
+//! See [GitHub](https://github.com/jvdwrf/polybox) for more information.
+
 mod errors;
 mod inbox;
 mod interface;

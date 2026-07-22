@@ -3,8 +3,8 @@ resolver = "3"
 members = ["polybox", "polybox-codegen", "polybox-core"]
 
 [workspace.dependencies]
-polybox-codegen = { path = "polybox-codegen" }
-polybox-core = { path = "polybox-core" }
+polybox-codegen = { path = "polybox-codegen", version = "0.0.1" }
+polybox-core = { path = "polybox-core", version = "0.0.1" }
 
 
 tokio = "1"

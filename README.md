@@ -9,7 +9,6 @@ Every actor has an `Interface`-enum, that defines which messages can be sent to 
 
 Check out the example below and docs.rs for more details.
 
-
 # Example
 ```rust
 use polybox::{

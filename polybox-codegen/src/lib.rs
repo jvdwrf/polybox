@@ -1,3 +1,7 @@
+//! Macros for the `polybox` crate.
+//!
+//! See [GitHub](https://github.com/jvdwrf/polybox) for more information.
+
 extern crate proc_macro;
 use proc_macro::TokenStream;
 use quote::quote;

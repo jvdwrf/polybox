@@ -1,15 +1,14 @@
 [package]
 name = "polybox-codegen"
-version = "0.1.1"
+version = "0.0.1"
 edition = "2021"
-
+repository = "https://github.com/jvdwrf/polybox"
+homepage = "https://github.com/jvdwrf/polybox"
+authors = ["Jasper van der Werf"]
 license = "MIT OR Apache-2.0"
-description = "A fast and flexible actor-framework for building fault-tolerant Rust applications"
-repository = "https://github.com/Zestors/polybox"
-homepage = "https://github.com/Zestors/polybox"
-keywords = ["actor", "actor-system", "tokio", "pool"]
+description = "Message-passing abstractions to make working with channels and actors a more seamless experience"
+keywords = ["actor", "actor-system", "tokio"]
 categories = ["concurrency"]
-authors = ["jvdwrf"]
 readme = "README.md"
 
 [dependencies]
