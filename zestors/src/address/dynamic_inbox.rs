@@ -2,7 +2,7 @@ use super::*;
 use std::{marker::PhantomData, sync::Arc};
 
 pub struct DynInbox<T> {
-    inbox: Arc<dyn SendsPayload>,
+    inbox: Arc<dyn SendsDynPayload>,
     _t: PhantomData<fn() -> T>,
 }
 
@@ -16,7 +16,7 @@ impl<T> Clone for DynInbox<T> {
 }
 
 impl<T> DynInbox<T> {
-    pub fn new_unchecked(inbox: Arc<dyn SendsPayload>) -> Self {
+    pub fn new_unchecked(inbox: Arc<dyn SendsDynPayload>) -> Self {
         Self {
             inbox,
             _t: PhantomData,
@@ -25,7 +25,7 @@ impl<T> DynInbox<T> {
 
     pub fn new<R>(inbox: R) -> Self
     where
-        R: SendsPayload + Inbox + 'static,
+        R: SendsDynPayload + Inbox + 'static,
         T: SubsetOf<R::Set>,
     {
         Self {
@@ -35,7 +35,7 @@ impl<T> DynInbox<T> {
     }
 }
 
-impl<T> Inbox for DynInbox<T> {
+impl<T: Members> Inbox for DynInbox<T> {
     type Set = T;
 
     fn into_dyn_unchecked<R>(self) -> DynInbox<R> {
@@ -46,26 +46,25 @@ impl<T> Inbox for DynInbox<T> {
 impl<T, R> Sends<T> for DynInbox<R>
 where
     T: Message<Kind: MessageSpecifier<T, Output: Send, Payload: Send>>,
-    R: Contains<T>,
+    R: Members + Contains<T>,
 {
     async fn send(&self, msg: T) -> Result<Output<T>, SendError<T>> {
-        let (payload, output) = T::into_payload(msg);
-        let payload = AnyPayload::new::<T>(payload);
-
-        match self.inbox._send_any_payload_checked(payload).await {
-            Ok(()) => Ok(output),
-            Err(SendCheckedError::Closed(payload)) => {
-                let payload = payload
-                    .downcast::<T>()
-                    .expect("Failed to convert payload back");
-
-                Err(SendError(T::from_payload(payload)))
-            }
-            Err(SendCheckedError::NotAccepted(_payload)) => {
+        self.send_checked(msg).await.map_err(|e| match e {
+            SendCheckedError::Closed(msg) => SendError(msg),
+            SendCheckedError::NotAccepted(_msg) => {
                 panic!(
                     "Payload was not accepted, this should not happen if the type system is used correctly"
                 )
             }
-        }
+        })
+    }
+}
+
+impl<T> SendsDynPayload for DynInbox<T> {
+    fn _send_any_payload_checked(
+        &self,
+        msg: AnyPayload,
+    ) -> BoxFuture<'_, Result<(), SendCheckedError<AnyPayload>>> {
+        self.inbox._send_any_payload_checked(msg)
     }
 }

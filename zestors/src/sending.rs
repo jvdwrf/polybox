@@ -23,3 +23,4 @@ pub trait SendsExt<T: Message>: Sends<T> {
         Ok(self.send_blocking(msg)?.get_blocking()?)
     }
 }
+impl<T: Message, S: Sends<T>> SendsExt<T> for S {}

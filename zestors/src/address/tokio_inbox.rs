@@ -9,6 +9,18 @@ impl<T> TokioInbox<T> {
         let (sender, receiver) = tokio::sync::mpsc::channel(buffer);
         (Self { sender }, receiver)
     }
+
+    pub fn inner(&self) -> &tokio::sync::mpsc::Sender<T> {
+        &self.sender
+    }
+
+    pub fn into_inner(self) -> tokio::sync::mpsc::Sender<T> {
+        self.sender
+    }
+
+    pub fn from_inner(sender: tokio::sync::mpsc::Sender<T>) -> Self {
+        Self { sender }
+    }
 }
 
 impl<T: Interface> Inbox for TokioInbox<T> {
@@ -19,7 +31,7 @@ impl<T: Interface> Inbox for TokioInbox<T> {
     }
 }
 
-impl<T: Interface> SendsPayload for TokioInbox<T> {
+impl<T: Interface> SendsDynPayload for TokioInbox<T> {
     fn _send_any_payload_checked(
         &self,
         msg: AnyPayload,

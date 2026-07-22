@@ -1,7 +1,7 @@
 use crate::*;
 
 #[derive(Message)]
-#[invoke(request = String)]
+#[msg(request = String)]
 #[zestors(crate = "crate")]
 struct MyMessage;
 

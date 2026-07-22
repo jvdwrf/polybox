@@ -154,7 +154,7 @@ fn extract_inner_type(ty: &Type) -> Option<&Type> {
     None
 }
 
-#[proc_macro_derive(Message, attributes(zestors, invoke))]
+#[proc_macro_derive(Message, attributes(zestors, msg))]
 pub fn derive_invocation(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
@@ -193,10 +193,7 @@ pub fn derive_invocation(input: TokenStream) -> TokenStream {
         syn::parse_str("::zestors").unwrap()
     };
 
-    let invoke_attr = &input
-        .attrs
-        .iter()
-        .find(|attr| attr.path().is_ident("invoke"));
+    let invoke_attr = &input.attrs.iter().find(|attr| attr.path().is_ident("msg"));
 
     let kind_type = if let Some(attr) = invoke_attr {
         let mut kind_type = quote!(#base_path::FireAndForget);
