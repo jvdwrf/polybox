@@ -6,23 +6,30 @@ use std::any::Any;
 pub struct AnyPayload(Box<dyn Any + Send>);
 
 impl AnyPayload {
-    pub fn new<I>(payload: Payload<I>) -> Self
+    pub fn new<T>(payload: Payload<T>) -> Self
     where
-        I: Message,
-        Payload<I>: Send + 'static,
+        T: Message,
+        Payload<T>: Send + 'static,
     {
         Self(Box::new(payload))
     }
 
-    pub fn downcast<I>(self) -> Result<Payload<I>, Self>
+    pub fn downcast<T>(self) -> Result<Payload<T>, Self>
     where
-        I: Message,
-        Payload<I>: 'static,
+        T: Message,
+        Payload<T>: 'static,
     {
         match self.0.downcast() {
             Ok(cast) => Ok(*cast),
             Err(boxed) => Err(Self(boxed)),
         }
+    }
+
+    pub fn try_into_interface<T>(self) -> Result<T, Self>
+    where
+        T: Interface,
+    {
+        T::try_from_any_payload(self)
     }
 }
 

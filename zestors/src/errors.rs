@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::RxError;
+
 /// Error returned when trying to send a message, checking at compile-time that
 /// the message is actually accepted by the actor.
 #[derive(Debug, thiserror::Error, Clone, PartialEq, Eq, Hash)]
@@ -36,8 +38,8 @@ pub struct SendError<M>(pub M);
 ///
 /// This error combines failures in sending and receiving.
 #[derive(Debug, thiserror::Error, Clone, Copy, PartialEq, Eq)]
-pub enum RequestError<M, E> {
-    NoReply(E),
+pub enum RequestError<M> {
+    NoReply,
     Closed(M),
 }
 
@@ -93,6 +95,18 @@ impl<T> From<TrySendError<T>> for TrySendCheckedError<T> {
 }
 
 impl<T> From<SendError<T>> for SendCheckedError<T> {
+    fn from(err: SendError<T>) -> Self {
+        Self::Closed(err.0)
+    }
+}
+
+impl<T> From<RxError> for RequestError<T> {
+    fn from(RxError: RxError) -> Self {
+        Self::NoReply
+    }
+}
+
+impl<T> From<SendError<T>> for RequestError<T> {
     fn from(err: SendError<T>) -> Self {
         Self::Closed(err.0)
     }

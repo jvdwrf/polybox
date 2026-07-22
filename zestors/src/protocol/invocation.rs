@@ -2,8 +2,8 @@ use crate::*;
 use std::marker::PhantomData;
 
 pub trait MessageSpecifier<I>: sealed::Sealed {
-    type Output;
-    type Payload;
+    type Output: MessageReply + Send;
+    type Payload: Send + 'static;
 
     fn into_payload(msg: I) -> (Self::Payload, Self::Output);
     fn from_payload(payload: Self::Payload) -> I;
@@ -20,7 +20,7 @@ impl<T> SimpleSpecifier<T> for FireAndForget {
 pub struct Request<T>(PhantomData<T>);
 pub struct FireAndForget(());
 
-impl<I, R> MessageSpecifier<I> for Request<R> {
+impl<I: Send + 'static, R: Send + 'static> MessageSpecifier<I> for Request<R> {
     type Output = Rx<R>;
     type Payload = (I, Tx<R>);
 
@@ -35,7 +35,7 @@ impl<I, R> MessageSpecifier<I> for Request<R> {
     }
 }
 
-impl<I> MessageSpecifier<I> for FireAndForget {
+impl<I: Send + 'static> MessageSpecifier<I> for FireAndForget {
     type Output = ();
     type Payload = I;
 
@@ -45,6 +45,35 @@ impl<I> MessageSpecifier<I> for FireAndForget {
 
     fn from_payload(payload: Self::Payload) -> I {
         payload
+    }
+}
+
+pub trait MessageReply: Sized {
+    type Reply;
+
+    fn get(self) -> impl Future<Output = Result<Self::Reply, RxError>> + Send;
+
+    fn get_blocking(self) -> Result<Self::Reply, RxError> {
+        futures::executor::block_on(self.get())
+    }
+}
+
+impl MessageReply for () {
+    type Reply = ();
+
+    async fn get(self) -> Result<Self::Reply, RxError> {
+        Ok(())
+    }
+}
+
+impl<T> MessageReply for Rx<T>
+where
+    T: Send + 'static,
+{
+    type Reply = T;
+
+    async fn get(self) -> Result<Self::Reply, RxError> {
+        self.await
     }
 }
 
@@ -62,6 +91,9 @@ pub trait Message: Send + 'static + Sized {
 
 /// The output type of an [`Message`].
 pub type Output<I> = <<I as Message>::Kind as MessageSpecifier<I>>::Output;
+
+/// The request output type of an [`Message`].
+pub type Reply<I> = <Output<I> as MessageReply>::Reply;
 
 /// The payload type of an [`Message`].
 pub type Payload<I> = <<I as Message>::Kind as MessageSpecifier<I>>::Payload;
