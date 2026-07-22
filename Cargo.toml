@@ -13,6 +13,4 @@ async-trait = "0.1"
 futures = "0.3"
 thiserror = "2"
 derive_more = { version = "2", features = ["full"] }
-paste = "1"
-disjoint_impls = "1"
-dynosaur = "0.3"
+flume = "0.12"

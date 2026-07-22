@@ -2,31 +2,31 @@ use super::*;
 use futures::future::BoxFuture;
 use std::sync::Arc;
 
-/// A wrapper around a [`tokio::sync::mpsc::Sender`] that acts as a [`PolyBox`].
-pub struct TokioInbox<T> {
-    sender: tokio::sync::mpsc::Sender<T>,
+/// A wrapper around a [`flume::Sender`] that acts as a [`PolyBox`].
+pub struct FlumeInbox<T> {
+    sender: flume::Sender<T>,
 }
 
-impl<T> TokioInbox<T> {
-    pub fn new(buffer: usize) -> (Self, tokio::sync::mpsc::Receiver<T>) {
-        let (sender, receiver) = tokio::sync::mpsc::channel(buffer);
+impl<T> FlumeInbox<T> {
+    pub fn new(buffer: usize) -> (Self, flume::Receiver<T>) {
+        let (sender, receiver) = flume::bounded(buffer);
         (Self { sender }, receiver)
     }
 
-    pub fn inner(&self) -> &tokio::sync::mpsc::Sender<T> {
+    pub fn inner(&self) -> &flume::Sender<T> {
         &self.sender
     }
 
-    pub fn into_inner(self) -> tokio::sync::mpsc::Sender<T> {
+    pub fn into_inner(self) -> flume::Sender<T> {
         self.sender
     }
 
-    pub fn from_inner(sender: tokio::sync::mpsc::Sender<T>) -> Self {
+    pub fn from_inner(sender: flume::Sender<T>) -> Self {
         Self { sender }
     }
 }
 
-impl<T: Interface> PolyBox for TokioInbox<T> {
+impl<T: Interface> PolyBox for FlumeInbox<T> {
     type Set = T::Set;
 
     fn into_dyn_unchecked<R>(self) -> DynInbox<R> {
@@ -34,7 +34,7 @@ impl<T: Interface> PolyBox for TokioInbox<T> {
     }
 }
 
-impl<T: Interface> DynPolyBox for TokioInbox<T> {
+impl<T: Interface> DynPolyBox for FlumeInbox<T> {
     fn _send_boxed_payload_checked(
         &self,
         msg: BoxedPayload,
@@ -51,7 +51,7 @@ impl<T: Interface> DynPolyBox for TokioInbox<T> {
     }
 }
 
-impl<T, R> Sends<T> for TokioInbox<R>
+impl<T, R> Sends<T> for FlumeInbox<R>
 where
     T: Message,
     R: TryIntoPayload<T> + FromPayload<T> + Send,
@@ -60,7 +60,7 @@ where
         let (payload, output) = T::build_payload(msg);
         let interface = R::from_payload(payload);
 
-        match self.sender.send(interface).await {
+        match self.sender.send_async(interface).await {
             Ok(()) => Ok(output),
             Err(e) => Err(SendError(T::destroy_payload(
                 e.0.try_into_payload()
@@ -71,7 +71,7 @@ where
     }
 }
 
-impl<T> Clone for TokioInbox<T> {
+impl<T> Clone for FlumeInbox<T> {
     fn clone(&self) -> Self {
         Self {
             sender: self.sender.clone(),

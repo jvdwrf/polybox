@@ -1,5 +1,6 @@
 use polybox::{
-    DynInbox, Interface, Message, Payload, PolyboxExt as _, Sends, SendsExt as _, Set, TokioInbox,
+    DynInbox, FlumeInbox, Interface, Message, Payload, PolyboxExt as _, Sends, SendsExt as _, Set,
+    TokioInbox,
 };
 
 // The following are messages defined for the NumberAdder and Printer actors.
@@ -29,7 +30,7 @@ pub struct AddNumber(u32);
 pub struct GetNumber;
 
 #[derive(Message, Debug)]
-pub struct PrintMessage(&'static str);
+pub struct Print(&'static str);
 
 /// A simple actor that adds numbers and can report its total.
 #[derive(Interface, Debug)]
@@ -74,15 +75,15 @@ impl NumberAdder {
 pub enum Printer {
     Health(Payload<GetHealth>),
     Exit(Payload<Exit>),
-    Print(Payload<PrintMessage>),
+    Print(Payload<Print>),
 }
 
 impl Printer {
-    fn spawn() -> (TokioInbox<Printer>, tokio::task::JoinHandle<()>) {
-        let (inbox, mut receiver) = TokioInbox::<Printer>::new(1000);
+    fn spawn() -> (FlumeInbox<Printer>, tokio::task::JoinHandle<()>) {
+        let (inbox, receiver) = FlumeInbox::<Printer>::new(1000);
 
         let handle = tokio::spawn(async move {
-            while let Some(msg) = receiver.recv().await {
+            while let Ok(msg) = receiver.recv_async().await {
                 match msg {
                     Printer::Health((GetHealth, tx)) => {
                         let _ = tx.send(Health::Positive);
@@ -103,13 +104,14 @@ impl Printer {
 
 #[tokio::test]
 pub async fn main() {
-    let (adder_inbox, adder_handle) = NumberAdder::spawn();
-    let (printer_inbox, printer_handle) = Printer::spawn();
+    let (adder, adder_handle) = NumberAdder::spawn();
+    let (printer, printer_handle) = Printer::spawn();
 
-    // Convert the individual inboxes into their common subset. (compile-time checked)
+    // Convert the individual inboxes into their common subset.
+    // This even converts a FlumeInbox and TokioInbox into a common type.
     let all_inboxes: Vec<DynInbox<Set![Exit, GetHealth]>> = vec![
-        adder_inbox.clone().into_dyn_subset(),
-        printer_inbox.clone().into_dyn_subset(),
+        adder.clone().into_dyn_subset(),
+        printer.clone().into_dyn_subset(),
     ];
 
     // Start a background task to monitor the health of all inboxes.
@@ -121,11 +123,11 @@ pub async fn main() {
     });
 
     // Send some messages to the actors and check their responses.
-    adder_inbox.send(AddNumber(10)).await.unwrap();
-    adder_inbox.send(AddNumber(20)).await.unwrap();
-    let number = adder_inbox.request(GetNumber).await.unwrap();
+    adder.send(AddNumber(10)).await.unwrap();
+    adder.send(AddNumber(20)).await.unwrap();
+    let number = adder.request(GetNumber).await.unwrap();
     assert_eq!(number, 30);
-    printer_inbox.send(PrintMessage("Hello!")).await.unwrap();
+    printer.send(Print("Hello!")).await.unwrap();
 
     // Wait for a moment to let the actors process the messages before exiting.
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;

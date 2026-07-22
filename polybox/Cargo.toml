@@ -4,13 +4,23 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-tokio = { workspace = true, features = ["full"] }
 type-sets = { workspace = true }
-async-trait = { workspace = true }
-paste.workspace = true
-disjoint_impls.workspace = true
 thiserror.workspace = true
-dynosaur.workspace = true
 polybox-codegen.workspace = true
 polybox-core.workspace = true
 futures.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+flume = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+
+[features]
+default = ["tokio"]
+flume = ["dep:flume"]
+tokio = []
+_ra = ["tokio", "flume"]
+
+
+[package.metadata.docs.rs]
+features = ["_ra"]
