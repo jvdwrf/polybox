@@ -15,8 +15,9 @@ Check out the example below and docs.rs for more details.
 # Example
 ```rust
 use polybox::{
-    DynInbox, FlumeInbox, Interface, Message, Payload, PolyboxExt as _, Sends, SendsExt as _, Set,
-    TokioInbox,
+    DynInbox, Interface, Message, Payload, PolyboxExt as _, Sends, SendsExt as _,
+    inboxes::{FlumeInbox, TokioInbox},
+    type_sets::Set,
 };
 
 // The following are messages defined for the NumberAdder and Printer actors.
@@ -179,3 +180,4 @@ pub async fn send_exit_to(inboxes: &[impl Sends<Exit>]) {
     }
 }
 ```
+(If the example is not compiling, look [here](polybox/tests/example.rs))
