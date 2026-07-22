@@ -3,7 +3,9 @@ use futures::future::BoxFuture;
 use std::{any::TypeId, future::Future, marker::PhantomData, sync::Arc};
 use type_sets::SubsetOf;
 
+/// A trait that allows for conversions to [`DynInbox`].
 pub trait PolyBox: DynPolyBox + Clone {
+    /// The set of message types that this inbox can accept.
     type Set: Members;
 
     /// Converts into a dynamic inbox without checking if the types are compatible.
@@ -16,6 +18,7 @@ pub trait PolyBox: DynPolyBox + Clone {
     fn into_dyn_unchecked<T>(self) -> DynInbox<T>;
 }
 
+/// A trait that extends [`PolyBox`] with some helper methods.
 pub trait PolyboxExt: PolyBox {
     /// Converts into a dynamic inbox with a subset of the original types.
     ///
@@ -41,11 +44,13 @@ pub trait PolyboxExt: PolyBox {
         }
     }
 
+    /// Checks if the inbox accepts a message of the given type.
     #[must_use]
     fn accepts_msg(&self, id: TypeId) -> bool {
         <Self::Set as Members>::members().contains(&id)
     }
 
+    /// Checks if the inbox accepts messages of the given types.
     #[must_use]
     fn accepts_msgs(&self, ids: &[TypeId]) -> bool {
         ids.iter()
@@ -81,6 +86,7 @@ pub trait PolyboxExt: PolyBox {
         }
     }
 
+    /// Same as [`Self::send_checked`], but blocks the current thread until the message is sent.
     fn send_checked_blocking<T: Message>(&self, msg: T) -> Result<Output<T>, SendCheckedError<T>> {
         let (payload, output) = T::build_payload(msg);
         let payload = BoxedPayload::new::<T>(payload);
@@ -106,12 +112,15 @@ pub trait PolyboxExt: PolyBox {
 }
 impl<T: PolyBox> PolyboxExt for T {}
 
+/// Object-safe sub-trait of [`PolyBox`], allowing for dynamic dispatch.
 pub trait DynPolyBox: Send + Sync {
+    /// Send a boxed payload.
     fn _send_boxed_payload_checked(
         &self,
         msg: BoxedPayload,
     ) -> BoxFuture<'_, Result<(), SendCheckedError<BoxedPayload>>>;
 
+    /// Same as [`Self::_send_boxed_payload_checked`], but blocks the current thread until the message is sent.
     fn _send_boxed_payload_checked_blocking(
         &self,
         msg: BoxedPayload,
@@ -120,6 +129,13 @@ pub trait DynPolyBox: Send + Sync {
     }
 }
 
+/// A dynamic inbox that can accept messages of any type, as long as they are part of the specified set.
+///
+/// An inbox is typed as: `DynInbox<Set![Msg1, Msg2, ...]>`.
+///
+/// Conversions between inboxes:
+/// - Into more specific subsets -> [`PolyboxExt::into_dyn_subset`].
+/// - Into more general supersets -> [`PolyboxExt::into_dyn_checked`] or [`PolyBox::into_dyn_unchecked`].
 pub struct DynInbox<T> {
     inbox: Arc<dyn DynPolyBox>,
     _t: PhantomData<fn() -> T>,
