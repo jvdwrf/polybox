@@ -3,17 +3,17 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Expr, Fields, Lit, Type};
 
-#[proc_macro_derive(Interface, attributes(zestors))]
+#[proc_macro_derive(Interface, attributes(polybox))]
 pub fn derive_interface(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let enum_name = &input.ident;
 
-    // 1. Determine the base path (default: ::zestors)
-    let mut base_path: syn::Path = syn::parse_str("::zestors").unwrap();
+    // 1. Determine the base path (default: ::polybox)
+    let mut base_path: syn::Path = syn::parse_str("::polybox").unwrap();
 
     for attr in &input.attrs {
-        if attr.path().is_ident("zestors") {
-            // Correct way to parse nested meta (e.g. #[zestors(crate = "...")] ) in syn 2.0
+        if attr.path().is_ident("polybox") {
+            // Correct way to parse nested meta (e.g. #[polybox(crate = "...")] ) in syn 2.0
             let _ = attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("crate") {
                     let value = meta.value()?;
@@ -78,24 +78,22 @@ pub fn derive_interface(input: TokenStream) -> TokenStream {
                 });
 
                 into_matches.push(quote! {
-                    Self::#variant_name(payload) => #base_path::AnyPayload::new::<#inner_type>(payload),
+                    Self::#variant_name(payload) => #base_path::BoxedPayload::new::<#inner_type>(payload),
                 });
 
                 from_impls.push(quote! {
-                    impl From<#field_type> for #enum_name {
-                        fn from(payload: #field_type) -> Self {
+                    impl #base_path::FromPayload<#inner_type> for #enum_name {
+                        fn from_payload(payload: #base_path::Payload<#inner_type>) -> Self {
                             Self::#variant_name(payload)
                         }
                     }
 
-                    impl TryFrom<#enum_name> for #field_type {
-                        type Error = #enum_name;
-
-                        fn try_from(value: #enum_name) -> Result<Self, Self::Error> {
-                            if let #enum_name::#variant_name(payload) = value {
+                    impl #base_path::TryIntoPayload<#inner_type> for #enum_name {
+                        fn try_into_payload(self) -> Result<#base_path::Payload<#inner_type>, Self> {
+                            if let #enum_name::#variant_name(payload) = self {
                                 Ok(payload)
                             } else {
-                                Err(value)
+                                Err(self)
                             }
                         }
                     }
@@ -107,7 +105,7 @@ pub fn derive_interface(input: TokenStream) -> TokenStream {
 
     let expanded = quote! {
         impl #base_path::Interface for #enum_name {
-            fn try_from_any_payload(payload: #base_path::AnyPayload) -> Result<Self, #base_path::AnyPayload> {
+            fn try_from_boxed_payload(payload: #base_path::BoxedPayload) -> Result<Self, #base_path::BoxedPayload> {
                 #(#try_from_matches)*
                 Err(payload)
             }
@@ -119,7 +117,7 @@ pub fn derive_interface(input: TokenStream) -> TokenStream {
             //     Err(self)
             // }
 
-            fn into_any_payload(self) -> #base_path::AnyPayload {
+            fn into_boxed_payload(self) -> #base_path::BoxedPayload {
                 match self {
                     #(#into_matches)*
                 }
@@ -132,6 +130,18 @@ pub fn derive_interface(input: TokenStream) -> TokenStream {
 
         impl #base_path::AsSet for #enum_name {
             type Set = #base_path::Set![#(#inner_types),*];
+        }
+
+        impl #base_path::TryIntoPayload<#enum_name> for #enum_name {
+            fn try_into_payload(self) -> Result<#base_path::Payload<#enum_name>, Self> {
+                Ok(self)
+            }
+        }
+
+        impl #base_path::FromPayload<#enum_name> for #enum_name {
+            fn from_payload(payload: #base_path::Payload<#enum_name>) -> Self {
+                payload
+            }
         }
 
         #(#from_impls)*
@@ -154,24 +164,24 @@ fn extract_inner_type(ty: &Type) -> Option<&Type> {
     None
 }
 
-#[proc_macro_derive(Message, attributes(zestors, msg))]
+#[proc_macro_derive(Message, attributes(polybox, msg))]
 pub fn derive_invocation(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
 
-    // // 1. Determine the base path (default: ::zestors)
-    // let mut base_path: syn::Path = syn::parse_str("::zestors").unwrap();
+    // // 1. Determine the base path (default: ::polybox)
+    // let mut base_path: syn::Path = syn::parse_str("::polybox").unwrap();
 
-    // // 2. Determine the default Kind (default: ::zestors::FireAndForget)
-    // let mut kind_type = quote!(::zestors::FireAndForget);
+    // // 2. Determine the default Kind (default: ::polybox::FireAndForget)
+    // let mut kind_type = quote!(::polybox::FireAndForget);
 
-    let zestors_attr = &input
+    let polybox_attr = &input
         .attrs
         .iter()
-        .find(|attr| attr.path().is_ident("zestors"));
+        .find(|attr| attr.path().is_ident("polybox"));
 
-    let base_path = if let Some(attr) = zestors_attr {
-        let mut base_path: syn::Path = syn::parse_str("::zestors").unwrap();
+    let base_path = if let Some(attr) = polybox_attr {
+        let mut base_path: syn::Path = syn::parse_str("::polybox").unwrap();
         let _ = attr.parse_nested_meta(|meta| {
             if meta.path.is_ident("crate") {
                 let value = meta.value()?;
@@ -190,7 +200,7 @@ pub fn derive_invocation(input: TokenStream) -> TokenStream {
         });
         base_path
     } else {
-        syn::parse_str("::zestors").unwrap()
+        syn::parse_str("::polybox").unwrap()
     };
 
     let invoke_attr = &input.attrs.iter().find(|attr| attr.path().is_ident("msg"));

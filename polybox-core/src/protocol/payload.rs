@@ -3,9 +3,9 @@ use std::any::Any;
 
 /// Holds a [`MessageSpecifier::Payload`]
 #[derive(Debug)]
-pub struct AnyPayload(Box<dyn Any + Send>);
+pub struct BoxedPayload(Box<dyn Any + Send>);
 
-impl AnyPayload {
+impl BoxedPayload {
     pub fn new<T>(payload: Payload<T>) -> Self
     where
         T: Message,
@@ -29,7 +29,7 @@ impl AnyPayload {
     where
         T: Interface,
     {
-        T::try_from_any_payload(self)
+        T::try_from_boxed_payload(self)
     }
 }
 

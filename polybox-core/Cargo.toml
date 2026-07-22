@@ -1,0 +1,15 @@
+[package]
+name = "polybox-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { workspace = true, features = ["full"] }
+type-sets = { workspace = true }
+async-trait = { workspace = true }
+paste.workspace = true
+disjoint_impls.workspace = true
+thiserror.workspace = true
+dynosaur.workspace = true
+polybox-codegen.workspace = true
+futures.workspace = true

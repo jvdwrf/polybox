@@ -1,9 +1,10 @@
 [workspace]
 resolver = "3"
-members = ["zestors", "zestors-codegen"]
+members = ["polybox", "polybox-codegen", "polybox-core"]
 
 [workspace.dependencies]
-zestors-codegen = { path = "zestors-codegen" }
+polybox-codegen = { path = "polybox-codegen" }
+polybox-core = { path = "polybox-core" }
 
 
 tokio = "1"

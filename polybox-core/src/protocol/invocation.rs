@@ -1,12 +1,12 @@
 use crate::*;
 use std::marker::PhantomData;
 
-pub trait MessageSpecifier<I>: sealed::Sealed {
+pub trait MessageSpecifier<T>: sealed::Sealed {
     type Output: MessageReply + Send;
     type Payload: Send + 'static;
 
-    fn into_payload(msg: I) -> (Self::Payload, Self::Output);
-    fn from_payload(payload: Self::Payload) -> I;
+    fn into_payload(msg: T) -> (Self::Payload, Self::Output);
+    fn from_payload(payload: Self::Payload) -> T;
 }
 
 pub trait SimpleSpecifier<I> {
@@ -111,14 +111,14 @@ pub trait Call<T>: Message<Kind = Request<T>> {}
 impl<I, T> Call<T> for I where I: Message<Kind = Request<T>> {}
 
 pub trait MessageExt: Message {
-    fn into_payload(self) -> (Payload<Self>, Output<Self>)
+    fn build_payload(self) -> (Payload<Self>, Output<Self>)
     where
         Self: Sized,
     {
         <Self::Kind as MessageSpecifier<Self>>::into_payload(self)
     }
 
-    fn from_payload(payload: Payload<Self>) -> Self
+    fn destroy_payload(payload: Payload<Self>) -> Self
     where
         Self: Sized,
     {

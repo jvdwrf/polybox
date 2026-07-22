@@ -1,9 +1,9 @@
-use zestors_codegen::Interface;
+use polybox_codegen::Interface;
 
 use super::*;
 
 #[derive(Interface)]
-#[zestors(crate = "crate")]
+#[polybox(crate = "crate")]
 enum MyActorProtocol {
     A(Payload<u32>),
     B(Payload<String>),

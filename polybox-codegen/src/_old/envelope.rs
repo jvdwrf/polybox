@@ -22,7 +22,9 @@ pub fn derive_envelope(item: TokenStream) -> Result<TokenStream, Error> {
         .find(|attr| attr.path.is_ident("envelope"))
     {
         Some(attr) => {
-            let Meta::List(meta_list) = attr.parse_meta()? else { panic!() };
+            let Meta::List(meta_list) = attr.parse_meta()? else {
+                panic!()
+            };
             let mut iter = meta_list.nested.into_iter();
             let Some(trait_name) = iter.next() else {
                 Err(Error::new_spanned(&meta_list.path, "Expected trait name"))?
@@ -47,14 +49,14 @@ pub fn derive_envelope(item: TokenStream) -> Result<TokenStream, Error> {
     };
     let trait_doc = format!(
         "
-        Automatically generated trait for creating envelopes of the 
+        Automatically generated trait for creating envelopes of the
         message[`{}`].
         ",
         item.ident
     );
     let method_doc = format!(
         "
-        Creates an [`Envelope`](::zestors::messaging::Envelope) for the 
+        Creates an [`Envelope`](::polybox::messaging::Envelope) for the
         message[`{}`].
         ",
         item.ident
@@ -65,16 +67,16 @@ pub fn derive_envelope(item: TokenStream) -> Result<TokenStream, Error> {
 
     Ok(quote! {
         #[doc = #trait_doc]
-        #vis trait #trait_name: ::zestors::actor_reference::ActorRef
+        #vis trait #trait_name: ::polybox::actor_reference::ActorRef
         where
-            Self::ActorType: ::zestors::messaging::Accepts<#ident>
+            Self::ActorType: ::polybox::messaging::Accepts<#ident>
         {
             #[doc = #method_doc]
             fn #method_name(
                 &self,
                 #field_params
-            ) -> ::zestors::messaging::Envelope<'_, Self::ActorType, #ident> {
-                <Self as ::zestors::actor_reference::ActorRefExt>::envelope(self, #ident {
+            ) -> ::polybox::messaging::Envelope<'_, Self::ActorType, #ident> {
+                <Self as ::polybox::actor_reference::ActorRefExt>::envelope(self, #ident {
                     #field_idents
                 })
             }
@@ -82,8 +84,8 @@ pub fn derive_envelope(item: TokenStream) -> Result<TokenStream, Error> {
 
         impl<T> #trait_name for T
         where
-            T: ::zestors::actor_reference::ActorRef,
-            T::ActorType: ::zestors::messaging::Accepts<#ident>
+            T: ::polybox::actor_reference::ActorRef,
+            T::ActorType: ::polybox::messaging::Accepts<#ident>
         { }
     })
 }

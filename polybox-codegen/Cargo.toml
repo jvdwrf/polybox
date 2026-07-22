@@ -1,12 +1,12 @@
 [package]
-name = "zestors-codegen"
+name = "polybox-codegen"
 version = "0.1.1"
 edition = "2021"
 
 license = "MIT OR Apache-2.0"
 description = "A fast and flexible actor-framework for building fault-tolerant Rust applications"
-repository = "https://github.com/Zestors/zestors"
-homepage = "https://github.com/Zestors/zestors"
+repository = "https://github.com/Zestors/polybox"
+homepage = "https://github.com/Zestors/polybox"
 keywords = ["actor", "actor-system", "tokio", "pool"]
 categories = ["concurrency"]
 authors = ["jvdwrf"]

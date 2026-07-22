@@ -1,5 +1,5 @@
 [package]
-name = "zestors"
+name = "polybox"
 version = "0.1.0"
 edition = "2024"
 
@@ -11,5 +11,6 @@ paste.workspace = true
 disjoint_impls.workspace = true
 thiserror.workspace = true
 dynosaur.workspace = true
-zestors-codegen.workspace = true
+polybox-codegen.workspace = true
+polybox-core.workspace = true
 futures.workspace = true

@@ -2,7 +2,7 @@ use super::*;
 use std::{marker::PhantomData, sync::Arc};
 
 pub struct DynInbox<T> {
-    inbox: Arc<dyn SendsDynPayload>,
+    inbox: Arc<dyn DynPolyBox>,
     _t: PhantomData<fn() -> T>,
 }
 
@@ -16,7 +16,7 @@ impl<T> Clone for DynInbox<T> {
 }
 
 impl<T> DynInbox<T> {
-    pub fn new_unchecked(inbox: Arc<dyn SendsDynPayload>) -> Self {
+    pub fn new_unchecked(inbox: Arc<dyn DynPolyBox>) -> Self {
         Self {
             inbox,
             _t: PhantomData,
@@ -25,7 +25,7 @@ impl<T> DynInbox<T> {
 
     pub fn new<R>(inbox: R) -> Self
     where
-        R: SendsDynPayload + Inbox + 'static,
+        R: DynPolyBox + PolyBox + 'static,
         T: SubsetOf<R::Set>,
     {
         Self {
@@ -35,7 +35,7 @@ impl<T> DynInbox<T> {
     }
 }
 
-impl<T: Members> Inbox for DynInbox<T> {
+impl<T: Members> PolyBox for DynInbox<T> {
     type Set = T;
 
     fn into_dyn_unchecked<R>(self) -> DynInbox<R> {
@@ -60,11 +60,11 @@ where
     }
 }
 
-impl<T> SendsDynPayload for DynInbox<T> {
-    fn _send_any_payload_checked(
+impl<T> DynPolyBox for DynInbox<T> {
+    fn _send_boxed_payload_checked(
         &self,
-        msg: AnyPayload,
-    ) -> BoxFuture<'_, Result<(), SendCheckedError<AnyPayload>>> {
-        self.inbox._send_any_payload_checked(msg)
+        msg: BoxedPayload,
+    ) -> BoxFuture<'_, Result<(), SendCheckedError<BoxedPayload>>> {
+        self.inbox._send_boxed_payload_checked(msg)
     }
 }

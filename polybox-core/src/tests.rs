@@ -2,11 +2,11 @@ use crate::*;
 
 #[derive(Message)]
 #[msg(request = String)]
-#[zestors(crate = "crate")]
+#[polybox(crate = "crate")]
 struct MyMessage;
 
 #[derive(Interface)]
-#[zestors(crate = "crate")]
+#[polybox(crate = "crate")]
 enum MyActorProtocol {
     A(Payload<u32>),
     B(Payload<u64>),

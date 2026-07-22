@@ -1,3 +1,7 @@
+use std::sync::Arc;
+
+use futures::future::BoxFuture;
+
 use super::*;
 
 pub struct TokioInbox<T> {
@@ -23,7 +27,7 @@ impl<T> TokioInbox<T> {
     }
 }
 
-impl<T: Interface> Inbox for TokioInbox<T> {
+impl<T: Interface> PolyBox for TokioInbox<T> {
     type Set = T::Set;
 
     fn into_dyn_unchecked<R>(self) -> DynInbox<R> {
@@ -31,18 +35,18 @@ impl<T: Interface> Inbox for TokioInbox<T> {
     }
 }
 
-impl<T: Interface> SendsDynPayload for TokioInbox<T> {
-    fn _send_any_payload_checked(
+impl<T: Interface> DynPolyBox for TokioInbox<T> {
+    fn _send_boxed_payload_checked(
         &self,
-        msg: AnyPayload,
-    ) -> BoxFuture<'_, Result<(), SendCheckedError<AnyPayload>>> {
+        msg: BoxedPayload,
+    ) -> BoxFuture<'_, Result<(), SendCheckedError<BoxedPayload>>> {
         Box::pin(async move {
             let payload = msg
                 .try_into_interface::<T>()
                 .map_err(|payload| SendCheckedError::NotAccepted(payload))?;
 
             self.send(payload).await.map_err(|SendError(payload)| {
-                SendCheckedError::Closed(T::into_any_payload(payload))
+                SendCheckedError::Closed(T::into_boxed_payload(payload))
             })
         })
     }
@@ -51,17 +55,16 @@ impl<T: Interface> SendsDynPayload for TokioInbox<T> {
 impl<T, R> Sends<T> for TokioInbox<R>
 where
     T: Message,
-    Payload<T>: Into<R>,
-    R: TryInto<Payload<T>> + Send,
+    R: TryIntoPayload<T> + FromPayload<T> + Send,
 {
     async fn send(&self, msg: T) -> Result<Output<T>, SendError<T>> {
-        let (payload, output) = T::into_payload(msg);
-        let payload = payload.into();
+        let (payload, output) = T::build_payload(msg);
+        let interface = R::from_payload(payload);
 
-        match self.sender.send(payload).await {
+        match self.sender.send(interface).await {
             Ok(()) => Ok(output),
-            Err(e) => Err(SendError(T::from_payload(
-                e.0.try_into()
+            Err(e) => Err(SendError(T::destroy_payload(
+                e.0.try_into_payload()
                     .map_err(|_| ())
                     .expect("Failed to convert payload back"),
             ))),
