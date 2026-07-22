@@ -208,7 +208,7 @@ pub fn derive_invocation(input: TokenStream) -> TokenStream {
     let kind_type = if let Some(attr) = invoke_attr {
         let mut kind_type = quote!(#base_path::FireAndForget);
         let _ = attr.parse_nested_meta(|meta| {
-            if meta.path.is_ident("request") {
+            if meta.path.is_ident("reply") {
                 let value = meta.value()?;
                 if let Ok(parsed_type) = value.parse::<Type>() {
                     kind_type = quote! {
@@ -216,7 +216,7 @@ pub fn derive_invocation(input: TokenStream) -> TokenStream {
                     }
                 }
             } else {
-                panic!("Only `request` is expected")
+                panic!("Only `reply` is expected")
             }
             Ok(())
         });

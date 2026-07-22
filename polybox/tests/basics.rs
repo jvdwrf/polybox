@@ -5,7 +5,7 @@ use polybox::{
 };
 
 #[derive(Message, Debug)]
-#[msg(request = i32)]
+#[msg(reply = i32)]
 pub struct MyMessage;
 
 #[derive(Interface, Debug)]
@@ -57,7 +57,7 @@ async fn creating_address() {
     address.send_checked(30u32).await.unwrap();
 
     assert!(address.accepts_msg(TypeId::of::<u64>()));
-    accepting(address.clone()).await;
+    send_u32(address.clone()).await;
     // address.send("hello").await.unwrap();
 
     drop(address);
@@ -66,7 +66,7 @@ async fn creating_address() {
     handle.await.unwrap();
 }
 
-async fn accepting(a: impl Sends<u32>) {
+async fn send_u32(a: impl Sends<u32>) {
     a.send(50u32).await.unwrap();
     // a.into_subset::<Set![u32]>();
 }
