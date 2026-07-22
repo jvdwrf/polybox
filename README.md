@@ -1,4 +1,7 @@
 # PolyBox
+[![crates.io](https://img.shields.io/crates/v/polybox.svg)](https://crates.io/crates/polybox)
+[![Documentation](https://docs.rs/polybox/badge.svg)](https://docs.rs/polybox)
+
 `PolyBox` provides message-passing abstractions to make working with channels and actors a more seamless experience.
 
 The fundamental idea is that a `Sender<T>` should not have to care about the actor it is sending to. The only thing that it should care about is the messages that can be sent over the channel. A sender should not care whether it is talking to `ProcessA` or `ProcessB`, only that they both accept the same `Message`. This is exactly what a `PolyBox` provides.
