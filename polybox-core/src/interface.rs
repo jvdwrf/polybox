@@ -2,6 +2,10 @@ use super::*;
 use std::any::TypeId;
 use type_sets::Members;
 
+/// An interface defines the set of messages that can be sent to a given actor.
+/// This is usually derived on an enum using the `#[derive(Interface)]` macro.
+///
+/// It defines conversion methods to and from a boxed payload, which is used for dynamic dispatch of messages.
 pub trait Interface:
     Message<Kind = FireAndForget>
     + TryIntoPayload<Self>

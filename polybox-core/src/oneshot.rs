@@ -41,21 +41,6 @@ impl<M> Tx<M> {
     }
 }
 
-// impl<M, R> MessageDerive<M> for Tx<R> {
-//     type Payload = (M, Rx<R>);
-//     type Returned = Tx<R>;
-
-//     fn create(msg: M) -> ((M, Rx<R>), Tx<R>) {
-//         let (tx, rx) = new_request();
-//         ((msg, rx), tx)
-//     }
-
-//     fn cancel(sent: (M, Rx<R>), _returned: Tx<R>) -> M {
-//         sent.0
-//     }
-// }
-
-//------------------------------------------------------------------------------------------------
 //  Rx
 //------------------------------------------------------------------------------------------------
 
@@ -81,20 +66,6 @@ impl<M> Rx<M> {
         self.0.close()
     }
 }
-
-// impl<M, R> MessageDerive<M> for Rx<R> {
-//     type Payload = (M, Tx<R>);
-//     type Returned = Rx<R>;
-
-//     fn create(msg: M) -> ((M, Tx<R>), Rx<R>) {
-//         let (tx, rx) = new_request();
-//         ((msg, tx), rx)
-//     }
-
-//     fn cancel(sent: (M, Tx<R>), _returned: Rx<R>) -> M {
-//         sent.0
-//     }
-// }
 
 impl<M> Unpin for Rx<M> {}
 

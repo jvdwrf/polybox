@@ -1,24 +1,34 @@
 use crate::*;
 use std::marker::PhantomData;
 
+/// A marker type for request messages.
+pub struct Request<T>(PhantomData<T>);
+
+/// A marker type for fire-and-forget messages.
+pub struct FireAndForget(());
+
+/// A trait for types that can be used to specify the kind of a [`Message`].
+///
+/// This trait is sealed and cannot be implemented outside of this crate.
+/// Use [`Request<T>`] or [`FireAndForget`] to specify the kind of a [`Message`].
 pub trait MessageSpecifier<T>: sealed::Sealed {
+    /// The output type of the message.
+    ///
+    /// This must implement [`MessageReply`], and is either [`Rx<T>`] for request
+    /// messages, or `()` for fire-and-forget messages.
     type Output: MessageReply + Send;
+
+    /// The actual payload of the message.
+    ///
+    /// This is `T` for fire-and-forget messages, and `(T, Tx<R>)` for requests.
     type Payload: Send + 'static;
 
+    /// Convert a message into its payload and output.
     fn into_payload(msg: T) -> (Self::Payload, Self::Output);
+
+    /// Convert a payload back into the message.
     fn from_payload(payload: Self::Payload) -> T;
 }
-
-pub trait SimpleSpecifier<I> {
-    type Payload;
-}
-
-impl<T> SimpleSpecifier<T> for FireAndForget {
-    type Payload = T;
-}
-
-pub struct Request<T>(PhantomData<T>);
-pub struct FireAndForget(());
 
 impl<I: Send + 'static, R: Send + 'static> MessageSpecifier<I> for Request<R> {
     type Output = Rx<R>;
@@ -48,20 +58,28 @@ impl<I: Send + 'static> MessageSpecifier<I> for FireAndForget {
     }
 }
 
-pub trait MessageReply: Sized {
+/// A trait for types that can be used as the output of a [`Message`].
+///
+/// This trait is sealed and cannot be implemented outside of this crate.
+/// It is implemented for [`Rx<T>`] and `()`, which are the output types of
+/// request and fire-and-forget messages, respectively.
+pub trait MessageReply: Sized + sealed::Sealed {
+    /// The reply type of the message.
     type Reply;
 
-    fn get(self) -> impl Future<Output = Result<Self::Reply, RxError>> + Send;
+    /// Receive the reply of the message.
+    fn receive(self) -> impl Future<Output = Result<Self::Reply, RxError>> + Send;
 
-    fn get_blocking(self) -> Result<Self::Reply, RxError> {
-        futures::executor::block_on(self.get())
+    /// Same as [`Self::receive`], but blocks the current thread until the reply is received.
+    fn receive_blocking(self) -> Result<Self::Reply, RxError> {
+        futures::executor::block_on(self.receive())
     }
 }
 
 impl MessageReply for () {
     type Reply = ();
 
-    async fn get(self) -> Result<Self::Reply, RxError> {
+    async fn receive(self) -> Result<Self::Reply, RxError> {
         Ok(())
     }
 }
@@ -72,44 +90,29 @@ where
 {
     type Reply = T;
 
-    async fn get(self) -> Result<Self::Reply, RxError> {
+    async fn receive(self) -> Result<Self::Reply, RxError> {
         self.await
     }
 }
 
-pub(crate) mod sealed {
-    pub trait Sealed {}
-    impl<T> Sealed for super::Request<T> {}
-    impl Sealed for super::FireAndForget {}
-}
-
-/// A trait for types that can be invoked, either as a request (with a response),
-/// or as a fire-and-forget cast.
+/// A trait that must be implemented for all types that are sent as messages.
+///
+/// It defines the kind of the message, which can be either [`Request<T>`] or [`FireAndForget`].
 pub trait Message: Send + 'static + Sized {
+    /// The kind of the message, which can be either [`Request<T>`] or [`FireAndForget`].
     type Kind: MessageSpecifier<Self>;
 }
 
-/// The output type of an [`Message`].
-pub type Output<I> = <<I as Message>::Kind as MessageSpecifier<I>>::Output;
+/// A helper type for the output of a [`Message`].
+pub type Output<T> = <<T as Message>::Kind as MessageSpecifier<T>>::Output;
 
-/// The request output type of an [`Message`].
-pub type Reply<I> = <Output<I> as MessageReply>::Reply;
+/// A helper type for the reply of a [`Message`].
+pub type Reply<T> = <Output<T> as MessageReply>::Reply;
 
-/// The payload type of an [`Message`].
-pub type Payload<I> = <<I as Message>::Kind as MessageSpecifier<I>>::Payload;
+/// A helper type for the payload of a [`Message`].
+pub type Payload<T> = <<T as Message>::Kind as MessageSpecifier<T>>::Payload;
 
-/// A trait for types that can be invoked as a fire-and-forget cast.
-///
-/// This trait is implemented for all types that implement [`Message`] with a [`FireAndForget`] kind.
-pub trait Cast: Message<Kind = FireAndForget> {}
-impl<I> Cast for I where I: Message<Kind = FireAndForget> {}
-
-/// A trait for types that can be invoked as a request (with a response).
-///
-/// This trait is implemented for all types that implement [`Message`] with a [`Request<T>`] kind.
-pub trait Call<T>: Message<Kind = Request<T>> {}
-impl<I, T> Call<T> for I where I: Message<Kind = Request<T>> {}
-
+/// A trait that extends [`Message`] with some helper methods.
 pub trait MessageExt: Message {
     fn build_payload(self) -> (Payload<Self>, Output<Self>)
     where
@@ -125,8 +128,17 @@ pub trait MessageExt: Message {
         <Self::Kind as MessageSpecifier<Self>>::from_payload(payload)
     }
 }
-
 impl<I> MessageExt for I where I: Message {}
+
+pub(crate) mod sealed {
+    pub trait Sealed {}
+
+    impl<T> Sealed for super::Request<T> {}
+    impl Sealed for super::FireAndForget {}
+
+    impl<T> Sealed for super::Rx<T> where T: Send + 'static {}
+    impl Sealed for () {}
+}
 
 //------------------------------------------------------------------------------------------------
 //  Message: Default implementations

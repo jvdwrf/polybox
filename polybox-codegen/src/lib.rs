@@ -3,6 +3,14 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Expr, Fields, Lit, Type};
 
+/// Derives the `Interface` trait for an enum, allowing it to be used as a message
+/// interface in the Polybox framework.
+///
+/// Under the hood, this macro generates implementations for the `Interface`, `Message`, and `AsSet` traits,
+/// as well as `FromPayload` and `TryIntoPayload` for each variant of the enum.
+///
+/// The macro expects the enum variants to be of the form `Variant(Payload<T>)`,
+/// where `T` is a type that implements the `Message` trait.
 #[proc_macro_derive(Interface, attributes(polybox))]
 pub fn derive_interface(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -164,6 +172,20 @@ fn extract_inner_type(ty: &Type) -> Option<&Type> {
     None
 }
 
+/// Derives the `Message` trait for a struct, allowing it to be used as a message
+/// in the Polybox framework.
+///
+/// This macro accepts an optional `reply` attribute to specify the reply type for the message.
+///
+/// # Example
+/// ```ignore
+/// #[derive(Message)]
+/// struct SimpleMessage;
+///
+/// #[derive(Message)]
+/// #[msg(reply = u32)]
+/// struct MessageWithReply;
+/// ```
 #[proc_macro_derive(Message, attributes(polybox, msg))]
 pub fn derive_invocation(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
