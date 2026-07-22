@@ -1,8 +1,9 @@
 use std::any::TypeId;
 
 use polybox::{
-    AsSet, Interface, Message, Payload, PolyboxExt as _, Sends, SendsExt as _, Set, TokioInbox,
+    Interface, Message, Payload, PolyboxExt as _, Sends, SendsExt as _, inboxes::TokioInbox,
 };
+use type_sets::{AsSet, Set};
 
 #[derive(Message, Debug)]
 #[msg(reply = i32)]

@@ -1,15 +1,5 @@
-use thiserror::Error;
-
 use crate::RxError;
-
-/// Error returned when trying to send a message, checking at compile-time that
-/// the message is actually accepted by the actor.
-#[derive(Debug, thiserror::Error, Clone, PartialEq, Eq, Hash)]
-pub enum TrySendCheckedError<M> {
-    Full(M),
-    Closed(M),
-    NotAccepted(M),
-}
+use thiserror::Error;
 
 /// Error returned when sending a message, checking at compile-time that
 /// the message is actually accepted by the actor.
@@ -17,17 +7,6 @@ pub enum TrySendCheckedError<M> {
 pub enum SendCheckedError<M> {
     Closed(M),
     NotAccepted(M),
-}
-
-/// An error returned when trying to send a message.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Error)]
-pub enum TrySendError<M> {
-    /// The channel has been closed, and no longer accepts new messages.
-    #[error("Couldn't send message because Channel is closed")]
-    Closed(M),
-    /// The channel is full.
-    #[error("Couldn't send message because Channel is full")]
-    Full(M),
 }
 
 /// The channel has been closed, and no longer accepts new messages.
@@ -41,57 +20,6 @@ pub struct SendError<M>(pub M);
 pub enum RequestError<M> {
     NoReply,
     Closed(M),
-}
-
-/// Error returned when trying to send a request.
-///
-/// This error combines failures in sending and receiving.
-#[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
-pub enum TryRequestError<M, E> {
-    NoReply(E),
-    Closed(M),
-    Full(M),
-}
-
-/// Error returned when receiving a message.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Error)]
-pub enum RecvError {
-    /// Process has been halted and should now exit.
-    #[error("Couldn't receive because the process has been halted")]
-    Halted,
-    /// Channel has been closed, and contains no more messages. It is impossible for new
-    /// messages to be sent to the channel.
-    #[error("Couldn't receive becuase the channel is closed and empty")]
-    ClosedAndEmpty,
-}
-
-/// Error returned when trying to receive a message.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Error)]
-pub enum TryRecvError {
-    /// Process has been halted and should now exit.
-    #[error("Couldn't receive because the process has been halted")]
-    Halted,
-    /// The channel is empty, but is not yet closed. New messges may arrive.
-    #[error("Couldn't receive because the channel is empty")]
-    Empty,
-    /// Channel has been closed, and contains no more messages. It is impossible for new
-    /// messages to be sent to the channel.
-    #[error("Couldn't receive becuase the channel is closed and empty")]
-    ClosedAndEmpty,
-}
-
-/// This process has been halted and should now exit.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Error)]
-#[error("Process has been halted")]
-pub struct Halted;
-
-impl<T> From<TrySendError<T>> for TrySendCheckedError<T> {
-    fn from(err: TrySendError<T>) -> Self {
-        match err {
-            TrySendError::Full(msg) => Self::Full(msg),
-            TrySendError::Closed(msg) => Self::Closed(msg),
-        }
-    }
 }
 
 impl<T> From<SendError<T>> for SendCheckedError<T> {

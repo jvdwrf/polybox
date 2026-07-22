@@ -140,8 +140,8 @@ pub fn derive_interface(input: TokenStream) -> TokenStream {
             type Kind = #base_path::FireAndForget;
         }
 
-        impl #base_path::AsSet for #enum_name {
-            type Set = #base_path::Set![#(#inner_types),*];
+        impl #base_path::type_sets::AsSet for #enum_name {
+            type Set = #base_path::type_sets::Set![#(#inner_types),*];
         }
 
         impl #base_path::TryIntoPayload<#enum_name> for #enum_name {

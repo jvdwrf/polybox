@@ -1,5 +1,6 @@
 use super::*;
 use futures::future::BoxFuture;
+use polybox_core::errors::{SendCheckedError, SendError};
 use std::sync::Arc;
 
 /// A wrapper around a [`tokio::sync::mpsc::Sender`] that acts as a [`PolyBox`].
