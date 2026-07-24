@@ -103,7 +103,7 @@ impl Printer {
     }
 }
 
-#[tokio::test]
+#[tokio::main]
 pub async fn main() {
     let (adder, adder_handle) = NumberAdder::spawn();
     let (printer, printer_handle) = Printer::spawn();

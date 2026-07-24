@@ -1,19 +1,101 @@
 //! Message-passing abstractions to make working with channels and actors a more seamless experience.
 //!
-//! See [GitHub](https://github.com/jvdwrf/polybox) for more information.
+//!
+//!
+//! # Defining messages
+//! ```rust
+//! # use polybox::*;
+//! #
+//! #[derive(Message)]
+//! struct MyMessage;
+//!
+//! #[derive(Message)]
+//! #[msg(reply = String)]
+//! struct MyRequest;
+//! ```
+//!
+//!
+//!
+//! # Defining an interface
+//! ```rust
+//! # use polybox::*;
+//! #
+//! # #[derive(Message)]
+//! # struct MyMessage;
+//! #
+//! # #[derive(Message)]
+//! # #[msg(reply = String)]
+//! # struct MyRequest;
+//! #
+//! #[derive(Interface)]
+//! enum MyInterface {
+//!     Number(Payload<u32>),
+//!     MyMessage(Payload<MyMessage>),
+//!     MyRequest(Payload<MyRequest>),
+//! }
+//! ```
+//!
+//!
+//!
+//! # Sending messages
+//! ```rust
+//! # use polybox::{*, inboxes::TokioInbox};
+//! #
+//! # #[derive(Message, Debug)]
+//! # struct MyMessage;
+//! #
+//! # #[derive(Message, Debug)]
+//! # #[msg(reply = String)]
+//! # struct MyRequest;
+//! #
+//! # #[derive(Interface, Debug)]
+//! # enum MyInterface {
+//! #     Number(Payload<u32>),
+//! #     MyMessage(Payload<MyMessage>),
+//! #     MyRequest(Payload<MyRequest>),
+//! # }
+//! #
+//! # #[tokio::main]
+//! # async fn main() {
+//! let (inbox, mut receiver) = TokioInbox::<MyInterface>::new(1000);
+//!
+//! inbox.send(42_u32).await.unwrap();
+//! inbox.send(MyMessage).await.unwrap();
+//! let _reply = inbox.request(MyRequest).await.unwrap();
+//! # }
+//! ```
+//!
+//!
+//!
+//! # Dynamic inboxes
+//! ```rust
+//! # use polybox::{*, inboxes::TokioInbox};
+//! #
+//! # #[derive(Message, Debug)]
+//! # struct MyMessage;
+//! #
+//! # #[derive(Message, Debug)]
+//! # #[msg(reply = String)]
+//! # struct MyRequest;
+//! #
+//! # #[derive(Interface, Debug)]
+//! # enum MyInterface {
+//! #     Number(Payload<u32>),
+//! #     MyMessage(Payload<MyMessage>),
+//! #     MyRequest(Payload<MyRequest>),
+//! # }
+//! #
+//! # #[tokio::main]
+//! # async fn main() {
+//! let (inbox, mut receiver) = TokioInbox::<MyInterface>::new(1000);
+//!
+//! inbox.send(42_u32).await.unwrap();
+//! inbox.send(MyMessage).await.unwrap();
+//! let _reply = inbox.request(MyRequest).await.unwrap();
+//! # }
+//! ```
 
-#[cfg(feature = "flume")]
-mod flume_inbox;
-#[cfg(feature = "tokio")]
-mod tokio_inbox;
-
-pub mod inboxes {
-    #[cfg(feature = "flume")]
-    pub use crate::flume_inbox::FlumeInbox;
-
-    #[cfg(feature = "tokio")]
-    pub use crate::tokio_inbox::TokioInbox;
-}
+pub mod inboxes;
 
 pub use polybox_codegen::{Interface, Message};
 pub use polybox_core::*;

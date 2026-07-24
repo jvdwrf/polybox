@@ -7,6 +7,14 @@ pub struct Request<T>(PhantomData<T>);
 /// A marker type for fire-and-forget messages.
 pub struct FireAndForget(());
 
+/// A trait that must be implemented for all types that are sent as messages.
+///
+/// It defines the kind of the message, which can be either [`Request<T>`] or [`FireAndForget`].
+pub trait Message: Send + 'static + Sized {
+    /// The kind of the message, which can be either [`Request<T>`] or [`FireAndForget`].
+    type Kind: MessageSpecifier<Self>;
+}
+
 /// A trait for types that can be used to specify the kind of a [`Message`].
 ///
 /// This trait is sealed and cannot be implemented outside of this crate.
@@ -93,14 +101,6 @@ where
     async fn receive(self) -> Result<Self::Reply, RxError> {
         self.await
     }
-}
-
-/// A trait that must be implemented for all types that are sent as messages.
-///
-/// It defines the kind of the message, which can be either [`Request<T>`] or [`FireAndForget`].
-pub trait Message: Send + 'static + Sized {
-    /// The kind of the message, which can be either [`Request<T>`] or [`FireAndForget`].
-    type Kind: MessageSpecifier<Self>;
 }
 
 /// A helper type for the output of a [`Message`].
