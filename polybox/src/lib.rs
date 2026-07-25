@@ -87,12 +87,15 @@
 //! #
 //! # #[tokio::main]
 //! # async fn main() {
-//! let (inbox, mut receiver) = TokioInbox::<MyInterface>::new(1000);
-//!
-//! inbox.send(42_u32).await.unwrap();
-//! inbox.send(MyMessage).await.unwrap();
-//! let _reply = inbox.request(MyRequest).await.unwrap();
+//! todo!()
 //! # }
+//! ```
+//!
+//!
+//!
+//! # Full Example
+//! ```rust
+#![doc = include_str!("../examples/full.rs")]
 //! ```
 
 pub mod inboxes;

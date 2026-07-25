@@ -48,6 +48,7 @@ impl<M> Tx<M> {
 ///
 /// This implements [`MessageDerive<M>`] to be used with the [`derive@Message`] derive macro.
 #[derive(Debug)]
+#[must_use = "Rx should be awaited to receive the message"]
 pub struct Rx<M>(oneshot::Receiver<M>);
 
 impl<M> Rx<M> {
