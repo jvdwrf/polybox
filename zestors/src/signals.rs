@@ -1,5 +1,6 @@
 use crate::*;
-use polybox::{Message, Payload, oneshot::new_request};
+use polybox::{Message, Payload, errors::SendError, oneshot::new_request};
+use tokio::select;
 
 #[derive(Message)]
 pub struct Shutdown;
@@ -21,7 +22,7 @@ pub struct GetStatus;
 pub enum Status {
     Running,
     Suspended,
-    Stopped,
+    Exiting,
 }
 
 #[derive(Message)]
@@ -33,16 +34,17 @@ pub struct State {
     pub status: Status,
     pub uptime: std::time::Duration,
     pub description: String,
-    pub description_json: String,
 }
 
 #[derive(Message)]
+#[msg(reply = (), crate = "test")]
 pub struct Ping;
 
 #[derive(Interface)]
+#[interface(crate = "crate")]
 pub enum Signal {
     Shutdown(Payload<Shutdown>),
-    Exit(Payload<Exit>),
+    Kill(Payload<Exit>),
     Suspend(Payload<Suspend>),
     Resume(Payload<Resume>),
     GetStatus(Payload<GetStatus>),
@@ -54,7 +56,7 @@ impl Signal {
     pub fn kind(&self) -> SignalKind {
         match self {
             Signal::Shutdown(_) => SignalKind::Shutdown,
-            Signal::Exit(_) => SignalKind::Exit,
+            Signal::Kill(_) => SignalKind::Exit,
             Signal::Suspend(_) => SignalKind::Suspend,
             Signal::Resume(_) => SignalKind::Resume,
             Signal::GetStatus(_) => SignalKind::GetStatus,
@@ -87,7 +89,7 @@ pub trait Observable {
     }
 
     fn exit(&self) -> impl Future<Output = Result<Output<Exit>, SendError<()>>> + Send {
-        let fut = Self::send_signal_payload(&self, Signal::Exit(Exit));
+        let fut = Self::send_signal_payload(&self, Signal::Kill(Exit));
         async { fut.await.map_err(|_| SendError(())) }
     }
 
@@ -114,8 +116,9 @@ pub trait Observable {
     }
 
     fn ping(&self) -> impl Future<Output = Result<Output<Ping>, SendError<()>>> + Send {
-        let fut = Self::send_signal_payload(&self, Signal::Ping(Ping));
-        async { fut.await.map_err(|_| SendError(())) }
+        let (tx, rx) = new_request();
+        let fut = Self::send_signal_payload(&self, Signal::Ping((Ping, tx)));
+        async { fut.await.map_err(|_| SendError(())).map(|_| rx) }
     }
 }
 
@@ -191,7 +194,53 @@ pub struct SignalSender {
     sender: tokio::sync::mpsc::Sender<Signal>,
 }
 
+impl SignalSender {
+    pub(crate) fn new() -> (Self, SignalReceiver) {
+        let (sender, receiver) = tokio::sync::mpsc::channel(1_000);
+        (Self { sender }, SignalReceiver { receiver })
+    }
+}
+
+impl SignalSender {
+    pub async fn send(&self, signal: Signal) -> Result<(), SendError<Signal>> {
+        self.sender.send(signal).await.map_err(|e| SendError(e.0))
+    }
+}
+
+impl Observable for SignalSender {
+    async fn send_signal_payload(this: &Self, signal: Signal) -> Result<(), SendError<Signal>> {
+        this.sender.send(signal).await.map_err(|e| SendError(e.0))
+    }
+}
+
 #[derive(Debug)]
 pub struct SignalReceiver {
     receiver: tokio::sync::mpsc::Receiver<Signal>,
+}
+
+impl SignalReceiver {
+    pub async fn recv(&mut self) -> Option<Signal> {
+        self.receiver.recv().await
+    }
+
+    pub async fn recv_with<T>(&mut self, other: &mut Receiver<T>) -> Option<SignalOrMessage<T>> {
+        select! {
+            biased;
+
+            Some(signal) = self.receiver.recv() => {
+                Some(SignalOrMessage::Signal(signal))
+            }
+
+            Some(msg) = other.recv() => {
+                Some(SignalOrMessage::Message(msg))
+            }
+
+            else => None,
+        }
+    }
+}
+
+pub enum SignalOrMessage<T> {
+    Signal(Signal),
+    Message(T),
 }

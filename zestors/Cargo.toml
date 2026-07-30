@@ -5,4 +5,10 @@ edition = "2024"
 
 [dependencies]
 polybox.workspace = true
+polybox-codegen.workspace = true
 tokio.workspace = true
+futures.workspace = true
+tracing.workspace = true
+
+[features]
+_ra = ["polybox/_ra"]

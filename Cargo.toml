@@ -8,10 +8,11 @@ polybox-core = { path = "polybox-core", version = "0.0.2" }
 polybox = { path = "polybox", version = "0.0.2" }
 
 
-tokio = "1"
+tokio = { version = "1", features = ["full"] }
 type-sets = "0.0.6"
 async-trait = "0.1"
 futures = "0.3"
 thiserror = "2"
 derive_more = { version = "2", features = ["full"] }
 flume = "0.12"
+tracing = "0.1"

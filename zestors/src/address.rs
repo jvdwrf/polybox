@@ -1,32 +1,39 @@
-use crate::signals::{Observable, Shutdown};
+use crate::signals::{Observable, Shutdown, SignalSender};
+use polybox::{errors::SendError, *};
 
 use super::*;
 
 pub struct Address<T> {
-    inbox: TokioInbox<T>,
-    signal_inbox: TokioInbox<Signal>,
+    inbox: Inbox<T>,
+    signal_inbox: SignalSender,
 }
 
 impl<T: Interface, M: Message> Sends<M> for Address<T>
 where
-    TokioInbox<T>: Sends<M>,
+    Inbox<T>: Sends<M>,
 {
     async fn send(&self, msg: M) -> Result<Output<M>, SendError<M>> {
         self.inbox.send(msg).await
     }
 }
 
-impl<T> Observable for Address<T>
-where
-    T: Interface,
-{
+impl<T: Interface> Observable for Address<T> {
     async fn send_signal_payload(this: &Self, signal: Signal) -> Result<(), SendError<Signal>> {
         this.signal_inbox.send(signal).await
     }
 }
 
+impl<T> Clone for Address<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inbox: self.inbox.clone(),
+            signal_inbox: self.signal_inbox.clone(),
+        }
+    }
+}
+
 impl<T: Interface> Address<T> {
-    pub(super) fn new(inbox: TokioInbox<T>, signal_inbox: TokioInbox<Signal>) -> Self {
+    pub(super) fn new(inbox: Inbox<T>, signal_inbox: SignalSender) -> Self {
         Self {
             inbox,
             signal_inbox,
@@ -43,7 +50,7 @@ impl<T: Interface> Address<T> {
 
 pub struct DynAddress<T> {
     inbox: DynInbox<T>,
-    signal_inbox: TokioInbox<Signal>,
+    signal_inbox: SignalSender,
 }
 
 impl<T: Interface, M: Message> Sends<M> for DynAddress<T>
@@ -52,5 +59,11 @@ where
 {
     async fn send(&self, msg: M) -> Result<Output<M>, SendError<M>> {
         self.inbox.send(msg).await
+    }
+}
+
+impl<T: Interface> Observable for DynAddress<T> {
+    async fn send_signal_payload(this: &Self, signal: Signal) -> Result<(), SendError<Signal>> {
+        this.signal_inbox.send(signal).await
     }
 }

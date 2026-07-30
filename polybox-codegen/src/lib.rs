@@ -15,35 +15,21 @@ use syn::{parse_macro_input, Data, DeriveInput, Expr, Fields, Lit, Type};
 ///
 /// The macro expects the enum variants to be of the form `Variant(Payload<T>)`,
 /// where `T` is a type that implements the `Message` trait.
-#[proc_macro_derive(Interface, attributes(polybox))]
-pub fn derive_interface(input: TokenStream) -> TokenStream {
+#[proc_macro_derive(Interface, attributes(interface))]
+pub fn derive_interface_polybox(input: TokenStream) -> TokenStream {
+    derive_interface(input, "::polybox")
+}
+
+#[proc_macro_derive(InterfaceZestors, attributes(interface))]
+pub fn derive_interface_zestors(input: TokenStream) -> TokenStream {
+    derive_interface(input, "::zestors")
+}
+
+fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let enum_name = &input.ident;
 
-    // 1. Determine the base path (default: ::polybox)
-    let mut base_path: syn::Path = syn::parse_str("::polybox").unwrap();
-
-    for attr in &input.attrs {
-        if attr.path().is_ident("polybox") {
-            // Correct way to parse nested meta (e.g. #[polybox(crate = "...")] ) in syn 2.0
-            let _ = attr.parse_nested_meta(|meta| {
-                if meta.path.is_ident("crate") {
-                    let value = meta.value()?;
-                    let expr: Expr = value.parse()?;
-                    if let Expr::Lit(syn::ExprLit {
-                        lit: Lit::Str(lit_str),
-                        ..
-                    }) = expr
-                    {
-                        if let Ok(parsed_path) = syn::parse_str::<syn::Path>(&lit_str.value()) {
-                            base_path = parsed_path;
-                        }
-                    }
-                }
-                Ok(())
-            });
-        }
-    }
+    let base_path: syn::Path = extract_base_path(&input.attrs, "interface", base);
 
     // Ensure we are working with an enum
     let variants = match &input.data {
@@ -64,7 +50,7 @@ pub fn derive_interface(input: TokenStream) -> TokenStream {
             Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
                 let field_type = &fields.unnamed[0].ty;
 
-                let inner_type = extract_inner_type(field_type)
+                let inner_type = extract_inner_payload_type(field_type)
                     .expect("Interface variants must be of type Payload<T>");
 
                 inner_types.push(inner_type);
@@ -136,6 +122,7 @@ pub fn derive_interface(input: TokenStream) -> TokenStream {
             }
         }
 
+
         impl #base_path::Message for #enum_name {
             type Kind = #base_path::FireAndForget;
         }
@@ -162,18 +149,57 @@ pub fn derive_interface(input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-fn extract_inner_type(ty: &Type) -> Option<&Type> {
-    if let Type::Path(type_path) = ty {
-        let segment = type_path.path.segments.last()?;
-        if segment.ident == "Payload" {
-            if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
-                    return Some(inner_ty);
+#[proc_macro_derive(ActorInterface, attributes(interface))]
+pub fn derive_actor_interface(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let enum_name = &input.ident;
+
+    // Ensure we are working with an enum
+    let variants = match &input.data {
+        Data::Enum(data_enum) => &data_enum.variants,
+        _ => panic!("ActorInterface derive can only be used on enums"),
+    };
+
+    let base_path = extract_base_path(&input.attrs, "interface", "::zestors");
+
+    let mut handle_matches = Vec::new();
+    let mut inner_types = Vec::new();
+
+    for variant in variants {
+        let variant_name = &variant.ident;
+
+        match &variant.fields {
+            Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
+                let field_type = &fields.unnamed[0].ty;
+
+                let inner_type = extract_inner_payload_type(field_type)
+                    .expect("ActorInterface variants must be of type Payload<T>");
+
+                handle_matches.push(quote! {
+                    Self::#variant_name(payload) => {
+                        <T as #base_path::actor::HandleMessage<#inner_type>>::handle_message(actor, payload).await
+                    }
+                });
+                inner_types.push(inner_type);
+            }
+            _ => panic!("ActorInterface derive only supports variants with a single unnamed field, e.g., A(Payload<T>)"),
+        }
+    }
+
+    let expanded = quote! {
+        impl<T> #base_path::actor::ActorInterface<T> for #enum_name
+        where
+            T: #base_path::actor::Actor + #( #base_path::actor::HandleMessage<#inner_types> + )*
+        {
+            async fn handle_with(self, actor: &mut T) -> Result<(), T::Error> {
+                match self {
+                    #(#handle_matches)*
                 }
             }
         }
-    }
-    None
+    };
+
+    TokenStream::from(expanded)
 }
 
 /// Derives the `Message` trait for a struct, allowing it to be used as a message
@@ -190,8 +216,17 @@ fn extract_inner_type(ty: &Type) -> Option<&Type> {
 /// #[msg(reply = u32)]
 /// struct MessageWithReply;
 /// ```
-#[proc_macro_derive(Message, attributes(polybox, msg))]
-pub fn derive_invocation(input: TokenStream) -> TokenStream {
+#[proc_macro_derive(Message, attributes(msg))]
+pub fn derive_message(input: TokenStream) -> TokenStream {
+    derive_invocation(input, "::polybox")
+}
+
+#[proc_macro_derive(MessageZestors, attributes(msg))]
+pub fn derive_message_zestors(input: TokenStream) -> TokenStream {
+    derive_invocation(input, "::zestors")
+}
+
+fn derive_invocation(input: TokenStream, base: &str) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
 
@@ -201,37 +236,11 @@ pub fn derive_invocation(input: TokenStream) -> TokenStream {
     // // 2. Determine the default Kind (default: ::polybox::FireAndForget)
     // let mut kind_type = quote!(::polybox::FireAndForget);
 
-    let polybox_attr = &input
-        .attrs
-        .iter()
-        .find(|attr| attr.path().is_ident("polybox"));
+    let msg_attr = &input.attrs.iter().find(|attr| attr.path().is_ident("msg"));
 
-    let base_path = if let Some(attr) = polybox_attr {
-        let mut base_path: syn::Path = syn::parse_str("::polybox").unwrap();
-        let _ = attr.parse_nested_meta(|meta| {
-            if meta.path.is_ident("crate") {
-                let value = meta.value()?;
-                let expr: Expr = value.parse()?;
-                if let Expr::Lit(syn::ExprLit {
-                    lit: Lit::Str(lit_str),
-                    ..
-                }) = expr
-                {
-                    if let Ok(parsed_path) = syn::parse_str::<syn::Path>(&lit_str.value()) {
-                        base_path = parsed_path;
-                    }
-                }
-            }
-            Ok(())
-        });
-        base_path
-    } else {
-        syn::parse_str("::polybox").unwrap()
-    };
+    let base_path = extract_base_path(&input.attrs, "msg", base);
 
-    let invoke_attr = &input.attrs.iter().find(|attr| attr.path().is_ident("msg"));
-
-    let kind_type = if let Some(attr) = invoke_attr {
+    let kind_type = if let Some(attr) = msg_attr {
         let mut kind_type = quote!(#base_path::FireAndForget);
         let _ = attr.parse_nested_meta(|meta| {
             if meta.path.is_ident("reply") {
@@ -241,8 +250,8 @@ pub fn derive_invocation(input: TokenStream) -> TokenStream {
                         #base_path::Request<#parsed_type>
                     }
                 }
-            } else {
-                panic!("Only `reply` is expected")
+            } else if !meta.path.is_ident("crate") {
+                panic!("Only `reply` or `crate` is expected")
             }
             Ok(())
         });
@@ -261,4 +270,45 @@ pub fn derive_invocation(input: TokenStream) -> TokenStream {
     };
 
     TokenStream::from(expanded)
+}
+
+fn extract_base_path(attrs: &[syn::Attribute], attr_name: &str, default_path: &str) -> syn::Path {
+    let mut base_path: syn::Path = syn::parse_str(default_path).unwrap();
+
+    for attr in attrs {
+        if attr.path().is_ident(attr_name) {
+            let _ = attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("crate") {
+                    let value = meta.value()?;
+                    let expr: Expr = value.parse()?;
+                    if let Expr::Lit(syn::ExprLit {
+                        lit: Lit::Str(lit_str),
+                        ..
+                    }) = expr
+                    {
+                        if let Ok(parsed_path) = syn::parse_str::<syn::Path>(&lit_str.value()) {
+                            base_path = parsed_path;
+                        }
+                    }
+                }
+                Ok(())
+            });
+        }
+    }
+
+    base_path
+}
+
+fn extract_inner_payload_type(ty: &Type) -> Option<&Type> {
+    if let Type::Path(type_path) = ty {
+        let segment = type_path.path.segments.last()?;
+        if segment.ident == "Payload" {
+            if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
+                    return Some(inner_ty);
+                }
+            }
+        }
+    }
+    None
 }
