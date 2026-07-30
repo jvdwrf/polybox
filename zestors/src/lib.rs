@@ -36,6 +36,7 @@ mod tests {
     use crate::{
         actor::{Actor, HandleMessage},
         signals::{SendSignal, Shutdown, SignalOrMessage},
+        state::ActorState,
     };
     use polybox::Payload;
     use std::time::Duration;
@@ -103,7 +104,11 @@ mod tests {
     }
 
     impl HandleMessage<u32> for MyActor {
-        async fn handle_message(&mut self, msg: u32) -> Result<(), Self::Error> {
+        async fn handle_message(
+            &mut self,
+            _state: &mut ActorState<Self>,
+            msg: u32,
+        ) -> Result<(), Self::Error> {
             println!("Handling message: {}", msg);
             self.nr += msg;
             Ok(())

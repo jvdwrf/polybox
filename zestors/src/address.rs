@@ -1,7 +1,6 @@
-use crate::signals::{Observable, Shutdown, SignalSender};
-use polybox::{errors::SendError, *};
-
 use super::*;
+use crate::signals::{Observable, SignalSender};
+use polybox::{errors::SendError, *};
 
 pub struct Address<T> {
     inbox: Inbox<T>,
@@ -20,6 +19,28 @@ where
 impl<T: Interface> Observable for Address<T> {
     async fn send_signal_payload(this: &Self, signal: Signal) -> Result<(), SendError<Signal>> {
         this.signal_inbox.send(signal).await
+    }
+}
+
+impl<T: Interface> DynPolyBox for Address<T> {
+    fn _send_boxed_payload_checked(
+        &self,
+        msg: BoxedPayload,
+    ) -> futures::prelude::future::BoxFuture<'_, Result<(), errors::SendCheckedError<BoxedPayload>>>
+    {
+        self.inbox._send_boxed_payload_checked(msg)
+    }
+}
+
+impl<T: Interface> PolyBox for Address<T> {
+    type Set = T::Set;
+    type AsDyn<R> = DynAddress<R>;
+
+    fn into_dyn_unchecked<R>(self) -> Self::AsDyn<R> {
+        DynAddress {
+            inbox: self.inbox.into_dyn_unchecked(),
+            signal_inbox: self.signal_inbox,
+        }
     }
 }
 
@@ -65,5 +86,36 @@ where
 impl<T: Interface> Observable for DynAddress<T> {
     async fn send_signal_payload(this: &Self, signal: Signal) -> Result<(), SendError<Signal>> {
         this.signal_inbox.send(signal).await
+    }
+}
+
+impl<T: Interface> DynPolyBox for DynAddress<T> {
+    fn _send_boxed_payload_checked(
+        &self,
+        msg: BoxedPayload,
+    ) -> futures::prelude::future::BoxFuture<'_, Result<(), errors::SendCheckedError<BoxedPayload>>>
+    {
+        self.inbox._send_boxed_payload_checked(msg)
+    }
+}
+
+impl<T: Interface> PolyBox for DynAddress<T> {
+    type Set = T::Set;
+    type AsDyn<R> = DynAddress<R>;
+
+    fn into_dyn_unchecked<R>(self) -> Self::AsDyn<R> {
+        DynAddress {
+            inbox: self.inbox.into_dyn_unchecked(),
+            signal_inbox: self.signal_inbox,
+        }
+    }
+}
+
+impl<T> Clone for DynAddress<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inbox: self.inbox.clone(),
+            signal_inbox: self.signal_inbox.clone(),
+        }
     }
 }

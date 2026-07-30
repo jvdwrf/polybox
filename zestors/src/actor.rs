@@ -1,6 +1,5 @@
 use crate::{
     address::Address,
-    spawn,
     state::{ActorState, ExitReason},
 };
 use polybox::{Interface, Message, Payload};
@@ -58,13 +57,6 @@ pub trait Actor: Debug + Sized + Send + 'static {
     fn debug_state(&self) -> String {
         format!("{self:?}")
     }
-
-    fn handle_message(
-        &mut self,
-        msg: Self::Interface,
-    ) -> impl Future<Output = Result<(), Self::Error>> + Send + '_ {
-        msg.handle_with(self)
-    }
 }
 
 pub trait ActorExt: Actor {
@@ -74,22 +66,35 @@ pub trait ActorExt: Actor {
         Address<Self::Interface>,
         JoinHandle<Result<Self::Exit, Self::Error>>,
     ) {
-        crate::spawn(async move |mut rx, mut signal_rx, _address| {
-            ActorState::new()
+        crate::spawn(async move |mut rx, mut signal_rx, address| {
+            ActorState::new(address)
                 .run(&mut self, &mut rx, &mut signal_rx)
                 .await
         })
+    }
+
+    fn handle_interface(
+        &mut self,
+        state: &mut ActorState<Self>,
+        interface: Self::Interface,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
+        interface.handle_with(state, self)
     }
 }
 impl<T: Actor> ActorExt for T {}
 
 pub trait ActorInterface<T: Actor>: Interface {
-    fn handle_with(self, actor: &mut T) -> impl Future<Output = Result<(), T::Error>> + Send + '_;
+    fn handle_with(
+        self,
+        state: &mut ActorState<T>,
+        actor: &mut T,
+    ) -> impl Future<Output = Result<(), T::Error>> + Send;
 }
 
 pub trait HandleMessage<T: Message>: Actor {
     fn handle_message(
         &mut self,
+        state: &mut ActorState<Self>,
         msg: Payload<T>,
-    ) -> impl Future<Output = Result<(), Self::Error>> + Send + '_;
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }

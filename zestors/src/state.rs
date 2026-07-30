@@ -1,32 +1,35 @@
+use crate::{
+    actor::{Actor, ActorExt as _},
+    signals::{Observable, SignalOrMessage},
+    *,
+};
+use polybox::errors::SendError;
 use std::fmt::Debug;
 
-use crate::{actor::Actor, signals::SignalOrMessage, *};
-
-pub struct ActorState {
-    pub status: signals::Status,
-    pub start_time: tokio::time::Instant,
+pub struct ActorState<T: Actor> {
+    status: signals::Status,
+    start_time: tokio::time::Instant,
+    address: Address<T::Interface>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ExitReason {
-    Shutdown,
-    Kill,
-    UnhandledError,
-}
-
-impl ActorState {
-    pub fn new() -> Self {
+impl<T: Actor> ActorState<T> {
+    pub fn new(address: Address<T::Interface>) -> Self {
         Self {
             status: signals::Status::Running,
             start_time: tokio::time::Instant::now(),
+            address,
         }
+    }
+
+    pub fn address(&self) -> &Address<T::Interface> {
+        &self.address
     }
 
     pub fn uptime(&self) -> std::time::Duration {
         self.start_time.elapsed()
     }
 
-    pub async fn run<T>(
+    pub async fn run(
         &mut self,
         actor: &mut T,
         rx: &mut Receiver<T::Interface>,
@@ -61,15 +64,12 @@ impl ActorState {
         }
     }
 
-    async fn _run_once<T>(
+    async fn _run_once(
         &mut self,
         actor: &mut T,
         rx: &mut Receiver<T::Interface>,
         signal_rx: &mut SignalReceiver,
-    ) -> Result<Option<T::Exit>, T::Error>
-    where
-        T: Actor + Debug,
-    {
+    ) -> Result<Option<T::Exit>, T::Error> {
         let Some(msg) = (match self.status {
             signals::Status::Running | signals::Status::Exiting => signal_rx.recv_with(rx).await,
             signals::Status::Suspended => signal_rx.recv().await.map(SignalOrMessage::Signal),
@@ -91,11 +91,21 @@ impl ActorState {
                 }
 
                 Signal::Suspend(_) => {
+                    if self.status == signals::Status::Exiting {
+                        tracing::warn!("Actor is exiting, cannot suspend");
+                        return Ok(None);
+                    }
+
                     actor.on_suspend().await?;
                     self.status = signals::Status::Suspended;
                 }
 
                 Signal::Resume(_) => {
+                    if self.status != signals::Status::Suspended {
+                        tracing::warn!("Actor is not suspended, cannot resume");
+                        return Ok(None);
+                    }
+
                     actor.on_resume().await?;
                     self.status = signals::Status::Running;
                 }
@@ -118,10 +128,32 @@ impl ActorState {
             },
 
             SignalOrMessage::Message(msg) => {
-                actor.handle_message(msg).await?;
+                actor.handle_interface(self, msg).await?;
             }
         }
 
         Ok(None)
     }
+}
+
+impl<T: Actor> Observable for ActorState<T> {
+    async fn send_signal_payload(this: &Self, signal: Signal) -> Result<(), SendError<Signal>> {
+        <Address<T::Interface> as Observable>::send_signal_payload(&this.address, signal).await
+    }
+}
+
+impl<T: Actor, M: Message> Sends<M> for ActorState<T>
+where
+    Address<T::Interface>: Sends<M>,
+{
+    async fn send(&self, msg: M) -> Result<Output<M>, SendError<M>> {
+        self.address.send(msg).await
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ExitReason {
+    Shutdown,
+    Kill,
+    UnhandledError,
 }

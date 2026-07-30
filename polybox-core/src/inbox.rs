@@ -7,6 +7,7 @@ use type_sets::SubsetOf;
 pub trait PolyBox: DynPolyBox + Clone {
     /// The set of message types that this inbox can accept.
     type Set: Members;
+    type AsDyn<T>;
 
     /// Converts into a dynamic inbox without checking if the types are compatible.
     ///
@@ -15,7 +16,7 @@ pub trait PolyBox: DynPolyBox + Clone {
     /// # Safety
     /// This method is not marked as unsafe, because violating the type system can
     /// only lead to runtime errors, not undefined behavior.
-    fn into_dyn_unchecked<T>(self) -> DynInbox<T>;
+    fn into_dyn_unchecked<T>(self) -> Self::AsDyn<T>;
 }
 
 /// A trait that extends [`PolyBox`] with some helper methods.
@@ -23,7 +24,7 @@ pub trait PolyboxExt: PolyBox {
     /// Converts into a dynamic inbox with a subset of the original types.
     ///
     /// This conversion is type-safe, and entirely at compile-time.
-    fn into_dyn_subset<T>(self) -> DynInbox<T>
+    fn into_dyn_subset<T>(self) -> Self::AsDyn<T>
     where
         T: SubsetOf<Self::Set>,
     {
@@ -31,12 +32,12 @@ pub trait PolyboxExt: PolyBox {
     }
 
     /// Converts into a dynamic inbox with the full set of original types.
-    fn into_dyn(self) -> DynInbox<Self::Set> {
+    fn into_dyn(self) -> Self::AsDyn<Self::Set> {
         self.into_dyn_unchecked()
     }
 
     /// Converts into a dynamic inbox, checking at runtime if the types are compatible.
-    fn into_dyn_checked<T: Members>(self) -> Result<DynInbox<T>, Self> {
+    fn into_dyn_checked<T: Members>(self) -> Result<Self::AsDyn<T>, Self> {
         if self.accepts_msgs(&T::members()) {
             Ok(self.into_dyn_unchecked())
         } else {
@@ -172,6 +173,7 @@ impl<T> DynInbox<T> {
 
 impl<T: Members> PolyBox for DynInbox<T> {
     type Set = T;
+    type AsDyn<R> = DynInbox<R>;
 
     fn into_dyn_unchecked<R>(self) -> DynInbox<R> {
         DynInbox::new_unchecked(self.inbox)

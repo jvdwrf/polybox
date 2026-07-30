@@ -177,7 +177,7 @@ pub fn derive_actor_interface(input: TokenStream) -> TokenStream {
 
                 handle_matches.push(quote! {
                     Self::#variant_name(payload) => {
-                        <T as #base_path::actor::HandleMessage<#inner_type>>::handle_message(actor, payload).await
+                        <T as #base_path::actor::HandleMessage<#inner_type>>::handle_message(actor, state, payload).await
                     }
                 });
                 inner_types.push(inner_type);
@@ -191,7 +191,7 @@ pub fn derive_actor_interface(input: TokenStream) -> TokenStream {
         where
             T: #base_path::actor::Actor + #( #base_path::actor::HandleMessage<#inner_types> + )*
         {
-            async fn handle_with(self, actor: &mut T) -> Result<(), T::Error> {
+            async fn handle_with(self, state: &mut #base_path::state::ActorState<T>, actor: &mut T) -> Result<(), T::Error> {
                 match self {
                     #(#handle_matches)*
                 }

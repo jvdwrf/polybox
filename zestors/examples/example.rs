@@ -4,6 +4,7 @@ use zestors::{
     actor::{Actor, ActorExt, HandleMessage},
     inbox::Receiver,
     signals::{SendSignal, Shutdown, Signal, SignalOrMessage},
+    state::ActorState,
     *,
 };
 
@@ -77,15 +78,29 @@ impl Actor for MyActor {
 }
 
 impl HandleMessage<u32> for MyActor {
-    async fn handle_message(&mut self, msg: Payload<u32>) -> Result<(), Self::Error> {
+    async fn handle_message(
+        &mut self,
+        state: &mut ActorState<Self>,
+        msg: Payload<u32>,
+    ) -> Result<(), Self::Error> {
         println!("Received message: {:?}", msg);
+
         self.nr += msg;
+
+        if msg == 301 {
+            state.signal(Shutdown).await.ok();
+        }
+
         Ok(())
     }
 }
 
 impl HandleMessage<String> for MyActor {
-    async fn handle_message(&mut self, msg: Payload<String>) -> Result<(), Self::Error> {
+    async fn handle_message(
+        &mut self,
+        _: &mut ActorState<Self>,
+        msg: Payload<String>,
+    ) -> Result<(), Self::Error> {
         println!("Received message: {:?}", msg);
         Ok(())
     }
