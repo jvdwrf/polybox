@@ -9,6 +9,8 @@ polybox-codegen.workspace = true
 tokio.workspace = true
 futures.workspace = true
 tracing.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
 
 [features]
 _ra = ["polybox/_ra"]

@@ -1,30 +1,39 @@
 use crate::{
     address::Address,
+    child::Child,
     inbox::{Inbox, Receiver},
     signals::{Signal, SignalReceiver, SignalSender},
 };
 
-pub fn spawn<T, F, Fut>(f: F) -> (Address<T>, tokio::task::JoinHandle<Fut::Output>)
+pub fn spawn<T, R, F>(
+    f: impl FnOnce(Receiver<T>, SignalReceiver, Address<T>) -> F,
+) -> (Address<T>, Child<R>)
 where
     T: Interface,
-    F: FnOnce(Receiver<T>, SignalReceiver, Address<T>) -> Fut,
-    Fut: Future + Send + 'static,
-    Fut::Output: Send + 'static,
+    R: Send + 'static,
+    F: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
+    F::Output: Send + 'static,
 {
     let (inbox, receiver) = Inbox::new(1_000_000);
     let (signal_inbox, signal_receiver) = SignalSender::new();
     let address = Address::new(inbox, signal_inbox);
     let handle = tokio::spawn(f(receiver, signal_receiver, address.clone()));
-    (address, handle)
+    let child = Child::new(handle);
+    (address, child)
 }
 
 pub mod actor;
 pub mod address;
+pub mod child;
 pub mod inbox;
 pub mod signals;
 pub mod state;
 pub use polybox;
 pub(crate) use polybox::*;
+
+pub(crate) mod _prelude {
+    pub(crate) use crate::{actor::*, address::*, child::*, inbox::*, signals::*, state::*, *};
+}
 
 pub use polybox_codegen::{
     ActorInterface, InterfaceZestors as Interface, MessageZestors as Message,
@@ -79,6 +88,7 @@ mod tests {
                         },
                     }
                 }
+                Ok(())
             },
         );
 
@@ -94,7 +104,7 @@ mod tests {
 
     impl Actor for MyActor {
         type Interface = TestInterface;
-        type Error = Box<dyn std::error::Error + Send + Sync>;
+        type Error = anyhow::Error;
         type Exit = u32;
 
         async fn exit(&mut self, reason: state::ExitReason) -> Result<Self::Exit, Self::Error> {

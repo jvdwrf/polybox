@@ -16,3 +16,4 @@ thiserror = "2"
 derive_more = { version = "2", features = ["full"] }
 flume = "0.12"
 tracing = "0.1"
+anyhow = "1"

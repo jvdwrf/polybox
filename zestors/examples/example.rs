@@ -43,6 +43,8 @@ async fn main() {
                     },
                 }
             }
+
+            Ok(())
         },
     );
 
@@ -67,7 +69,7 @@ enum MyInterface {
 impl Actor for MyActor {
     type Interface = MyInterface;
 
-    type Error = Box<dyn std::error::Error + Send + Sync>;
+    type Error = anyhow::Error;
 
     type Exit = u32;
 
@@ -113,6 +115,6 @@ async fn test() {
     addr.send(15u32).await.unwrap();
     addr.send("Hello, world!".to_string()).await.unwrap();
     addr.signal(Shutdown).await.unwrap();
-    let exit_value = handle.await.unwrap().unwrap();
+    let exit_value = handle.await.unwrap();
     assert_eq!(exit_value, 20);
 }

@@ -1,14 +1,14 @@
 use crate::{
     address::Address,
+    child::Child,
     state::{ActorState, ExitReason},
 };
 use polybox::{Interface, Message, Payload};
 use std::fmt::{Debug, Display};
-use tokio::task::JoinHandle;
 
 pub trait Actor: Debug + Sized + Send + 'static {
     type Interface: Interface + ActorInterface<Self>;
-    type Error: Debug + Display + Send + 'static;
+    type Error: Debug + Display + Send + 'static + Into<anyhow::Error>;
     type Exit: Send + 'static;
 
     /// Called when the actor is exiting, after all messages have been processed.
@@ -60,17 +60,18 @@ pub trait Actor: Debug + Sized + Send + 'static {
 }
 
 pub trait ActorExt: Actor {
-    fn spawn(
-        mut self,
-    ) -> (
-        Address<Self::Interface>,
-        JoinHandle<Result<Self::Exit, Self::Error>>,
-    ) {
+    fn spawn(mut self) -> (Address<Self::Interface>, Child<Self::Exit>) {
         crate::spawn(async move |mut rx, mut signal_rx, address| {
             ActorState::new(address)
                 .run(&mut self, &mut rx, &mut signal_rx)
                 .await
+                .map_err(Into::into)
         })
+    }
+
+    fn spawn_detached(self) -> (Address<Self::Interface>, Child<Self::Exit>) {
+        let (address, child) = self.spawn();
+        (address, child.detached())
     }
 
     fn handle_interface(
