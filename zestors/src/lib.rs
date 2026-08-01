@@ -18,7 +18,7 @@ where
     let (signal_inbox, signal_receiver) = SignalSender::new();
     let address = Address::new(inbox, signal_inbox);
     let handle = tokio::spawn(f(receiver, signal_receiver, address.clone()));
-    let child = Child::new(handle);
+    let child = Child::new(handle, address.clone().into_dyn_subset());
     (address, child)
 }
 

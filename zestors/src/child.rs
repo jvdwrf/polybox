@@ -1,19 +1,29 @@
 #[allow(unused_imports)]
 use crate::_prelude::*;
-use futures::FutureExt as _;
+use futures::{FutureExt as _, prelude::future::BoxFuture};
+use polybox::errors::SendError;
 use std::{any::Any, fmt::Debug, task::Poll};
 
 pub struct Child<T> {
     handle: Option<tokio::task::JoinHandle<Result<T, anyhow::Error>>>,
     attached: bool,
+    address: DynAddress,
 }
 
 impl<T> Child<T> {
-    pub(crate) fn new(handle: tokio::task::JoinHandle<Result<T, anyhow::Error>>) -> Self {
+    pub(crate) fn new(
+        handle: tokio::task::JoinHandle<Result<T, anyhow::Error>>,
+        address: DynAddress,
+    ) -> Self {
         Self {
             handle: Some(handle),
             attached: true,
+            address,
         }
+    }
+
+    pub fn address(&self) -> &DynAddress {
+        &self.address
     }
 
     pub fn abort(&self) {
@@ -85,11 +95,26 @@ impl<T> Future for Child<T> {
     }
 }
 
+impl<T: Send> Observable for Child<T> {
+    async fn send_signal_payload(this: &Self, signal: Signal) -> Result<(), SendError<Signal>> {
+        <DynAddress as Observable>::send_signal_payload(&this.address, signal).await
+    }
+}
+
+impl<T: Send> DynPolyBox for Child<T> {
+    fn _send_boxed_payload_checked(
+        &self,
+        msg: BoxedPayload,
+    ) -> BoxFuture<'_, Result<(), errors::SendCheckedError<BoxedPayload>>> {
+        self.address._send_boxed_payload_checked(msg)
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum JoinError {
     /// The task panicked.
     #[error("task panicked")]
-    Panic(Box<dyn Any + Send>),
+    Panic,
 
     /// The task was aborted.
     #[error("task was aborted / cancelled")]
@@ -105,7 +130,7 @@ impl From<tokio::task::JoinError> for JoinError {
         if err.is_cancelled() {
             JoinError::Aborted
         } else if err.is_panic() {
-            JoinError::Panic(err.into_panic())
+            JoinError::Panic
         } else {
             unreachable!("JoinError is neither cancelled nor panicked: {:?}", err)
         }
@@ -132,11 +157,13 @@ impl<T> Debug for Child<T> {
 #[derive(Debug)]
 pub struct AnyChild {
     child: Box<dyn IsAnyChild>,
+    address: DynAddress,
 }
 
 impl AnyChild {
     pub fn new<T: Send + 'static>(child: Child<T>) -> Self {
         Self {
+            address: child.address.clone(),
             child: Box::new(child),
         }
     }
@@ -251,5 +278,20 @@ impl Future for AnyChild {
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Self::Output> {
         self.child.poll_any_child(cx)
+    }
+}
+
+impl Observable for AnyChild {
+    async fn send_signal_payload(this: &Self, signal: Signal) -> Result<(), SendError<Signal>> {
+        <DynAddress as Observable>::send_signal_payload(&this.address, signal).await
+    }
+}
+
+impl DynPolyBox for AnyChild {
+    fn _send_boxed_payload_checked(
+        &self,
+        msg: BoxedPayload,
+    ) -> BoxFuture<'_, Result<(), errors::SendCheckedError<BoxedPayload>>> {
+        self.address._send_boxed_payload_checked(msg)
     }
 }

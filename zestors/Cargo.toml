@@ -11,6 +11,7 @@ futures.workspace = true
 tracing.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
+indexmap.workspace = true
 
 [features]
 _ra = ["polybox/_ra"]

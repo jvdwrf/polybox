@@ -85,13 +85,13 @@ where
     }
 }
 
-impl<T: Interface> Observable for DynAddress<T> {
+impl<T> Observable for DynAddress<T> {
     async fn send_signal_payload(this: &Self, signal: Signal) -> Result<(), SendError<Signal>> {
         this.signal_inbox.send(signal).await
     }
 }
 
-impl<T: Interface> DynPolyBox for DynAddress<T> {
+impl<T> DynPolyBox for DynAddress<T> {
     fn _send_boxed_payload_checked(
         &self,
         msg: BoxedPayload,
