@@ -29,9 +29,11 @@ pub mod inbox;
 pub mod signals;
 pub mod state;
 pub use polybox;
+pub mod supervisor;
 pub(crate) use polybox::*;
 
 pub(crate) mod _prelude {
+    #![allow(unused_imports)]
     pub(crate) use crate::{actor::*, address::*, child::*, inbox::*, signals::*, state::*, *};
 }
 

@@ -1,6 +1,8 @@
+use std::fmt::Debug;
+
 use super::*;
 use crate::signals::{Observable, SignalSender};
-use polybox::{errors::SendError, *};
+use polybox::{errors::SendError, type_sets::Set, *};
 
 pub struct Address<T> {
     inbox: Inbox<T>,
@@ -69,7 +71,7 @@ impl<T: Interface> Address<T> {
     }
 }
 
-pub struct DynAddress<T> {
+pub struct DynAddress<T = Set![]> {
     inbox: DynInbox<T>,
     signal_inbox: SignalSender,
 }
@@ -117,5 +119,14 @@ impl<T> Clone for DynAddress<T> {
             inbox: self.inbox.clone(),
             signal_inbox: self.signal_inbox.clone(),
         }
+    }
+}
+
+impl<T> Debug for DynAddress<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DynAddress")
+            .field("inbox", &std::any::type_name::<DynInbox<T>>())
+            .field("signal_inbox", &self.signal_inbox)
+            .finish()
     }
 }
