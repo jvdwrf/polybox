@@ -66,7 +66,7 @@ mod tests {
                     match msg {
                         SignalOrMessage::Signal(signal) => match signal {
                             Signal::Shutdown(_) => break,
-                            Signal::Kill(_) => break,
+                            Signal::Exit(_) => break,
                             Signal::Suspend(_) => todo!(),
                             Signal::Resume(_) => todo!(),
                             Signal::GetStatus((_, tx)) => {

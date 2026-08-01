@@ -61,26 +61,73 @@ impl Supervisor {
         mut signal_rx: SignalReceiver,
         _address: Address<SupervisorInterface>,
     ) -> Result<(), SupervisorError> {
+        let mut suspended = false;
+        let start_time = Instant::now();
+
         loop {
-            tokio::select! {
+            let msg = tokio::select! {
                 biased;
-
                 Some(msg) = signal_rx.recv_with(&mut rx) => {
-                    match msg {
-                        SignalOrMessage::Signal(signal) => self.handle_signal(signal)?,
-                        SignalOrMessage::Message(message) => self.handle_message(message)?,
-                    }
+                    Some(msg)
                 }
-
                 Some(item) = self.next() => {
-                    self.handle_child_termination(item).await?
+                    self.handle_child_termination(item).await?;
+                    None
                 }
-
                 _ = futures::future::pending::<()>() => {
                     unreachable!()
                 }
             };
+
+            let Some(msg) = msg else {
+                continue;
+            };
+
+            match msg {
+                SignalOrMessage::Signal(signal) => match signal {
+                    Signal::Shutdown(_) | Signal::Exit(_) => {
+                        self.shutdown().await;
+                        break;
+                    }
+                    Signal::Suspend(_) => {
+                        suspended = true;
+                    }
+                    Signal::Resume(_) => {
+                        suspended = false;
+                    }
+                    Signal::GetStatus((_, tx)) => {
+                        let status = if suspended {
+                            signals::Status::Suspended
+                        } else {
+                            signals::Status::Running
+                        };
+                        tx.send(status).ok();
+                    }
+                    Signal::GetState((_, tx)) => {
+                        tx.send(State {
+                            status: if suspended {
+                                signals::Status::Suspended
+                            } else {
+                                signals::Status::Running
+                            },
+                            uptime: start_time.elapsed(),
+                            description: "Supervisor".to_string(),
+                        })
+                        .ok();
+                    }
+                    Signal::Ping((_, tx)) => {
+                        tx.send(()).ok();
+                    }
+                },
+                SignalOrMessage::Message(message) => match message {},
+            }
         }
+
+        Ok(())
+    }
+
+    async fn shutdown(&mut self) {
+        Self::shutdown_children(&mut self.supervisees.values_mut().collect::<Vec<_>>()).await;
     }
 
     async fn handle_child_termination(
@@ -122,87 +169,49 @@ impl Supervisor {
             }
         }
 
-        self.restart_children(id).await;
+        Self::restart_children(&mut self.affected_supervisees_mut(id)).await;
 
         Ok(())
     }
 
-    async fn restart_children(&mut self, id: &ChildId) {
-        let mut affected_children = self.affected_children(id);
-
-        // First attempt to shutdown all affected children gracefully
-        let successful_shutdown = {
-            let abort_timeout = affected_children
-                .iter()
-                .map(|(_id, supervisee)| supervisee.spec.abort_timeout())
-                .max()
-                .expect("at least one affected child");
-
-            for (_id, supervisee) in &affected_children {
-                if let Some(child) = &supervisee.child {
-                    child.shutdown().await.ok();
-                }
-            }
-
-            let mut child_futures = join_all(
-                affected_children
-                    .iter_mut()
-                    .filter_map(|c| c.1.child.as_mut()),
-            );
-
-            // Race between waiting for children to shutdown and the abort timeout
-            select! {
-                _ = tokio::time::sleep(abort_timeout) => {
-                    tracing::warn!("Timeout reached while waiting for children to shutdown. Aborting remaining children.");
-                    false
-                }
-
-                _ = &mut child_futures => {
-                    tracing::info!("All affected children have shutdown.");
-                    true
-                }
-            }
-        };
-
-        // If shutdown was not successful, abort all remaining children
-        if !successful_shutdown {
-            for (_id, supervisee) in &affected_children {
-                if let Some(child) = &supervisee.child {
-                    child.abort();
-                }
-            }
-
-            join_all(
-                affected_children
-                    .iter_mut()
-                    .filter_map(|c| c.1.child.as_mut()),
-            )
-            .await;
-        }
+    async fn restart_children(supervisees: &mut [&mut Supervisee]) {
+        // First, shutdown all affected children
+        let _ = Self::shutdown_children(supervisees).await;
 
         // Now restart all affected children
-        for (_id, supervisee) in &mut affected_children {
+        for supervisee in supervisees {
             let (child, _address) = supervisee.spec.spawn();
             supervisee.child = Some(child);
         }
+    }
+
+    async fn shutdown_children(
+        supervisees: &mut [&mut Supervisee],
+    ) -> Vec<Result<Box<dyn Any + Send>, JoinError>> {
+        let shutdown_futures = supervisees.iter_mut().filter_map(|supervisee| {
+            let abort_timeout = supervisee.spec.abort_timeout();
+
+            supervisee
+                .child
+                .take()
+                .map(|c| c.shutdown_abort(abort_timeout))
+        });
+
+        join_all(shutdown_futures).await
     }
 
     fn allow_restart(&mut self) -> bool {
         self.restart_intensity.allow_restart(&mut self.restarts)
     }
 
-    fn affected_children<'a>(
-        &'a mut self,
-        id: &'a ChildId,
-    ) -> Vec<(&'a ChildId, &'a mut Supervisee)> {
+    fn affected_supervisees_mut<'a>(&'a mut self, id: &'a ChildId) -> Vec<&'a mut Supervisee> {
         match self.strategy {
-            SupervisionStrategy::OneForOne => vec![(
-                id,
+            SupervisionStrategy::OneForOne => vec![
                 self.supervisees
                     .get_mut(id)
                     .expect("child should be present"),
-            )],
-            SupervisionStrategy::OneForAll => self.supervisees.iter_mut().collect(),
+            ],
+            SupervisionStrategy::OneForAll => self.supervisees.values_mut().collect(),
             SupervisionStrategy::RestForOne => {
                 let mut affected = Vec::new();
                 let mut found = false;
@@ -213,7 +222,7 @@ impl Supervisor {
                     }
 
                     if found {
-                        affected.push((child_id, supervisee));
+                        affected.push(supervisee);
                     }
                 }
 
@@ -224,7 +233,7 @@ impl Supervisor {
 
     fn handle_signal(&mut self, signal: Signal) -> Result<(), SupervisorError> {
         match signal {
-            Signal::Shutdown(_) | Signal::Kill(_) => {
+            Signal::Shutdown(_) | Signal::Exit(_) => {
                 for child in self.supervisees.values_mut() {
                     if let Some(child) = &mut child.child {
                         child.abort();

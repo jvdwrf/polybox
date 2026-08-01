@@ -2,7 +2,7 @@
 use crate::_prelude::*;
 use futures::{FutureExt as _, prelude::future::BoxFuture};
 use polybox::errors::SendError;
-use std::{any::Any, fmt::Debug, task::Poll};
+use std::{any::Any, fmt::Debug, task::Poll, time::Duration};
 
 pub struct Child<T> {
     handle: Option<tokio::task::JoinHandle<Result<T, anyhow::Error>>>,
@@ -73,6 +73,25 @@ impl<T> Child<T> {
         T: Send + 'static,
     {
         AnyChild::new(self)
+    }
+
+    pub async fn shutdown_abort(mut self, timeout: Duration) -> Result<T, JoinError> {
+        let signal_res = self.address.signal_shutdown().await;
+
+        if signal_res.is_ok() {
+            tokio::select! {
+                biased;
+
+                res = &mut self => {
+                    return res;
+                }
+
+                _ = tokio::time::sleep(timeout) => {}
+            };
+        }
+
+        self.abort();
+        self.await
     }
 }
 
@@ -170,6 +189,28 @@ impl AnyChild {
 
     pub fn abort(&self) {
         self.child.abort();
+    }
+
+    pub async fn shutdown_abort(
+        mut self,
+        timeout: Duration,
+    ) -> Result<Box<dyn Any + Send>, JoinError> {
+        let signal_res = self.address.signal_shutdown().await;
+
+        if signal_res.is_ok() {
+            tokio::select! {
+                biased;
+
+                res = &mut self => {
+                    return res;
+                }
+
+                _ = tokio::time::sleep(timeout) => {}
+            };
+        }
+
+        self.abort();
+        self.await
     }
 
     pub fn is_finished(&self) -> bool {

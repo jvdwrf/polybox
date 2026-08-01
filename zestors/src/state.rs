@@ -84,7 +84,7 @@ impl<T: Actor> ActorState<T> {
                     actor.on_shutdown().await?;
                 }
 
-                Signal::Kill(_) => {
+                Signal::Exit(_) => {
                     self.status = signals::Status::Exiting;
                     actor.on_kill().await?;
                     return actor.exit(ExitReason::Kill).await.map(Some);
