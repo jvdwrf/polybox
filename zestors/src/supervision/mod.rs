@@ -58,8 +58,8 @@ impl Supervisor {
     }
 
     pub fn spawn(self) -> (Child<()>, Address<SupervisorInterface>) {
-        let (address, child) = crate::spawn(async move |stream| {
-            self.run(stream).await?;
+        let (address, child) = crate::spawn(async move |stream, address| {
+            self.run(stream, address).await?;
             Ok(())
         });
 
@@ -69,6 +69,7 @@ impl Supervisor {
     async fn run(
         mut self,
         mut stream: EventStream<SupervisorInterface>,
+        _address: Address<SupervisorInterface>,
     ) -> Result<(), SupervisorError> {
         let mut suspended = false;
         let start_time = Instant::now();
@@ -93,7 +94,7 @@ impl Supervisor {
             };
 
             match msg {
-                SignalOrMessage::Signal(signal) => match signal {
+                Event::Signal(signal) => match signal {
                     Signal::Shutdown(_) | Signal::Exit(_) => {
                         self.shutdown().await;
                         break;
@@ -128,7 +129,7 @@ impl Supervisor {
                         tx.send(()).ok();
                     }
                 },
-                SignalOrMessage::Message(message) => match message {
+                Event::Message(message) => match message {
                     SupervisorInterface::RegisterChild(RegisterChild(spec)) => {
                         tracing::trace!("Registering child: {:?}", spec.id());
                         self.add_child(spec);

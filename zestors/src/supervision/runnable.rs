@@ -1,5 +1,7 @@
 use super::*;
 
+pub struct ChildSpec {}
+
 pub trait Runnable: Send + Sized + 'static {
     type Interface: Interface;
     type Exit: Send + 'static;
@@ -7,6 +9,7 @@ pub trait Runnable: Send + Sized + 'static {
     fn run(
         self,
         stream: EventStream<Self::Interface>,
+        address: Address<Self::Interface>,
     ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static;
 }
 
@@ -59,7 +62,9 @@ pub trait RunnableExt: Runnable {
 
     fn wrap<F, Fut, E>(self, mapper: F) -> WrapRunnable<Self, F>
     where
-        F: FnOnce(Self, EventStream<Self::Interface>) -> Fut + Send + 'static,
+        F: FnOnce(Self, EventStream<Self::Interface>, Address<Self::Interface>) -> Fut
+            + Send
+            + 'static,
         Fut: Future<Output = Result<E, anyhow::Error>> + Send + 'static,
         E: Send + 'static,
     {
@@ -67,7 +72,7 @@ pub trait RunnableExt: Runnable {
     }
 
     fn spawn(self) -> (Child<Self::Exit>, Address<Self::Interface>) {
-        let (address, child) = crate::spawn(|stream| self.run(stream));
+        let (address, child) = crate::spawn(|stream, address| self.run(stream, address));
 
         (child, address)
     }
@@ -114,10 +119,11 @@ where
     fn run(
         self,
         stream: EventStream<Self::Interface>,
+        address: Address<Self::Interface>,
     ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static {
         let Self { inner, map_exit } = self;
 
-        async move { map_exit(inner.run(stream).await) }
+        async move { map_exit(inner.run(stream, address).await) }
     }
 }
 
@@ -142,7 +148,7 @@ impl<T, F> WrapRunnable<T, F> {
     pub fn new<R, Fut>(inner: T, mapper: F) -> Self
     where
         T: Runnable,
-        F: FnOnce(T, EventStream<T::Interface>) -> Fut + Send + 'static,
+        F: FnOnce(T, EventStream<T::Interface>, Address<T::Interface>) -> Fut + Send + 'static,
         Fut: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
         R: Send + 'static,
     {
@@ -153,7 +159,7 @@ impl<T, F> WrapRunnable<T, F> {
 impl<T, F, Fut, E> Runnable for WrapRunnable<T, F>
 where
     T: Runnable + Send + 'static,
-    F: FnOnce(T, EventStream<T::Interface>) -> Fut + Send + 'static,
+    F: FnOnce(T, EventStream<T::Interface>, Address<T::Interface>) -> Fut + Send + 'static,
     Fut: Future<Output = Result<E, anyhow::Error>> + Send + 'static,
     E: Send + 'static,
 {
@@ -163,10 +169,11 @@ where
     fn run(
         self,
         stream: EventStream<Self::Interface>,
+        address: Address<Self::Interface>,
     ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static {
         let Self { inner, mapper } = self;
 
-        async move { mapper(inner, stream).await }
+        async move { mapper(inner, stream, address).await }
     }
 }
 
@@ -187,6 +194,7 @@ mod test {
         fn run(
             self,
             _stream: EventStream<Self::Interface>,
+            _address: Address<Self::Interface>,
         ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static {
             async move { Ok(()) }
         }
@@ -199,9 +207,9 @@ mod test {
                 Ok(_) => Ok(12u32),
                 Err(_) => Err(anyhow::anyhow!("error")),
             })
-            .wrap(|runnable, stream| async move {
-                runnable
-                    .run(stream)
+            .wrap(|inner, stream, address| async move {
+                inner
+                    .run(stream, address)
                     .await
                     .map_err(|e| {
                         eprintln!("Error: {:?}", e);

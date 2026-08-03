@@ -1,8 +1,4 @@
-use crate::{
-    address::Address,
-    child::Child,
-    state::{ActorState, ExitReason},
-};
+use crate::_prelude::*;
 use polybox::{Interface, Message, Payload};
 use std::fmt::{Debug, Display};
 
@@ -61,8 +57,8 @@ pub trait Actor: Debug + Sized + Send + 'static {
 
 pub trait ActorExt: Actor {
     fn spawn(mut self) -> (Address<Self::Interface>, Child<Self::Exit>) {
-        crate::spawn(async move |mut stream| {
-            ActorState::new(stream.address.clone())
+        crate::spawn(async move |mut stream, address| {
+            ActorState::new(address)
                 .run(&mut self, &mut stream)
                 .await
                 .map_err(Into::into)

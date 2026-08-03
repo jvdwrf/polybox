@@ -1,6 +1,6 @@
 use crate::{
     actor::{Actor, ActorExt as _},
-    signals::{Observable, SignalOrMessage},
+    signals::{Event, Observable},
     *,
 };
 use polybox::errors::SendError;
@@ -70,17 +70,13 @@ impl<T: Actor> ActorState<T> {
     ) -> Result<Option<T::Exit>, T::Error> {
         let Some(msg) = (match self.status {
             signals::Status::Running | signals::Status::Exiting => stream.recv().await,
-            signals::Status::Suspended => stream
-                .signal_receiver
-                .recv()
-                .await
-                .map(SignalOrMessage::Signal),
+            signals::Status::Suspended => stream.signal_receiver.recv().await.map(Event::Signal),
         }) else {
             return actor.exit(ExitReason::Shutdown).await.map(Some);
         };
 
         match msg {
-            SignalOrMessage::Signal(signal) => match signal {
+            Event::Signal(signal) => match signal {
                 Signal::Shutdown(_) => {
                     self.status = signals::Status::Exiting;
                     actor.on_shutdown().await?;
@@ -129,7 +125,7 @@ impl<T: Actor> ActorState<T> {
                 }
             },
 
-            SignalOrMessage::Message(msg) => {
+            Event::Message(msg) => {
                 actor.handle_interface(self, msg).await?;
             }
         }

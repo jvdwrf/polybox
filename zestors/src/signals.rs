@@ -231,16 +231,16 @@ impl SignalReceiver {
         self.receiver.recv().await
     }
 
-    pub async fn recv_with<T>(&mut self, other: &mut Receiver<T>) -> Option<SignalOrMessage<T>> {
+    pub async fn recv_with<T>(&mut self, other: &mut Receiver<T>) -> Option<Event<T>> {
         select! {
             biased;
 
             Some(signal) = self.receiver.recv() => {
-                Some(SignalOrMessage::Signal(signal))
+                Some(Event::Signal(signal))
             }
 
             Some(msg) = other.recv() => {
-                Some(SignalOrMessage::Message(msg))
+                Some(Event::Message(msg))
             }
 
             else => None,
@@ -251,24 +251,24 @@ impl SignalReceiver {
         &mut self,
         other: &mut Receiver<T>,
         enabled: bool,
-    ) -> Option<SignalOrMessage<T>> {
+    ) -> Option<Event<T>> {
         if enabled {
             select! {
                 biased;
 
                 Some(signal) = self.receiver.recv() => {
-                    Some(SignalOrMessage::Signal(signal))
+                    Some(Event::Signal(signal))
                 }
 
                 Some(msg) = other.recv() => {
-                    Some(SignalOrMessage::Message(msg))
+                    Some(Event::Message(msg))
                 }
 
                 else => None,
             }
         } else {
             if let Some(signal) = self.receiver.recv().await {
-                Some(SignalOrMessage::Signal(signal))
+                Some(Event::Signal(signal))
             } else {
                 None
             }
@@ -276,7 +276,7 @@ impl SignalReceiver {
     }
 }
 
-pub enum SignalOrMessage<T> {
+pub enum Event<T> {
     Signal(Signal),
     Message(T),
 }

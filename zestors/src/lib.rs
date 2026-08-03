@@ -3,10 +3,10 @@ use crate::{
     address::Address,
     child::Child,
     inbox::{Inbox, Receiver},
-    signals::{Signal, SignalReceiver, SignalSender},
+    signals::{Signal, SignalSender},
 };
 
-pub fn spawn<T, R, F>(f: impl FnOnce(EventStream<T>) -> F) -> (Address<T>, Child<R>)
+pub fn spawn<T, R, F>(f: impl FnOnce(EventStream<T>, Address<T>) -> F) -> (Address<T>, Child<R>)
 where
     T: Interface,
     R: Send + 'static,
@@ -16,8 +16,8 @@ where
     let (inbox, receiver) = Inbox::new(1_000_000);
     let (signal_inbox, signal_receiver) = SignalSender::new();
     let address = Address::new(inbox, signal_inbox);
-    let stream = EventStream::new(receiver, signal_receiver, address.clone());
-    let handle = tokio::spawn(f(stream));
+    let stream = EventStream::new(receiver, signal_receiver);
+    let handle = tokio::spawn(f(stream, address.clone()));
     let child = Child::new(handle, address.clone().into_dyn_subset());
     (address, child)
 }
