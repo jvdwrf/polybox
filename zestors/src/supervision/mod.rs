@@ -1,8 +1,6 @@
+use crate::_prelude::*;
 use futures::{FutureExt, Stream, StreamExt as _, future::join_all};
 use indexmap::IndexMap;
-use tokio::{select, time::Instant};
-
-use crate::_prelude::*;
 use std::{
     any::Any,
     collections::VecDeque,
@@ -13,6 +11,7 @@ use std::{
     task::{Context, Poll},
     time::Duration,
 };
+use tokio::time::Instant;
 
 #[derive(Debug)]
 pub struct Supervisor {
@@ -22,9 +21,20 @@ pub struct Supervisor {
     restarts: VecDeque<Instant>,
 }
 
+#[derive(Message, Debug)]
+#[msg(path = crate)]
+pub struct RegisterChild(ChildSpec);
+
+#[derive(Message, Debug)]
+#[msg(path = crate, reply = "Option<Supervisee>")]
+pub struct DeregisterChild(ChildId);
+
 #[derive(Interface, Debug)]
 #[interface(crate = "crate")]
-pub enum SupervisorInterface {}
+pub enum SupervisorInterface {
+    RegisterChild(Payload<RegisterChild>),
+    DeregisterChild(Payload<DeregisterChild>),
+}
 
 impl Supervisor {
     pub fn new(strategy: SupervisionStrategy, restart_intensity: RestartIntensity) -> Self {
@@ -38,7 +48,8 @@ impl Supervisor {
 
     pub fn add_child(&mut self, spec: ChildSpec) {
         let supervisee = Supervisee::new(spec);
-        self.supervisees.insert(supervisee.spec.id(), supervisee);
+        self.supervisees
+            .insert(supervisee.spec.id().clone(), supervisee);
     }
 
     pub fn with_child(mut self, spec: ChildSpec) -> Self {
@@ -46,13 +57,13 @@ impl Supervisor {
         self
     }
 
-    pub fn spawn(self) -> (AnyChild, DynAddress) {
+    pub fn spawn(self) -> (Child<()>, Address<SupervisorInterface>) {
         let (address, child) = crate::spawn(async move |rx, signal_rx, address| {
             self.run(rx, signal_rx, address).await?;
             Ok(())
         });
 
-        (child.into_any(), address.into_dyn_subset())
+        (child, address)
     }
 
     async fn run(
@@ -67,7 +78,7 @@ impl Supervisor {
         loop {
             let msg = tokio::select! {
                 biased;
-                Some(msg) = signal_rx.recv_with(&mut rx) => {
+                Some(msg) = signal_rx.recv_with_enabled(&mut rx, !suspended) => {
                     Some(msg)
                 }
                 Some(item) = self.next() => {
@@ -119,7 +130,18 @@ impl Supervisor {
                         tx.send(()).ok();
                     }
                 },
-                SignalOrMessage::Message(message) => match message {},
+                SignalOrMessage::Message(message) => match message {
+                    SupervisorInterface::RegisterChild(RegisterChild(spec)) => {
+                        tracing::trace!("Registering child: {:?}", spec.id());
+                        self.add_child(spec);
+                    }
+
+                    SupervisorInterface::DeregisterChild((DeregisterChild(id), tx)) => {
+                        tracing::trace!("Deregistering child: {:?}", id);
+                        let supervisee = self.supervisees.shift_remove(&id);
+                        tx.send(supervisee).ok();
+                    }
+                },
             }
         }
 
@@ -230,27 +252,6 @@ impl Supervisor {
             }
         }
     }
-
-    fn handle_signal(&mut self, signal: Signal) -> Result<(), SupervisorError> {
-        match signal {
-            Signal::Shutdown(_) | Signal::Exit(_) => {
-                for child in self.supervisees.values_mut() {
-                    if let Some(child) = &mut child.child {
-                        child.abort();
-                    }
-                }
-            }
-            _ => {}
-        }
-
-        Ok(())
-    }
-
-    fn handle_message(&mut self, message: SupervisorInterface) -> Result<(), SupervisorError> {
-        match message {
-            // Handle messages here
-        }
-    }
 }
 
 impl Stream for Supervisor {
@@ -286,63 +287,97 @@ pub struct ChildTermination {
 }
 
 #[derive(Debug)]
-struct Supervisee {
-    child: Option<AnyChild>,
-    spec: ChildSpec,
-    restarts: VecDeque<Instant>,
+pub struct Supervisee {
+    pub child: Option<AnyChild>,
+    pub spec: ChildSpec,
 }
 
 impl Supervisee {
     fn new(spec: ChildSpec) -> Self {
-        Self {
-            child: None,
-            spec,
-            restarts: VecDeque::new(),
-        }
+        Self { child: None, spec }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ChildSpec {
-    inner: Arc<dyn DynChildSpec + Send + Sync>,
+    id: ChildId,
+    restart_mode: RestartMode,
+    abort_timeout: Duration,
+    spawn: Arc<dyn Fn() -> (AnyChild, DynAddress) + Send + Sync>,
 }
 
 impl ChildSpec {
-    pub fn new<T: Supervisable>(supervisable: T) -> Self {
+    pub fn from_supervisable(spec: impl Supervisable) -> Self {
         Self {
-            inner: Arc::new(supervisable),
+            id: spec.id(),
+            restart_mode: spec.restart_mode(),
+            abort_timeout: spec.abort_timeout(),
+            spawn: Arc::new(move || {
+                let (child, address) = spec.clone().spawn();
+                (child.into_any(), address.into_dyn_subset())
+            }),
         }
     }
 
-    pub fn spawn(&self) -> (AnyChild, DynAddress) {
-        self.inner.spawn()
+    pub fn new(
+        id: ChildId,
+        spawn: impl Fn() -> (AnyChild, DynAddress) + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            id,
+            restart_mode: RestartMode::OnError,
+            abort_timeout: Duration::from_millis(5_000),
+            spawn: Arc::new(spawn),
+        }
     }
 
-    pub fn id(&self) -> ChildId {
-        self.inner.id()
+    pub fn with_restart_mode(mut self, restart_mode: RestartMode) -> Self {
+        self.restart_mode = restart_mode;
+        self
+    }
+
+    pub fn with_abort_timeout(mut self, abort_timeout: Duration) -> Self {
+        self.abort_timeout = abort_timeout;
+        self
+    }
+
+    pub fn set_restart_mode(&mut self, restart_mode: RestartMode) {
+        self.restart_mode = restart_mode;
+    }
+
+    pub fn set_abort_timeout(&mut self, abort_timeout: Duration) {
+        self.abort_timeout = abort_timeout;
+    }
+
+    pub fn id(&self) -> &ChildId {
+        &self.id
     }
 
     pub fn restart_mode(&self) -> RestartMode {
-        self.inner.restart_mode()
+        self.restart_mode
     }
 
     pub fn abort_timeout(&self) -> Duration {
-        self.inner.abort_timeout()
+        self.abort_timeout
+    }
+
+    pub fn spawn(&self) -> (AnyChild, DynAddress) {
+        (self.spawn)()
     }
 }
 
-pub trait Supervisable: Clone + Debug + Send + Sync + 'static {
-    type Interface: Interface;
-    type Exit: Send + 'static;
+impl Debug for ChildSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ChildSpec")
+            .field("id", &self.id)
+            .field("restart_mode", &self.restart_mode)
+            .field("abort_timeout", &self.abort_timeout)
+            .finish()
+    }
+}
 
+pub trait Supervisable: Runnable + Clone + Debug + Send + Sync + 'static {
     fn id(&self) -> ChildId;
-
-    fn run(
-        self,
-        receiver: Receiver<Self::Interface>,
-        signal_receiver: SignalReceiver,
-        address: Address<Self::Interface>,
-    ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static;
 
     fn restart_mode(&self) -> RestartMode {
         RestartMode::OnError
@@ -350,34 +385,6 @@ pub trait Supervisable: Clone + Debug + Send + Sync + 'static {
 
     fn abort_timeout(&self) -> Duration {
         Duration::from_millis(5_000)
-    }
-}
-
-trait DynChildSpec: Debug {
-    fn id(&self) -> ChildId;
-    fn restart_mode(&self) -> RestartMode;
-    fn abort_timeout(&self) -> Duration;
-    fn spawn(&self) -> (AnyChild, DynAddress);
-}
-
-impl<T: Supervisable> DynChildSpec for T {
-    fn id(&self) -> ChildId {
-        <Self as Supervisable>::id(self)
-    }
-
-    fn restart_mode(&self) -> RestartMode {
-        <Self as Supervisable>::restart_mode(self)
-    }
-
-    fn abort_timeout(&self) -> Duration {
-        <Self as Supervisable>::abort_timeout(self)
-    }
-
-    fn spawn(&self) -> (AnyChild, DynAddress) {
-        let (address, child) =
-            crate::spawn(|rx, signal_rx, address| self.clone().run(rx, signal_rx, address));
-
-        (child.into_any(), address.into_dyn_subset())
     }
 }
 
@@ -463,3 +470,6 @@ pub enum SupervisorError {
     #[error("Restart limit reached for child {0}")]
     RestartLimit(#[from] RestartLimitReached),
 }
+
+pub use runnable::*;
+mod runnable;

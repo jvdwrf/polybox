@@ -12,10 +12,11 @@ categories = ["concurrency"]
 readme = "README.md"
 
 [dependencies]
-syn = { version = "2", features = ["full"] }
+syn = { version = "3", features = ["full"] }
 quote = "1"
 proc-macro2 = "1"
 heck = "0.5"
+darling = { version = "0.24" }
 
 [lib]
 proc-macro = true

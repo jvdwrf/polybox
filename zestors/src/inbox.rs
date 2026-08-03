@@ -85,6 +85,12 @@ impl<T> Clone for Inbox<T> {
     }
 }
 
+impl<T> std::fmt::Debug for Inbox<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Inbox").finish()
+    }
+}
+
 pub struct Receiver<T> {
     receiver: tokio::sync::mpsc::Receiver<T>,
 }
@@ -92,5 +98,11 @@ pub struct Receiver<T> {
 impl<T> Receiver<T> {
     pub async fn recv(&mut self) -> Option<T> {
         self.receiver.recv().await
+    }
+}
+
+impl<T> std::fmt::Debug for Receiver<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Receiver").finish()
     }
 }

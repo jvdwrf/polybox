@@ -71,6 +71,15 @@ impl<T: Interface> Address<T> {
     }
 }
 
+impl<T> Debug for Address<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Address")
+            .field("inbox", &self.inbox)
+            .field("signal_inbox", &self.signal_inbox)
+            .finish()
+    }
+}
+
 pub struct DynAddress<T = Set![]> {
     inbox: DynInbox<T>,
     signal_inbox: SignalSender,

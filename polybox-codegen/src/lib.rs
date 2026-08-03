@@ -3,6 +3,7 @@
 //! See [GitHub](https://github.com/jvdwrf/polybox) for more information.
 
 extern crate proc_macro;
+use darling::FromAttributes;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Expr, Fields, Lit, Type};
@@ -218,46 +219,34 @@ pub fn derive_actor_interface(input: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_derive(Message, attributes(msg))]
 pub fn derive_message(input: TokenStream) -> TokenStream {
-    derive_invocation(input, "::polybox")
+    _derive_message(input, "::polybox")
 }
 
 #[proc_macro_derive(MessageZestors, attributes(msg))]
 pub fn derive_message_zestors(input: TokenStream) -> TokenStream {
-    derive_invocation(input, "::zestors")
+    _derive_message(input, "::zestors")
 }
 
-fn derive_invocation(input: TokenStream, base: &str) -> TokenStream {
+#[derive(darling::FromAttributes)]
+#[darling(attributes(msg))]
+struct MessageAttrs {
+    reply: Option<syn::Type>,
+    path: Option<syn::Path>,
+}
+
+fn _derive_message(input: TokenStream, base: &str) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
+    let attrs = match MessageAttrs::from_attributes(&input.attrs) {
+        Ok(attrs) => attrs,
+        Err(err) => return err.write_errors().into(),
+    };
     let name = &input.ident;
 
-    // // 1. Determine the base path (default: ::polybox)
-    // let mut base_path: syn::Path = syn::parse_str("::polybox").unwrap();
-
-    // // 2. Determine the default Kind (default: ::polybox::FireAndForget)
-    // let mut kind_type = quote!(::polybox::FireAndForget);
-
-    let msg_attr = &input.attrs.iter().find(|attr| attr.path().is_ident("msg"));
-
-    let base_path = extract_base_path(&input.attrs, "msg", base);
-
-    let kind_type = if let Some(attr) = msg_attr {
-        let mut kind_type = quote!(#base_path::FireAndForget);
-        let _ = attr.parse_nested_meta(|meta| {
-            if meta.path.is_ident("reply") {
-                let value = meta.value()?;
-                if let Ok(parsed_type) = value.parse::<Type>() {
-                    kind_type = quote! {
-                        #base_path::Request<#parsed_type>
-                    }
-                }
-            } else if !meta.path.is_ident("crate") {
-                panic!("Only `reply` or `crate` is expected")
-            }
-            Ok(())
-        });
-        kind_type
+    let base_path: syn::Path = attrs.path.unwrap_or_else(|| syn::parse_str(base).unwrap());
+    let kind_type = if let Some(reply_type) = attrs.reply {
+        quote!( #base_path::Request<#reply_type> )
     } else {
-        quote!(#base_path::FireAndForget)
+        quote!( #base_path::FireAndForget )
     };
 
     // Handle generics if the struct/enum is generic
@@ -271,6 +260,36 @@ fn derive_invocation(input: TokenStream, base: &str) -> TokenStream {
 
     TokenStream::from(expanded)
 }
+
+// #[proc_macro_derive(MessageMethodZestors, attributes(msg))]
+// pub fn derive_message_method_zestors(input: TokenStream) -> TokenStream {
+//     _derive_message_method(input, "::zestors")
+// }
+
+// #[proc_macro_derive(MessageMethod, attributes(msg))]
+// pub fn derive_message_method(input: TokenStream) -> TokenStream {
+//     _derive_message_method(input, "::polybox")
+// }
+
+// fn _derive_message_method(input: TokenStream, base: &str) -> TokenStream {
+//     let input = parse_macro_input!(input as DeriveInput);
+//     let name = &input.ident;
+//     let base_path = extract_base_path(&input.attrs, "msg", base);
+//     let trait_name = syn::Ident::new(&format!("Send{}", name), name.span());
+//     let method_name = syn::Ident::new(
+//         &format!("send_{}", name.to_string().to_lowercase()),
+//         name.span(),
+//     );
+//     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+//     let expanded = quote! {
+//         pub trait #trait_name #impl_generics #where_clause {
+//             fn #method_name(&self, msg: ) -> #base_path::SendFuture<'_, Result<#base_path::Output<#name #ty_generics>, #base_path::SendError<#name #ty_generics>>>;
+//         }
+//     };
+
+//     TokenStream::from(expanded)
+// }
 
 fn extract_base_path(attrs: &[syn::Attribute], attr_name: &str, default_path: &str) -> syn::Path {
     let mut base_path: syn::Path = syn::parse_str(default_path).unwrap();

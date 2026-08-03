@@ -37,7 +37,7 @@ pub struct State {
 }
 
 #[derive(Message)]
-#[msg(reply = (), crate = "test")]
+#[msg(reply = ())]
 pub struct Ping;
 
 #[derive(Interface)]
@@ -244,6 +244,34 @@ impl SignalReceiver {
             }
 
             else => None,
+        }
+    }
+
+    pub async fn recv_with_enabled<T>(
+        &mut self,
+        other: &mut Receiver<T>,
+        enabled: bool,
+    ) -> Option<SignalOrMessage<T>> {
+        if enabled {
+            select! {
+                biased;
+
+                Some(signal) = self.receiver.recv() => {
+                    Some(SignalOrMessage::Signal(signal))
+                }
+
+                Some(msg) = other.recv() => {
+                    Some(SignalOrMessage::Message(msg))
+                }
+
+                else => None,
+            }
+        } else {
+            if let Some(signal) = self.receiver.recv().await {
+                Some(SignalOrMessage::Signal(signal))
+            } else {
+                None
+            }
         }
     }
 }
