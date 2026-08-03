@@ -1,7 +1,5 @@
 use super::*;
 
-pub struct ChildSpec {}
-
 pub trait Runnable: Send + Sized + 'static {
     type Interface: Interface;
     type Exit: Send + 'static;
@@ -72,9 +70,13 @@ pub trait RunnableExt: Runnable {
     }
 
     fn spawn(self) -> (Child<Self::Exit>, Address<Self::Interface>) {
-        let (address, child) = crate::spawn(|stream, address| self.run(stream, address));
+        crate::spawn(|stream, address| self.run(stream, address))
+    }
 
-        (child, address)
+    fn spawn_detached(self) -> (Child<Self::Exit>, Address<Self::Interface>) {
+        let (child, address) = crate::spawn(|stream, address| self.run(stream, address));
+
+        (child.detached(), address)
     }
 }
 impl<T: Runnable> RunnableExt for T {}
@@ -218,6 +220,6 @@ mod test {
                     .map(|val| val.to_string())
             });
 
-        let (child, address) = runnable.spawn();
+        let (_child, _address) = runnable.spawn();
     }
 }

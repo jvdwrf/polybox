@@ -55,30 +55,23 @@ pub trait Actor: Debug + Sized + Send + 'static {
     }
 }
 
-pub trait ActorExt: Actor {
-    fn spawn(mut self) -> (Address<Self::Interface>, Child<Self::Exit>) {
-        crate::spawn(async move |mut stream, address| {
+impl<T: Actor> Runnable for T {
+    type Interface = T::Interface;
+    type Exit = T::Exit;
+
+    fn run(
+        mut self,
+        mut stream: EventStream<Self::Interface>,
+        address: Address<Self::Interface>,
+    ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static {
+        async move {
             ActorState::new(address)
                 .run(&mut self, &mut stream)
                 .await
                 .map_err(Into::into)
-        })
-    }
-
-    fn spawn_detached(self) -> (Address<Self::Interface>, Child<Self::Exit>) {
-        let (address, child) = self.spawn();
-        (address, child.detached())
-    }
-
-    fn handle_interface(
-        &mut self,
-        state: &mut ActorState<Self>,
-        interface: Self::Interface,
-    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
-        interface.handle_with(state, self)
+        }
     }
 }
-impl<T: Actor> ActorExt for T {}
 
 pub trait ActorInterface<T: Actor>: Interface {
     fn handle_with(

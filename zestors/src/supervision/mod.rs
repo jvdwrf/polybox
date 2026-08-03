@@ -58,12 +58,10 @@ impl Supervisor {
     }
 
     pub fn spawn(self) -> (Child<()>, Address<SupervisorInterface>) {
-        let (address, child) = crate::spawn(async move |stream, address| {
+        crate::spawn(async move |stream, address| {
             self.run(stream, address).await?;
             Ok(())
-        });
-
-        (child, address)
+        })
     }
 
     async fn run(

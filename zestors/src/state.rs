@@ -1,5 +1,5 @@
 use crate::{
-    actor::{Actor, ActorExt as _},
+    actor::{Actor, ActorInterface},
     signals::{Event, Observable},
     *,
 };
@@ -126,7 +126,7 @@ impl<T: Actor> ActorState<T> {
             },
 
             Event::Message(msg) => {
-                actor.handle_interface(self, msg).await?;
+                msg.handle_with(self, actor).await?;
             }
         }
 

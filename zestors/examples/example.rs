@@ -1,16 +1,17 @@
 use polybox::{Interface, Payload, Sends as _};
 use std::time::Duration;
 use zestors::{
-    actor::{Actor, ActorExt, HandleMessage},
+    actor::{Actor, HandleMessage},
     event_stream::EventStream,
     signals::{Event, SendSignal, Shutdown, Signal},
     state::ActorState,
+    supervision::RunnableExt as _,
     *,
 };
 
 #[tokio::main]
 async fn main() {
-    let (address, handle) = spawn(
+    let (handle, address) = spawn(
         async move |mut stream: EventStream<MyInterface>, _address| {
             while let Some(msg) = stream.recv().await {
                 match msg {
@@ -109,12 +110,12 @@ impl HandleMessage<String> for MyActor {
 }
 
 async fn test() {
-    let (addr, handle) = MyActor { nr: 0 }.spawn();
+    let (handle, addr) = MyActor { nr: 0 }.map_ok(|x| x * 2).spawn();
 
     addr.send(5u32).await.unwrap();
     addr.send(15u32).await.unwrap();
     addr.send("Hello, world!".to_string()).await.unwrap();
     addr.signal(Shutdown).await.unwrap();
     let exit_value = handle.await.unwrap();
-    assert_eq!(exit_value, 20);
+    assert_eq!(exit_value, 20 * 2);
 }
