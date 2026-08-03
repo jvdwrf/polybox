@@ -58,8 +58,8 @@ impl Supervisor {
     }
 
     pub fn spawn(self) -> (Child<()>, Address<SupervisorInterface>) {
-        let (address, child) = crate::spawn(async move |rx, signal_rx, address| {
-            self.run(rx, signal_rx, address).await?;
+        let (address, child) = crate::spawn(async move |stream| {
+            self.run(stream).await?;
             Ok(())
         });
 
@@ -68,9 +68,7 @@ impl Supervisor {
 
     async fn run(
         mut self,
-        mut rx: Receiver<SupervisorInterface>,
-        mut signal_rx: SignalReceiver,
-        _address: Address<SupervisorInterface>,
+        mut stream: EventStream<SupervisorInterface>,
     ) -> Result<(), SupervisorError> {
         let mut suspended = false;
         let start_time = Instant::now();
@@ -78,7 +76,7 @@ impl Supervisor {
         loop {
             let msg = tokio::select! {
                 biased;
-                Some(msg) = signal_rx.recv_with_enabled(&mut rx, !suspended) => {
+                Some(msg) = stream.recv_enabled(!suspended) => {
                     Some(msg)
                 }
                 Some(item) = self.next() => {

@@ -6,9 +6,7 @@ pub trait Runnable: Send + Sized + 'static {
 
     fn run(
         self,
-        receiver: Receiver<Self::Interface>,
-        signal_receiver: SignalReceiver,
-        address: Address<Self::Interface>,
+        stream: EventStream<Self::Interface>,
     ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static;
 }
 
@@ -61,9 +59,7 @@ pub trait RunnableExt: Runnable {
 
     fn wrap<F, Fut, E>(self, mapper: F) -> WrapRunnable<Self, F>
     where
-        F: FnOnce(Self, Receiver<Self::Interface>, SignalReceiver, Address<Self::Interface>) -> Fut
-            + Send
-            + 'static,
+        F: FnOnce(Self, EventStream<Self::Interface>) -> Fut + Send + 'static,
         Fut: Future<Output = Result<E, anyhow::Error>> + Send + 'static,
         E: Send + 'static,
     {
@@ -71,8 +67,7 @@ pub trait RunnableExt: Runnable {
     }
 
     fn spawn(self) -> (Child<Self::Exit>, Address<Self::Interface>) {
-        let (address, child) =
-            crate::spawn(|rx, signal_rx, address| self.run(rx, signal_rx, address));
+        let (address, child) = crate::spawn(|stream| self.run(stream));
 
         (child, address)
     }
@@ -118,13 +113,11 @@ where
 
     fn run(
         self,
-        receiver: Receiver<Self::Interface>,
-        signal_receiver: SignalReceiver,
-        address: Address<Self::Interface>,
+        stream: EventStream<Self::Interface>,
     ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static {
         let Self { inner, map_exit } = self;
 
-        async move { map_exit(inner.run(receiver, signal_receiver, address).await) }
+        async move { map_exit(inner.run(stream).await) }
     }
 }
 
@@ -149,9 +142,7 @@ impl<T, F> WrapRunnable<T, F> {
     pub fn new<R, Fut>(inner: T, mapper: F) -> Self
     where
         T: Runnable,
-        F: FnOnce(T, Receiver<T::Interface>, SignalReceiver, Address<T::Interface>) -> Fut
-            + Send
-            + 'static,
+        F: FnOnce(T, EventStream<T::Interface>) -> Fut + Send + 'static,
         Fut: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
         R: Send + 'static,
     {
@@ -162,9 +153,7 @@ impl<T, F> WrapRunnable<T, F> {
 impl<T, F, Fut, E> Runnable for WrapRunnable<T, F>
 where
     T: Runnable + Send + 'static,
-    F: FnOnce(T, Receiver<T::Interface>, SignalReceiver, Address<T::Interface>) -> Fut
-        + Send
-        + 'static,
+    F: FnOnce(T, EventStream<T::Interface>) -> Fut + Send + 'static,
     Fut: Future<Output = Result<E, anyhow::Error>> + Send + 'static,
     E: Send + 'static,
 {
@@ -173,13 +162,11 @@ where
 
     fn run(
         self,
-        receiver: Receiver<Self::Interface>,
-        signal_receiver: SignalReceiver,
-        address: Address<Self::Interface>,
+        stream: EventStream<Self::Interface>,
     ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static {
         let Self { inner, mapper } = self;
 
-        async move { mapper(inner, receiver, signal_receiver, address).await }
+        async move { mapper(inner, stream).await }
     }
 }
 
@@ -199,9 +186,7 @@ mod test {
 
         fn run(
             self,
-            _receiver: Receiver<Self::Interface>,
-            _signal_receiver: SignalReceiver,
-            _address: Address<Self::Interface>,
+            _stream: EventStream<Self::Interface>,
         ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static {
             async move { Ok(()) }
         }
@@ -214,9 +199,9 @@ mod test {
                 Ok(_) => Ok(12u32),
                 Err(_) => Err(anyhow::anyhow!("error")),
             })
-            .wrap(|runnable, r, s, a| async move {
+            .wrap(|runnable, stream| async move {
                 runnable
-                    .run(r, s, a)
+                    .run(stream)
                     .await
                     .map_err(|e| {
                         eprintln!("Error: {:?}", e);

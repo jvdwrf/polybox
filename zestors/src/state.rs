@@ -32,14 +32,13 @@ impl<T: Actor> ActorState<T> {
     pub async fn run(
         &mut self,
         actor: &mut T,
-        rx: &mut Receiver<T::Interface>,
-        signal_rx: &mut SignalReceiver,
+        stream: &mut EventStream<T::Interface>,
     ) -> Result<T::Exit, T::Error>
     where
         T: Actor + Debug,
     {
         loop {
-            match self._run_once(actor, rx, signal_rx).await {
+            match self._run_once(actor, stream).await {
                 Ok(None) => {}
 
                 Ok(Some(exit)) => {
@@ -67,12 +66,15 @@ impl<T: Actor> ActorState<T> {
     async fn _run_once(
         &mut self,
         actor: &mut T,
-        rx: &mut Receiver<T::Interface>,
-        signal_rx: &mut SignalReceiver,
+        stream: &mut EventStream<T::Interface>,
     ) -> Result<Option<T::Exit>, T::Error> {
         let Some(msg) = (match self.status {
-            signals::Status::Running | signals::Status::Exiting => signal_rx.recv_with(rx).await,
-            signals::Status::Suspended => signal_rx.recv().await.map(SignalOrMessage::Signal),
+            signals::Status::Running | signals::Status::Exiting => stream.recv().await,
+            signals::Status::Suspended => stream
+                .signal_receiver
+                .recv()
+                .await
+                .map(SignalOrMessage::Signal),
         }) else {
             return actor.exit(ExitReason::Shutdown).await.map(Some);
         };

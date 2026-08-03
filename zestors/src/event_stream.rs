@@ -2,9 +2,9 @@ use crate::_prelude::*;
 
 #[derive(Debug)]
 pub struct EventStream<T> {
-    receiver: Receiver<T>,
-    signal_receiver: SignalReceiver,
-    address: Address<T>,
+    pub receiver: Receiver<T>,
+    pub signal_receiver: SignalReceiver,
+    pub address: Address<T>,
 }
 
 impl<T> EventStream<T> {
@@ -20,15 +20,13 @@ impl<T> EventStream<T> {
         }
     }
 
-    pub fn receiver(&self) -> &Receiver<T> {
-        &self.receiver
+    pub async fn recv(&mut self) -> Option<SignalOrMessage<T>> {
+        self.signal_receiver.recv_with(&mut self.receiver).await
     }
 
-    pub fn signal_receiver(&self) -> &SignalReceiver {
-        &self.signal_receiver
-    }
-
-    pub fn address(&self) -> &Address<T> {
-        &self.address
+    pub async fn recv_enabled(&mut self, enabled: bool) -> Option<SignalOrMessage<T>> {
+        self.signal_receiver
+            .recv_with_enabled(&mut self.receiver, enabled)
+            .await
     }
 }

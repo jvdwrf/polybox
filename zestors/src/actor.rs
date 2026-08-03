@@ -61,9 +61,9 @@ pub trait Actor: Debug + Sized + Send + 'static {
 
 pub trait ActorExt: Actor {
     fn spawn(mut self) -> (Address<Self::Interface>, Child<Self::Exit>) {
-        crate::spawn(async move |mut rx, mut signal_rx, address| {
-            ActorState::new(address)
-                .run(&mut self, &mut rx, &mut signal_rx)
+        crate::spawn(async move |mut stream| {
+            ActorState::new(stream.address.clone())
+                .run(&mut self, &mut stream)
                 .await
                 .map_err(Into::into)
         })
