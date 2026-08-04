@@ -67,7 +67,7 @@ impl Supervisor {
         self
     }
 
-    pub fn spawn(self) -> (Child<()>, Address<SupervisorInterface>) {
+    pub fn spawn(self) -> Child<(), SupervisorInterface> {
         crate::spawn(async move |stream, address| {
             self.run(stream, address).await?;
             Ok(())
@@ -156,7 +156,10 @@ impl Supervisor {
     }
 
     async fn shutdown(&mut self) {
-        Self::shutdown_children(&mut self.supervisees.values_mut().collect::<Vec<_>>()).await;
+        ShutdownSupervisees {
+            supervisees: &mut self.supervisees.values_mut().collect::<Vec<_>>(),
+        }
+        .await;
     }
 
     async fn handle_child_termination(
@@ -202,30 +205,15 @@ impl Supervisor {
         Ok(())
     }
 
-    async fn restart_children(supervisees: &mut [&mut Supervisee]) {
+    async fn restart_children<'a>(supervisees: &mut [&mut Supervisee]) {
         // First, shutdown all affected children
-        let _ = Self::shutdown_children(supervisees).await;
+        let _ = ShutdownSupervisees { supervisees }.await;
 
         // Now restart all affected children
         for supervisee in supervisees {
-            let (child, _address) = supervisee.spec.spawn();
+            let child = supervisee.spec.spawn();
             supervisee.child = Some(child);
         }
-    }
-
-    async fn shutdown_children(
-        supervisees: &mut [&mut Supervisee],
-    ) -> Vec<Result<Box<dyn Any + Send>, JoinError>> {
-        let shutdown_futures = supervisees.iter_mut().filter_map(|supervisee| {
-            let abort_timeout = supervisee.spec.abort_timeout;
-
-            supervisee
-                .child
-                .take()
-                .map(|c| c.shutdown_abort(abort_timeout))
-        });
-
-        join_all(shutdown_futures).await
     }
 
     fn allow_restart(&mut self) -> bool {
@@ -288,13 +276,13 @@ impl Stream for Supervisor {
 #[derive(Debug)]
 pub struct ChildTermination {
     pub id: ChildId,
-    pub exit: Result<Box<dyn Any + Send>, JoinError>,
-    pub reference: AnyChild,
+    pub exit: Result<(), JoinError>,
+    pub reference: Child<()>,
 }
 
 #[derive(Debug)]
 pub struct Supervisee {
-    pub child: Option<AnyChild>,
+    pub child: Option<Child<()>>,
     pub spec: ChildSpec,
 }
 
@@ -328,4 +316,32 @@ pub struct RestartLimitReached {
 pub enum SupervisorError {
     #[error("Restart limit reached for child {0}")]
     RestartLimit(#[from] RestartLimitReached),
+}
+
+struct ShutdownSupervisees<'a, 'b> {
+    supervisees: &'a mut [&'b mut Supervisee],
+}
+
+impl<'a, 'b> Future for ShutdownSupervisees<'a, 'b> {
+    type Output = Vec<Result<(), JoinError>>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let mut results = Vec::new();
+
+        for supervisee in self.supervisees.iter_mut() {
+            if let Some(child) = &mut supervisee.child
+                && let Poll::Ready(exit) = child.poll_unpin(cx)
+            {
+                let _exited_child = supervisee.child.take().expect("child should be present");
+
+                results.push(exit);
+            }
+        }
+
+        if results.len() == self.supervisees.len() {
+            Poll::Ready(results)
+        } else {
+            Poll::Pending
+        }
+    }
 }

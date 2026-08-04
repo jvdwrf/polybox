@@ -2,36 +2,40 @@ use tokio::sync::mpsc;
 
 use super::*;
 
-pub struct Runnable(Box<dyn Fn() -> (AnyChild, DynAddress) + Send>);
+pub struct Runnable(Box<dyn Fn() -> Child + Send>);
 
 impl Runnable {
     pub fn new<T: Run + Clone>(value: T) -> Self {
         Self(Box::new(move || {
-            let (child, address) = value.clone().spawn();
-            (child.into_any(), address.into_dyn_subset())
+            value
+                .clone()
+                .map(|_exit| {
+                    _exit.map(|_exit| {
+                        ()
+                        // TODO: do something with the exit value
+                    })
+                })
+                .spawn()
+                .into_dyn_subset()
         }))
     }
 
-    pub fn from_inner(f: Box<dyn Fn() -> (AnyChild, DynAddress) + Send>) -> Self {
+    pub fn from_inner(f: Box<dyn Fn() -> Child + Send>) -> Self {
         Self(f)
     }
 
-    pub fn from_fn<T, F, R>(f: impl Fn(EventStream<T>, Address<T>) -> F + Send + 'static) -> Self
+    pub fn from_fn<T, F>(f: impl Fn(EventStream<T>, Address<T>) -> F + Send + 'static) -> Self
     where
         T: Interface,
-        R: Send + 'static,
-        F: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
+        F: Future<Output = Result<(), anyhow::Error>> + Send + 'static,
         F::Output: Send + 'static,
     {
-        let spawn_fn = move || {
-            let (child, address) = crate::spawn(|stream, address| f(stream, address));
-            (child.into_any(), address.into_dyn_subset())
-        };
+        let spawn_fn = move || crate::spawn(|stream, address| f(stream, address)).into_dyn_subset();
 
         Self::from_inner(Box::new(spawn_fn))
     }
 
-    pub fn spawn(&self) -> (AnyChild, DynAddress) {
+    pub fn spawn(&self) -> Child {
         (self.0)()
     }
 }
@@ -45,8 +49,8 @@ where
     }
 }
 
-impl From<Box<dyn Fn() -> (AnyChild, DynAddress) + Send>> for Runnable {
-    fn from(value: Box<dyn Fn() -> (AnyChild, DynAddress) + Send>) -> Self {
+impl From<Box<dyn Fn() -> Child + Send>> for Runnable {
+    fn from(value: Box<dyn Fn() -> Child + Send>) -> Self {
         Self::from_inner(value)
     }
 }
@@ -71,22 +75,22 @@ pub trait RunnableExt: Run {
         MapRunnable::new(self, map_exit)
     }
 
-    fn map_ok<F, R>(
-        self,
-        map_ok: F,
-    ) -> MapRunnable<
-        Self,
-        impl FnOnce(Result<Self::Exit, anyhow::Error>) -> Result<R, anyhow::Error> + Send + 'static,
-    >
-    where
-        F: FnOnce(Self::Exit) -> R + Send + 'static,
-        R: Send + 'static,
-    {
-        self.map(move |exit| match exit {
-            Ok(value) => Ok(map_ok(value)),
-            Err(e) => Err(e),
-        })
-    }
+    // fn map_ok<F, R>(
+    //     self,
+    //     map_ok: F,
+    // ) -> MapRunnable<
+    //     Self,
+    //     impl FnOnce(Result<Self::Exit, anyhow::Error>) -> Result<R, anyhow::Error> + Send + 'static,
+    // >
+    // where
+    //     F: FnOnce(Self::Exit) -> R + Send + 'static,
+    //     R: Send + 'static,
+    // {
+    //     self.map(move |exit| match exit {
+    //         Ok(value) => Ok(map_ok(value)),
+    //         Err(e) => Err(e),
+    //     })
+    // }
 
     fn tap_err_mut<F>(
         self,
@@ -136,14 +140,8 @@ pub trait RunnableExt: Run {
     //     address
     // }
 
-    fn spawn(self) -> (Child<Self::Exit>, Address<Self::Interface>) {
+    fn spawn(self) -> Child<Self::Exit, Self::Interface> {
         crate::spawn(|stream, address| self.run(stream, address))
-    }
-
-    fn spawn_detached(self) -> (Child<Self::Exit>, Address<Self::Interface>) {
-        let (child, address) = crate::spawn(|stream, address| self.run(stream, address));
-
-        (child.detached(), address)
     }
 }
 impl<T: Run> RunnableExt for T {}
@@ -316,7 +314,7 @@ mod test {
     async fn test_map_exit_runnable() {
         let (runnable, address) = TestRunnable { number: 42 }.extract_address();
 
-        let (supervisor, _addr) = Supervisor::new()
+        let supervisor = Supervisor::new()
             .with_strategy(SupervisionStrategy::OneForOne)
             .with_intensity(RestartIntensity::default())
             .with_children([

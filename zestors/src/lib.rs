@@ -6,7 +6,7 @@ use crate::{
     signals::{Signal, SignalSender},
 };
 
-pub fn spawn<T, R, F>(f: impl FnOnce(EventStream<T>, Address<T>) -> F) -> (Child<R>, Address<T>)
+pub fn spawn<T, R, F>(f: impl FnOnce(EventStream<T>, Address<T>) -> F) -> Child<R, T>
 where
     T: Interface,
     R: Send + 'static,
@@ -18,8 +18,7 @@ where
     let address = Address::new(inbox, signal_inbox);
     let stream = EventStream::new(receiver, signal_receiver);
     let handle = tokio::spawn(f(stream, address.clone()));
-    let child = Child::new(handle, address.clone().into_dyn_subset());
-    (child, address)
+    Child::new(handle, address)
 }
 
 pub mod actor;

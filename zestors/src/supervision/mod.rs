@@ -40,7 +40,7 @@ impl ChildSpec {
         self
     }
 
-    pub fn spawn(&self) -> (AnyChild, DynAddress) {
+    pub fn spawn(&self) -> Child {
         self.runnable.spawn()
     }
 }

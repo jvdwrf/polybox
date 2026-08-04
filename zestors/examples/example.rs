@@ -11,7 +11,7 @@ use zestors::{
 
 #[tokio::main]
 async fn main() {
-    let (handle, address) = spawn(
+    let child = spawn(
         async move |mut stream: EventStream<MyInterface>, _address| {
             while let Some(msg) = stream.recv().await {
                 match msg {
@@ -49,9 +49,9 @@ async fn main() {
         },
     );
 
-    address.send(10u32).await.unwrap();
-    address.signal(Shutdown).await.unwrap();
-    handle.await.unwrap();
+    child.address().send(10u32).await.unwrap();
+    child.address().signal(Shutdown).await.unwrap();
+    child.await.unwrap();
 
     test().await;
 }
@@ -110,12 +110,16 @@ impl HandleMessage<String> for MyActor {
 }
 
 async fn test() {
-    let (handle, addr) = MyActor { nr: 0 }.map_ok(|x| x * 2).spawn();
+    let child = MyActor { nr: 0 }.map(|x| x.map(|x| x * 2)).spawn();
 
-    addr.send(5u32).await.unwrap();
-    addr.send(15u32).await.unwrap();
-    addr.send("Hello, world!".to_string()).await.unwrap();
-    addr.signal(Shutdown).await.unwrap();
-    let exit_value = handle.await.unwrap();
+    child.address().send(5u32).await.unwrap();
+    child.address().send(15u32).await.unwrap();
+    child
+        .address()
+        .send("Hello, world!".to_string())
+        .await
+        .unwrap();
+    child.address().signal(Shutdown).await.unwrap();
+    let exit_value = child.await.unwrap();
     assert_eq!(exit_value, 20 * 2);
 }
