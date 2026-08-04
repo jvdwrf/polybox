@@ -2,7 +2,7 @@ use crate::_prelude::*;
 use polybox::{Interface, Message, Payload};
 use std::fmt::{Debug, Display};
 
-pub trait Actor: Debug + Sized + Send + 'static {
+pub trait Actor: Debug + Sized + Send + Sync + 'static {
     type Interface: Interface + ActorInterface<Self>;
     type Error: Debug + Display + Send + 'static + Into<anyhow::Error>;
     type Exit: Send + 'static;
@@ -55,7 +55,7 @@ pub trait Actor: Debug + Sized + Send + 'static {
     }
 }
 
-impl<T: Actor> Runnable for T {
+impl<T: Actor> Run for T {
     type Interface = T::Interface;
     type Exit = T::Exit;
 

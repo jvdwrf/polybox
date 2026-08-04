@@ -1,19 +1,33 @@
 #[allow(unused_imports)]
 use crate::_prelude::*;
 use futures::{FutureExt as _, prelude::future::BoxFuture};
-use polybox::errors::SendError;
+use polybox::{
+    errors::SendError,
+    type_sets::{Members, Set},
+};
 use std::{any::Any, fmt::Debug, task::Poll, time::Duration};
 
-pub struct Child<T> {
+// impl<T: ?Sized> AddressKind for Set<T>
+// where
+//     Set<T>: Members,
+// {
+//     type Address = DynAddress<Set<T>>;
+// }
+
+// impl<T: Interface> AddressKind for T {
+//     type Address = Address<T>;
+// }
+
+pub struct Child<T, R = DynAddress> {
     handle: Option<tokio::task::JoinHandle<Result<T, anyhow::Error>>>,
     attached: bool,
-    address: DynAddress,
+    address: R,
 }
 
-impl<T> Child<T> {
+impl<T, R> Child<T, R> {
     pub(crate) fn new(
         handle: tokio::task::JoinHandle<Result<T, anyhow::Error>>,
-        address: DynAddress,
+        address: R,
     ) -> Self {
         Self {
             handle: Some(handle),
@@ -22,7 +36,7 @@ impl<T> Child<T> {
         }
     }
 
-    pub fn address(&self) -> &DynAddress {
+    pub fn address(&self) -> &R {
         &self.address
     }
 
@@ -71,11 +85,15 @@ impl<T> Child<T> {
     pub fn into_any(self) -> AnyChild
     where
         T: Send + 'static,
+        R: Clone + Unpin + Debug + PolyBox<Dyn<Set![]> = DynAddress<Set![]>> + 'static,
     {
         AnyChild::new(self)
     }
 
-    pub async fn shutdown_abort(mut self, timeout: Duration) -> Result<T, JoinError> {
+    pub async fn shutdown_abort(mut self, timeout: Duration) -> Result<T, JoinError>
+    where
+        R: Observable + Unpin,
+    {
         let signal_res = self.address.signal_shutdown().await;
 
         if signal_res.is_ok() {
@@ -95,7 +113,7 @@ impl<T> Child<T> {
     }
 }
 
-impl<T> Future for Child<T> {
+impl<T, R: Unpin> Future for Child<T, R> {
     type Output = Result<T, JoinError>;
 
     fn poll(
@@ -114,13 +132,16 @@ impl<T> Future for Child<T> {
     }
 }
 
-impl<T: Send> Observable for Child<T> {
-    async fn send_signal_payload(this: &Self, signal: Signal) -> Result<(), SendError<Signal>> {
-        <DynAddress as Observable>::send_signal_payload(&this.address, signal).await
+impl<T: Send, R: Observable> Observable for Child<T, R> {
+    fn send_signal_payload(
+        this: &Self,
+        signal: Signal,
+    ) -> impl Future<Output = Result<(), SendError<Signal>>> {
+        <R as Observable>::send_signal_payload(&this.address, signal)
     }
 }
 
-impl<T: Send> DynPolyBox for Child<T> {
+impl<T: Send, R: DynPolyBox> DynPolyBox for Child<T, R> {
     fn _send_boxed_payload_checked(
         &self,
         msg: BoxedPayload,
@@ -156,7 +177,7 @@ impl From<tokio::task::JoinError> for JoinError {
     }
 }
 
-impl<T> Drop for Child<T> {
+impl<T, R> Drop for Child<T, R> {
     fn drop(&mut self) {
         if self.attached {
             self.abort();
@@ -164,11 +185,12 @@ impl<T> Drop for Child<T> {
     }
 }
 
-impl<T> Debug for Child<T> {
+impl<T, R: Debug> Debug for Child<T, R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Child")
             .field("handle", &std::any::type_name::<T>())
             .field("attached", &self.attached)
+            .field("address", &self.address)
             .finish()
     }
 }
@@ -180,9 +202,13 @@ pub struct AnyChild {
 }
 
 impl AnyChild {
-    pub fn new<T: Send + 'static>(child: Child<T>) -> Self {
+    pub fn new<T, R>(child: Child<T, R>) -> Self
+    where
+        T: Send + 'static,
+        R: Clone + Unpin + Debug + PolyBox<Dyn<Set![]> = DynAddress<Set![]>> + 'static,
+    {
         Self {
-            address: child.address.clone(),
+            address: child.address.clone().into_dyn_subset::<Set![]>(),
             child: Box::new(child),
         }
     }
@@ -271,7 +297,11 @@ trait IsAnyChild: Debug + Send + Sync {
     ) -> Poll<Result<Box<dyn Any + Send>, JoinError>>;
 }
 
-impl<T: Send + 'static> IsAnyChild for Child<T> {
+impl<T, R> IsAnyChild for Child<T, R>
+where
+    T: Send + 'static,
+    R: Unpin + Debug + Send + Sync + 'static,
+{
     fn abort(&self) {
         self.abort();
     }

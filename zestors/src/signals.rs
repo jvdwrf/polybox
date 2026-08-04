@@ -2,19 +2,19 @@ use crate::*;
 use polybox::{Message, Payload, errors::SendError, oneshot::new_request};
 use tokio::select;
 
-#[derive(Message)]
+#[derive(Message, Debug)]
 pub struct Shutdown;
 
-#[derive(Message)]
+#[derive(Message, Debug)]
 pub struct Exit;
 
-#[derive(Message)]
+#[derive(Message, Debug)]
 pub struct Suspend;
 
-#[derive(Message)]
+#[derive(Message, Debug)]
 pub struct Resume;
 
-#[derive(Message)]
+#[derive(Message, Debug)]
 #[msg(reply = Status)]
 pub struct GetStatus;
 
@@ -25,7 +25,7 @@ pub enum Status {
     Exiting,
 }
 
-#[derive(Message)]
+#[derive(Message, Debug)]
 #[msg(reply = State)]
 pub struct GetState;
 
@@ -36,11 +36,11 @@ pub struct State {
     pub description: String,
 }
 
-#[derive(Message)]
+#[derive(Message, Debug)]
 #[msg(reply = ())]
 pub struct Ping;
 
-#[derive(Interface)]
+#[derive(Interface, Debug)]
 #[interface(crate = "crate")]
 pub enum Signal {
     Shutdown(Payload<Shutdown>),
@@ -276,6 +276,7 @@ impl SignalReceiver {
     }
 }
 
+#[derive(Debug)]
 pub enum Event<T> {
     Signal(Signal),
     Message(T),

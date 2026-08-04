@@ -4,10 +4,10 @@ use std::{any::TypeId, future::Future, marker::PhantomData, sync::Arc};
 use type_sets::SubsetOf;
 
 /// A trait that allows for conversions to [`DynInbox`].
-pub trait PolyBox: DynPolyBox + Clone {
+pub trait PolyBox: DynPolyBox {
     /// The set of message types that this inbox can accept.
     type Set: Members;
-    type AsDyn<T>;
+    type Dyn<T>;
 
     /// Converts into a dynamic inbox without checking if the types are compatible.
     ///
@@ -16,15 +16,15 @@ pub trait PolyBox: DynPolyBox + Clone {
     /// # Safety
     /// This method is not marked as unsafe, because violating the type system can
     /// only lead to runtime errors, not undefined behavior.
-    fn into_dyn_unchecked<T>(self) -> Self::AsDyn<T>;
+    fn into_dyn_unchecked<T>(self) -> Self::Dyn<T>;
 }
 
 /// A trait that extends [`PolyBox`] with some helper methods.
-pub trait PolyboxExt: PolyBox {
+pub trait PolyboxExt: PolyBox + Sized {
     /// Converts into a dynamic inbox with a subset of the original types.
     ///
     /// This conversion is type-safe, and entirely at compile-time.
-    fn into_dyn_subset<T>(self) -> Self::AsDyn<T>
+    fn into_dyn_subset<T>(self) -> Self::Dyn<T>
     where
         T: SubsetOf<Self::Set>,
     {
@@ -32,12 +32,12 @@ pub trait PolyboxExt: PolyBox {
     }
 
     /// Converts into a dynamic inbox with the full set of original types.
-    fn into_dyn(self) -> Self::AsDyn<Self::Set> {
+    fn into_dyn(self) -> Self::Dyn<Self::Set> {
         self.into_dyn_unchecked()
     }
 
     /// Converts into a dynamic inbox, checking at runtime if the types are compatible.
-    fn into_dyn_checked<T: Members>(self) -> Result<Self::AsDyn<T>, Self> {
+    fn into_dyn_checked<T: Members>(self) -> Result<Self::Dyn<T>, Self> {
         if self.accepts_msgs(&T::members()) {
             Ok(self.into_dyn_unchecked())
         } else {
@@ -173,7 +173,7 @@ impl<T> DynInbox<T> {
 
 impl<T: Members> PolyBox for DynInbox<T> {
     type Set = T;
-    type AsDyn<R> = DynInbox<R>;
+    type Dyn<R> = DynInbox<R>;
 
     fn into_dyn_unchecked<R>(self) -> DynInbox<R> {
         DynInbox::new_unchecked(self.inbox)

@@ -1,8 +1,28 @@
-use std::fmt::Debug;
-
 use super::*;
 use crate::signals::{Observable, SignalSender};
-use polybox::{errors::SendError, type_sets::Set, *};
+use polybox::{
+    errors::SendError,
+    type_sets::{Members, Set},
+    *,
+};
+use std::{fmt::Debug, marker::PhantomData};
+
+pub trait InboxKind {
+    type Inbox: PolyBox;
+}
+
+pub struct Dyn<T>(PhantomData<fn() -> T>);
+
+impl<T: ?Sized> InboxKind for Dyn<Set<T>>
+where
+    Set<T>: Members,
+{
+    type Inbox = DynInbox<Set<T>>;
+}
+
+impl<T: Interface> InboxKind for T {
+    type Inbox = Inbox<T>;
+}
 
 pub struct Address<T> {
     inbox: Inbox<T>,
@@ -36,9 +56,9 @@ impl<T: Interface> DynPolyBox for Address<T> {
 
 impl<T: Interface> PolyBox for Address<T> {
     type Set = T::Set;
-    type AsDyn<R> = DynAddress<R>;
+    type Dyn<R> = DynAddress<R>;
 
-    fn into_dyn_unchecked<R>(self) -> Self::AsDyn<R> {
+    fn into_dyn_unchecked<R>(self) -> Self::Dyn<R> {
         DynAddress {
             inbox: self.inbox.into_dyn_unchecked(),
             signal_inbox: self.signal_inbox,
@@ -85,7 +105,7 @@ pub struct DynAddress<T = Set![]> {
     signal_inbox: SignalSender,
 }
 
-impl<T: Interface, M: Message> Sends<M> for DynAddress<T>
+impl<T, M: Message> Sends<M> for DynAddress<T>
 where
     DynInbox<T>: Sends<M>,
 {
@@ -110,11 +130,11 @@ impl<T> DynPolyBox for DynAddress<T> {
     }
 }
 
-impl<T: Interface> PolyBox for DynAddress<T> {
-    type Set = T::Set;
-    type AsDyn<R> = DynAddress<R>;
+impl<T: Members> PolyBox for DynAddress<T> {
+    type Set = T;
+    type Dyn<R> = DynAddress<R>;
 
-    fn into_dyn_unchecked<R>(self) -> Self::AsDyn<R> {
+    fn into_dyn_unchecked<R>(self) -> Self::Dyn<R> {
         DynAddress {
             inbox: self.inbox.into_dyn_unchecked(),
             signal_inbox: self.signal_inbox,

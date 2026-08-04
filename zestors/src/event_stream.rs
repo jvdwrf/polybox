@@ -1,3 +1,7 @@
+use std::pin::Pin;
+
+use futures::Stream;
+
 use crate::_prelude::*;
 
 #[derive(Debug)]
@@ -24,3 +28,28 @@ impl<T> EventStream<T> {
             .await
     }
 }
+
+// impl<T> Stream for EventStream<T> {
+//     type Item = Event<T>;
+
+//     fn poll_next(
+//         mut self: Pin<&mut Self>,
+//         cx: &mut std::task::Context<'_>,
+//     ) -> std::task::Poll<Option<Self::Item>> {
+//         let receiver = &mut self.receiver;
+//         let signal_receiver = &mut self.signal_receiver;
+
+//         let mut receiver_fut = Box::pin(receiver.recv());
+//         let mut signal_fut = Box::pin(signal_receiver.recv());
+
+//         match futures::future::select(receiver_fut, signal_fut).poll_unpin(cx) {
+//             std::task::Poll::Ready(futures::future::Either::Left((msg, _))) => {
+//                 std::task::Poll::Ready(msg.map(Event::Message))
+//             }
+//             std::task::Poll::Ready(futures::future::Either::Right((signal, _))) => {
+//                 std::task::Poll::Ready(signal.map(Event::Signal))
+//             }
+//             std::task::Poll::Pending => std::task::Poll::Pending,
+//         }
+//     }
+// }
