@@ -121,6 +121,15 @@ impl<T, R: InboxKind> Future for Child<T, R> {
     }
 }
 
+impl<T, R: InboxKind, S: Message> Sends<S> for Child<T, R>
+where
+    Address<R>: Sends<S>,
+{
+    fn send(&self, msg: S) -> impl Future<Output = Result<Output<S>, SendError<S>>> {
+        self.address.send(msg)
+    }
+}
+
 impl<T: Send, R: InboxKind> Observable for Child<T, R> {
     fn send_signal_payload(
         this: &Self,

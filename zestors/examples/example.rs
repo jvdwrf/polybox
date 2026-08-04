@@ -111,15 +111,12 @@ impl HandleMessage<String> for MyActor {
 
 async fn test() {
     let child = MyActor { nr: 0 }.map(|x| x.map(|x| x * 2)).spawn();
+    let address = child.address().clone();
 
-    child.address().send(5u32).await.unwrap();
-    child.address().send(15u32).await.unwrap();
-    child
-        .address()
-        .send("Hello, world!".to_string())
-        .await
-        .unwrap();
-    child.address().signal(Shutdown).await.unwrap();
+    address.send(5u32).await.unwrap();
+    child.send(15u32).await.unwrap();
+    child.send("Hello, world!".to_string()).await.unwrap();
+    child.signal(Shutdown).await.unwrap();
     let exit_value = child.await.unwrap();
     assert_eq!(exit_value, 20 * 2);
 }
