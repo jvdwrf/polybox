@@ -1,13 +1,13 @@
 use crate::*;
 use futures::future::BoxFuture;
-use std::{any::TypeId, future::Future, marker::PhantomData, sync::Arc};
+use std::{any::TypeId, fmt::Debug, future::Future, marker::PhantomData, sync::Arc};
 use type_sets::SubsetOf;
 
 /// A trait that allows for conversions to [`DynInbox`].
 pub trait PolyBox: DynPolyBox {
     /// The set of message types that this inbox can accept.
     type Set: Members;
-    type Dyn<T>;
+    type Dyn<T: Members>;
 
     /// Converts into a dynamic inbox without checking if the types are compatible.
     ///
@@ -16,7 +16,7 @@ pub trait PolyBox: DynPolyBox {
     /// # Safety
     /// This method is not marked as unsafe, because violating the type system can
     /// only lead to runtime errors, not undefined behavior.
-    fn into_dyn_unchecked<T>(self) -> Self::Dyn<T>;
+    fn into_dyn_unchecked<T: Members>(self) -> Self::Dyn<T>;
 }
 
 /// A trait that extends [`PolyBox`] with some helper methods.
@@ -24,7 +24,7 @@ pub trait PolyboxExt: PolyBox + Sized {
     /// Converts into a dynamic inbox with a subset of the original types.
     ///
     /// This conversion is type-safe, and entirely at compile-time.
-    fn into_dyn_subset<T>(self) -> Self::Dyn<T>
+    fn into_dyn_subset<T: Members>(self) -> Self::Dyn<T>
     where
         T: SubsetOf<Self::Set>,
     {
@@ -151,6 +151,14 @@ impl<T> Clone for DynInbox<T> {
     }
 }
 
+impl<T> Debug for DynInbox<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DynInbox")
+            .field("inbox", &std::any::type_name::<T>())
+            .finish()
+    }
+}
+
 impl<T> DynInbox<T> {
     pub fn new_unchecked(inbox: Arc<dyn DynPolyBox>) -> Self {
         Self {
@@ -173,7 +181,7 @@ impl<T> DynInbox<T> {
 
 impl<T: Members> PolyBox for DynInbox<T> {
     type Set = T;
-    type Dyn<R> = DynInbox<R>;
+    type Dyn<R: Members> = DynInbox<R>;
 
     fn into_dyn_unchecked<R>(self) -> DynInbox<R> {
         DynInbox::new_unchecked(self.inbox)

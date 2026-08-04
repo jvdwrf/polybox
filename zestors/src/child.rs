@@ -1,33 +1,19 @@
 #[allow(unused_imports)]
 use crate::_prelude::*;
 use futures::{FutureExt as _, prelude::future::BoxFuture};
-use polybox::{
-    errors::SendError,
-    type_sets::{Members, Set},
-};
+use polybox::{errors::SendError, type_sets::Set};
 use std::{any::Any, fmt::Debug, task::Poll, time::Duration};
 
-// impl<T: ?Sized> AddressKind for Set<T>
-// where
-//     Set<T>: Members,
-// {
-//     type Address = DynAddress<Set<T>>;
-// }
-
-// impl<T: Interface> AddressKind for T {
-//     type Address = Address<T>;
-// }
-
-pub struct Child<T, R = DynAddress> {
+pub struct Child<T, R: InboxKind = Dyn<Set![]>> {
     handle: Option<tokio::task::JoinHandle<Result<T, anyhow::Error>>>,
     attached: bool,
-    address: R,
+    address: Address<R>,
 }
 
-impl<T, R> Child<T, R> {
+impl<T, R: InboxKind> Child<T, R> {
     pub(crate) fn new(
         handle: tokio::task::JoinHandle<Result<T, anyhow::Error>>,
-        address: R,
+        address: Address<R>,
     ) -> Self {
         Self {
             handle: Some(handle),
@@ -36,7 +22,7 @@ impl<T, R> Child<T, R> {
         }
     }
 
-    pub fn address(&self) -> &R {
+    pub fn address(&self) -> &Address<R> {
         &self.address
     }
 
@@ -85,7 +71,7 @@ impl<T, R> Child<T, R> {
     pub fn into_any(self) -> AnyChild
     where
         T: Send + 'static,
-        R: Clone + Unpin + Debug + PolyBox<Dyn<Set![]> = DynAddress<Set![]>> + 'static,
+        R: 'static,
     {
         AnyChild::new(self)
     }
@@ -113,7 +99,7 @@ impl<T, R> Child<T, R> {
     }
 }
 
-impl<T, R: Unpin> Future for Child<T, R> {
+impl<T, R: InboxKind> Future for Child<T, R> {
     type Output = Result<T, JoinError>;
 
     fn poll(
@@ -132,16 +118,16 @@ impl<T, R: Unpin> Future for Child<T, R> {
     }
 }
 
-impl<T: Send, R: Observable> Observable for Child<T, R> {
+impl<T: Send, R: InboxKind> Observable for Child<T, R> {
     fn send_signal_payload(
         this: &Self,
         signal: Signal,
     ) -> impl Future<Output = Result<(), SendError<Signal>>> {
-        <R as Observable>::send_signal_payload(&this.address, signal)
+        <Address<R> as Observable>::send_signal_payload(&this.address, signal)
     }
 }
 
-impl<T: Send, R: DynPolyBox> DynPolyBox for Child<T, R> {
+impl<T: Send, R: InboxKind> DynPolyBox for Child<T, R> {
     fn _send_boxed_payload_checked(
         &self,
         msg: BoxedPayload,
@@ -177,7 +163,7 @@ impl From<tokio::task::JoinError> for JoinError {
     }
 }
 
-impl<T, R> Drop for Child<T, R> {
+impl<T, R: InboxKind> Drop for Child<T, R> {
     fn drop(&mut self) {
         if self.attached {
             self.abort();
@@ -185,7 +171,7 @@ impl<T, R> Drop for Child<T, R> {
     }
 }
 
-impl<T, R: Debug> Debug for Child<T, R> {
+impl<T, R: InboxKind> Debug for Child<T, R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Child")
             .field("handle", &std::any::type_name::<T>())
@@ -205,7 +191,7 @@ impl AnyChild {
     pub fn new<T, R>(child: Child<T, R>) -> Self
     where
         T: Send + 'static,
-        R: Clone + Unpin + Debug + PolyBox<Dyn<Set![]> = DynAddress<Set![]>> + 'static,
+        R: InboxKind + 'static,
     {
         Self {
             address: child.address.clone().into_dyn_subset::<Set![]>(),
@@ -300,7 +286,7 @@ trait IsAnyChild: Debug + Send + Sync {
 impl<T, R> IsAnyChild for Child<T, R>
 where
     T: Send + 'static,
-    R: Unpin + Debug + Send + Sync + 'static,
+    R: InboxKind + 'static,
 {
     fn abort(&self) {
         self.abort();
@@ -353,8 +339,11 @@ impl Future for AnyChild {
 }
 
 impl Observable for AnyChild {
-    async fn send_signal_payload(this: &Self, signal: Signal) -> Result<(), SendError<Signal>> {
-        <DynAddress as Observable>::send_signal_payload(&this.address, signal).await
+    fn send_signal_payload(
+        this: &Self,
+        signal: Signal,
+    ) -> impl Future<Output = Result<(), SendError<Signal>>> {
+        <DynAddress as Observable>::send_signal_payload(&this.address, signal)
     }
 }
 

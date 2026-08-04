@@ -1,10 +1,10 @@
 use crate::*;
 use futures::future::BoxFuture;
-use polybox::MessageExt;
 use polybox::{
     BoxedPayload, DynPolyBox, FromPayload, PolyBox, TryIntoPayload,
     errors::{SendCheckedError, SendError},
 };
+use polybox::{MessageExt, type_sets::Members};
 use std::sync::Arc;
 
 /// A wrapper around a [`tokio::sync::mpsc::Sender`] that acts as a [`PolyBox`].
@@ -33,7 +33,7 @@ impl<T> Inbox<T> {
 
 impl<T: Interface> PolyBox for Inbox<T> {
     type Set = T::Set;
-    type Dyn<R> = DynInbox<R>;
+    type Dyn<R: Members> = DynInbox<R>;
 
     fn into_dyn_unchecked<R>(self) -> DynInbox<R> {
         DynInbox::new_unchecked(Arc::new(self))
