@@ -110,10 +110,8 @@ pub async fn main() {
 
     // Convert the individual inboxes into their common subset.
     // This even converts a FlumeInbox and TokioInbox into a common type.
-    let all_inboxes: Vec<DynInbox<Set![Exit, GetHealth]>> = vec![
-        adder.clone().into_dyn_subset(),
-        printer.clone().into_dyn_subset(),
-    ];
+    let all_inboxes: Vec<DynInbox<Set![Exit, GetHealth]>> =
+        vec![adder.clone().into_dyn(), printer.clone().into_dyn()];
 
     // Start a background task to monitor the health of all inboxes.
     tokio::task::spawn({

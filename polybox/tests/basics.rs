@@ -46,9 +46,9 @@ async fn creating_address() {
     inbox.send_checked("hello").await.unwrap_err();
     inbox.send_checked(30u32).await.unwrap();
 
-    let address = inbox.clone().into_dyn();
-    let address = address.into_dyn_subset::<<MyInterface as AsSet>::Set>();
-    let address = address.into_dyn_subset::<Set![u64, u32]>();
+    let address = inbox.clone().into_dyn_full();
+    let address = address.into_dyn::<<MyInterface as AsSet>::Set>();
+    let address = address.into_dyn::<Set![u64, u32]>();
     // let address = address.into_any::<Set![String]>();
 
     address.send(50u64).await.unwrap();

@@ -1,18 +1,18 @@
 use super::*;
 use tokio::sync::mpsc;
 
-pub trait Runnable: Send + Sized + 'static {
-    type Interface: Interface;
+pub trait ActorRunner: Send + Sized + 'static {
+    type Inbox: Interface;
     type Exit: Send + 'static;
 
     fn run(
         self,
-        stream: EventStream<Self::Interface>,
-        address: Address<Self::Interface>,
+        stream: EventStream<Self::Inbox>,
+        address: Address<Self::Inbox>,
     ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static;
 }
 
-pub trait RunnableExt: Runnable {
+pub trait ActorRunnerExt: ActorRunner {
     fn map<F, R>(self, map_exit: F) -> MapRun<Self, F>
     where
         F: FnOnce(Result<Self::Exit, anyhow::Error>) -> Result<R, anyhow::Error> + Send + 'static,
@@ -44,9 +44,7 @@ pub trait RunnableExt: Runnable {
 
     fn wrap<F, Fut, E>(self, mapper: F) -> WrapRun<Self, F>
     where
-        F: FnOnce(Self, EventStream<Self::Interface>, Address<Self::Interface>) -> Fut
-            + Send
-            + 'static,
+        F: FnOnce(Self, EventStream<Self::Inbox>, Address<Self::Inbox>) -> Fut + Send + 'static,
         Fut: Future<Output = Result<E, anyhow::Error>> + Send + 'static,
         E: Send + 'static,
     {
@@ -57,17 +55,17 @@ pub trait RunnableExt: Runnable {
         self,
     ) -> (
         ExtractAddressRunnable<Self>,
-        mpsc::UnboundedReceiver<Address<Self::Interface>>,
+        mpsc::UnboundedReceiver<Address<Self::Inbox>>,
     ) {
         let (tx, rx) = mpsc::unbounded_channel();
         (ExtractAddressRunnable { inner: self, tx }, rx)
     }
 
-    fn spawn(self) -> Child<Self::Exit, Self::Interface> {
+    fn spawn(self) -> Child<Self::Exit, Self::Inbox> {
         crate::spawn(|stream, address| self.run(stream, address))
     }
 }
-impl<T: Runnable> RunnableExt for T {}
+impl<T: ActorRunner> ActorRunnerExt for T {}
 
 #[derive(Clone)]
 pub struct MapRun<T, F> {
@@ -89,7 +87,7 @@ where
 impl<T, F> MapRun<T, F> {
     pub fn new<R>(inner: T, map_exit: F) -> Self
     where
-        T: Runnable,
+        T: ActorRunner,
         F: FnOnce(Result<T::Exit, anyhow::Error>) -> Result<R, anyhow::Error> + Send + 'static,
         R: Send + 'static,
     {
@@ -97,19 +95,19 @@ impl<T, F> MapRun<T, F> {
     }
 }
 
-impl<T, F, R> Runnable for MapRun<T, F>
+impl<T, F, R> ActorRunner for MapRun<T, F>
 where
-    T: Runnable + Send + 'static,
+    T: ActorRunner + Send + 'static,
     F: FnOnce(Result<T::Exit, anyhow::Error>) -> Result<R, anyhow::Error> + Send + 'static,
     R: Send + 'static,
 {
-    type Interface = T::Interface;
+    type Inbox = T::Inbox;
     type Exit = R;
 
     fn run(
         self,
-        stream: EventStream<Self::Interface>,
-        address: Address<Self::Interface>,
+        stream: EventStream<Self::Inbox>,
+        address: Address<Self::Inbox>,
     ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static {
         let Self { inner, map_exit } = self;
 
@@ -137,8 +135,8 @@ where
 impl<T, F> WrapRun<T, F> {
     pub fn new<R, Fut>(inner: T, mapper: F) -> Self
     where
-        T: Runnable,
-        F: FnOnce(T, EventStream<T::Interface>, Address<T::Interface>) -> Fut + Send + 'static,
+        T: ActorRunner,
+        F: FnOnce(T, EventStream<T::Inbox>, Address<T::Inbox>) -> Fut + Send + 'static,
         Fut: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
         R: Send + 'static,
     {
@@ -146,20 +144,20 @@ impl<T, F> WrapRun<T, F> {
     }
 }
 
-impl<T, F, Fut, E> Runnable for WrapRun<T, F>
+impl<T, F, Fut, E> ActorRunner for WrapRun<T, F>
 where
-    T: Runnable + Send + 'static,
-    F: FnOnce(T, EventStream<T::Interface>, Address<T::Interface>) -> Fut + Send + 'static,
+    T: ActorRunner + Send + 'static,
+    F: FnOnce(T, EventStream<T::Inbox>, Address<T::Inbox>) -> Fut + Send + 'static,
     Fut: Future<Output = Result<E, anyhow::Error>> + Send + 'static,
     E: Send + 'static,
 {
-    type Interface = T::Interface;
+    type Inbox = T::Inbox;
     type Exit = E;
 
     fn run(
         self,
-        stream: EventStream<Self::Interface>,
-        address: Address<Self::Interface>,
+        stream: EventStream<Self::Inbox>,
+        address: Address<Self::Inbox>,
     ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static {
         let Self { inner, mapper } = self;
 
@@ -168,22 +166,22 @@ where
 }
 
 #[derive(Debug, Clone)]
-pub struct ExtractAddressRunnable<T: Runnable> {
+pub struct ExtractAddressRunnable<T: ActorRunner> {
     inner: T,
-    tx: mpsc::UnboundedSender<Address<T::Interface>>,
+    tx: mpsc::UnboundedSender<Address<T::Inbox>>,
 }
 
-impl<T> Runnable for ExtractAddressRunnable<T>
+impl<T> ActorRunner for ExtractAddressRunnable<T>
 where
-    T: Runnable + Send + 'static,
+    T: ActorRunner + Send + 'static,
 {
-    type Interface = T::Interface;
+    type Inbox = T::Inbox;
     type Exit = T::Exit;
 
     fn run(
         self,
-        stream: EventStream<Self::Interface>,
-        address: Address<Self::Interface>,
+        stream: EventStream<Self::Inbox>,
+        address: Address<Self::Inbox>,
     ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static {
         let Self { inner, tx } = self;
 
@@ -233,10 +231,10 @@ mod test {
 
     pub struct TestActorStarter(u32);
 
-    impl InitActor for TestActorStarter {
-        type Actor = TestActor;
+    impl ActorBlueprint for TestActorStarter {
+        type Runner = TestActor;
 
-        fn init(&mut self) -> Self::Actor {
+        fn create_runner(&mut self) -> Self::Runner {
             let actor = TestActor { number: self.0 };
             self.0 += 1;
             actor
@@ -250,24 +248,24 @@ mod test {
         let supervisor = Supervisor::new()
             .with_strategy(SupervisionStrategy::OneForOne)
             .with_intensity(RestartIntensity::default())
-            .with_children([
-                ChildSpec::new(
-                    "ChildA",
-                    TestActor { number: 42 }.map(|exit| exit.map(|()| 12)).wrap(
-                        |inner, stream, address| async move {
-                            inner.run(stream, address).await.map(|val| val.to_string())
-                        },
-                    ),
+            .with_child(ChildSpec::new(
+                "ChildA",
+                TestActor { number: 42 }.map(|exit| exit.map(|()| 12)).wrap(
+                    |inner, stream, address| async move {
+                        inner.run(stream, address).await.map(|val| val.to_string())
+                    },
                 ),
+            ))
+            .with_child(
                 ChildSpec::new("ChildB", TestActor { number: 42 })
                     .mode(RestartMode::Always)
                     .timeout(Duration::from_secs(10)),
-                ChildSpec::new(
-                    "ChildC",
-                    SpawnFn::from_fn(|| TestActor { number: 12 }.spawn()),
-                ),
-                ChildSpec::new("ChildD", TestActorStarter(0)),
-            ])
+            )
+            .with_child(ChildSpec::new(
+                "ChildC",
+                DynSpawnFn::from_fn(|| TestActor { number: 12 }.spawn()),
+            ))
+            .with_child(ChildSpec::new("ChildD", TestActorStarter(0)))
             .spawn();
 
         tokio::time::sleep(Duration::from_secs(1)).await;

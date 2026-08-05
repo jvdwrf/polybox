@@ -49,18 +49,27 @@ impl Supervisor {
         self
     }
 
-    pub fn add_child(&mut self, spec: ChildSpec) {
-        let supervisee = Supervisee::new(spec);
+    pub fn add_child<T>(&mut self, spec: ChildSpec<T>)
+    where
+        ChildSpec<T>: Into<ChildSpec>,
+    {
+        let supervisee = Supervisee::new(spec.into());
         self.supervisees
             .insert(supervisee.spec.id.clone(), supervisee);
     }
 
-    pub fn with_child(mut self, spec: ChildSpec) -> Self {
+    pub fn with_child<T>(mut self, spec: ChildSpec<T>) -> Self
+    where
+        ChildSpec<T>: Into<ChildSpec>,
+    {
         self.add_child(spec);
         self
     }
 
-    pub fn with_children(mut self, specs: impl IntoIterator<Item = ChildSpec>) -> Self {
+    pub fn with_children<T>(mut self, specs: impl IntoIterator<Item = ChildSpec<T>>) -> Self
+    where
+        ChildSpec<T>: Into<ChildSpec>,
+    {
         for spec in specs {
             self.add_child(spec);
         }

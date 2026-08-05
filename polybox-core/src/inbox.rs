@@ -24,7 +24,7 @@ pub trait PolyboxExt: PolyBox + Sized {
     /// Converts into a dynamic inbox with a subset of the original types.
     ///
     /// This conversion is type-safe, and entirely at compile-time.
-    fn into_dyn_subset<T: Members>(self) -> Self::Dyn<T>
+    fn into_dyn<T: Members>(self) -> Self::Dyn<T>
     where
         T: SubsetOf<Self::Set>,
     {
@@ -32,7 +32,7 @@ pub trait PolyboxExt: PolyBox + Sized {
     }
 
     /// Converts into a dynamic inbox with the full set of original types.
-    fn into_dyn(self) -> Self::Dyn<Self::Set> {
+    fn into_dyn_full(self) -> Self::Dyn<Self::Set> {
         self.into_dyn_unchecked()
     }
 

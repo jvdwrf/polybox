@@ -5,7 +5,7 @@ use zestors::{
     event_stream::EventStream,
     signals::{Event, SendSignal, Shutdown, Signal},
     state::ActorState,
-    supervision::RunnableExt as _,
+    supervision::ActorRunnerExt as _,
     *,
 };
 
