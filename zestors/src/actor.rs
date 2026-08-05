@@ -55,7 +55,7 @@ pub trait Actor: Debug + Sized + Send + Sync + 'static {
     }
 }
 
-impl<T: Actor> Run for T {
+impl<T: Actor> Runnable for T {
     type Interface = T::Interface;
     type Exit = T::Exit;
 

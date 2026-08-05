@@ -1,8 +1,7 @@
 use crate::_prelude::*;
-use futures::{FutureExt, Stream, StreamExt as _, future::join_all};
+use futures::{FutureExt, Stream, StreamExt as _};
 use indexmap::IndexMap;
 use std::{
-    any::Any,
     collections::VecDeque,
     fmt::{Debug, Display},
     ops::Deref,
@@ -13,20 +12,21 @@ use std::{
 };
 use tokio::time::Instant;
 
+#[derive(Debug)]
 pub struct ChildSpec {
     pub id: ChildId,
     pub restart_mode: RestartMode,
     pub abort_timeout: Duration,
-    pub runnable: Runnable,
+    pub spawner: SpawnFn,
 }
 
 impl ChildSpec {
-    pub fn new(id: impl Into<ChildId>, runnable: impl Into<Runnable>) -> Self {
+    pub fn new(id: impl Into<ChildId>, spawner: impl Into<SpawnFn>) -> Self {
         Self {
             id: id.into(),
             restart_mode: RestartMode::OnError,
             abort_timeout: Duration::from_millis(5_000),
-            runnable: runnable.into(),
+            spawner: spawner.into(),
         }
     }
 
@@ -40,18 +40,8 @@ impl ChildSpec {
         self
     }
 
-    pub fn spawn(&self) -> Child {
-        self.runnable.spawn()
-    }
-}
-
-impl Debug for ChildSpec {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ChildSpec")
-            .field("id", &self.id)
-            .field("restart_mode", &self.restart_mode)
-            .field("abort_timeout", &self.abort_timeout)
-            .finish()
+    pub fn spawn(&mut self) -> Child {
+        self.spawner.spawn()
     }
 }
 
@@ -132,3 +122,6 @@ mod runnable;
 
 pub use supervisor::*;
 mod supervisor;
+
+pub use spawn::*;
+mod spawn;

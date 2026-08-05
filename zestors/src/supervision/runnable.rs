@@ -1,61 +1,7 @@
+use super::*;
 use tokio::sync::mpsc;
 
-use super::*;
-
-pub struct Runnable(Box<dyn Fn() -> Child + Send>);
-
-impl Runnable {
-    pub fn new<T: Run + Clone>(value: T) -> Self {
-        Self(Box::new(move || {
-            value
-                .clone()
-                .map(|_exit| {
-                    _exit.map(|_exit| {
-                        ()
-                        // TODO: do something with the exit value
-                    })
-                })
-                .spawn()
-                .into_dyn_subset()
-        }))
-    }
-
-    pub fn from_inner(f: Box<dyn Fn() -> Child + Send>) -> Self {
-        Self(f)
-    }
-
-    pub fn from_fn<T, F>(f: impl Fn(EventStream<T>, Address<T>) -> F + Send + 'static) -> Self
-    where
-        T: Interface,
-        F: Future<Output = Result<(), anyhow::Error>> + Send + 'static,
-        F::Output: Send + 'static,
-    {
-        let spawn_fn = move || crate::spawn(|stream, address| f(stream, address)).into_dyn_subset();
-
-        Self::from_inner(Box::new(spawn_fn))
-    }
-
-    pub fn spawn(&self) -> Child {
-        (self.0)()
-    }
-}
-
-impl<T> From<T> for Runnable
-where
-    T: Run + Clone,
-{
-    fn from(value: T) -> Self {
-        Self::new(value)
-    }
-}
-
-impl From<Box<dyn Fn() -> Child + Send>> for Runnable {
-    fn from(value: Box<dyn Fn() -> Child + Send>) -> Self {
-        Self::from_inner(value)
-    }
-}
-
-pub trait Run: Send + Sized + 'static {
+pub trait Runnable: Send + Sized + 'static {
     type Interface: Interface;
     type Exit: Send + 'static;
 
@@ -66,36 +12,19 @@ pub trait Run: Send + Sized + 'static {
     ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static;
 }
 
-pub trait RunnableExt: Run {
-    fn map<F, R>(self, map_exit: F) -> MapRunnable<Self, F>
+pub trait RunnableExt: Runnable {
+    fn map<F, R>(self, map_exit: F) -> MapRun<Self, F>
     where
         F: FnOnce(Result<Self::Exit, anyhow::Error>) -> Result<R, anyhow::Error> + Send + 'static,
         R: Send + 'static,
     {
-        MapRunnable::new(self, map_exit)
+        MapRun::new(self, map_exit)
     }
-
-    // fn map_ok<F, R>(
-    //     self,
-    //     map_ok: F,
-    // ) -> MapRunnable<
-    //     Self,
-    //     impl FnOnce(Result<Self::Exit, anyhow::Error>) -> Result<R, anyhow::Error> + Send + 'static,
-    // >
-    // where
-    //     F: FnOnce(Self::Exit) -> R + Send + 'static,
-    //     R: Send + 'static,
-    // {
-    //     self.map(move |exit| match exit {
-    //         Ok(value) => Ok(map_ok(value)),
-    //         Err(e) => Err(e),
-    //     })
-    // }
 
     fn tap_err_mut<F>(
         self,
         map_err: F,
-    ) -> MapRunnable<
+    ) -> MapRun<
         Self,
         impl FnOnce(Result<Self::Exit, anyhow::Error>) -> Result<Self::Exit, anyhow::Error>
         + Send
@@ -113,7 +42,7 @@ pub trait RunnableExt: Run {
         })
     }
 
-    fn wrap<F, Fut, E>(self, mapper: F) -> WrapRunnable<Self, F>
+    fn wrap<F, Fut, E>(self, mapper: F) -> WrapRun<Self, F>
     where
         F: FnOnce(Self, EventStream<Self::Interface>, Address<Self::Interface>) -> Fut
             + Send
@@ -121,7 +50,7 @@ pub trait RunnableExt: Run {
         Fut: Future<Output = Result<E, anyhow::Error>> + Send + 'static,
         E: Send + 'static,
     {
-        WrapRunnable::new(self, mapper)
+        WrapRun::new(self, mapper)
     }
 
     fn extract_address(
@@ -134,39 +63,33 @@ pub trait RunnableExt: Run {
         (ExtractAddressRunnable { inner: self, tx }, rx)
     }
 
-    // fn supervise(self, supervisor: &mut Supervisor) -> Address<Self::Interface> {
-    //     let (child, address) = self.spawn();
-    //     supervisor.add_child(child);
-    //     address
-    // }
-
     fn spawn(self) -> Child<Self::Exit, Self::Interface> {
         crate::spawn(|stream, address| self.run(stream, address))
     }
 }
-impl<T: Run> RunnableExt for T {}
+impl<T: Runnable> RunnableExt for T {}
 
 #[derive(Clone)]
-pub struct MapRunnable<T, F> {
+pub struct MapRun<T, F> {
     inner: T,
     map_exit: F,
 }
 
-impl<T, F> Debug for MapRunnable<T, F>
+impl<T, F> Debug for MapRun<T, F>
 where
     T: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("MappedExitRunnable")
+        f.debug_struct("MapRun")
             .field("inner", &self.inner)
             .finish()
     }
 }
 
-impl<T, F> MapRunnable<T, F> {
+impl<T, F> MapRun<T, F> {
     pub fn new<R>(inner: T, map_exit: F) -> Self
     where
-        T: Run,
+        T: Runnable,
         F: FnOnce(Result<T::Exit, anyhow::Error>) -> Result<R, anyhow::Error> + Send + 'static,
         R: Send + 'static,
     {
@@ -174,9 +97,9 @@ impl<T, F> MapRunnable<T, F> {
     }
 }
 
-impl<T, F, R> Run for MapRunnable<T, F>
+impl<T, F, R> Runnable for MapRun<T, F>
 where
-    T: Run + Send + 'static,
+    T: Runnable + Send + 'static,
     F: FnOnce(Result<T::Exit, anyhow::Error>) -> Result<R, anyhow::Error> + Send + 'static,
     R: Send + 'static,
 {
@@ -195,26 +118,26 @@ where
 }
 
 #[derive(Clone)]
-pub struct WrapRunnable<T, F> {
+pub struct WrapRun<T, F> {
     inner: T,
     mapper: F,
 }
 
-impl<T, F> Debug for WrapRunnable<T, F>
+impl<T, F> Debug for WrapRun<T, F>
 where
     T: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PreRunRunnable")
+        f.debug_struct("WrapRun")
             .field("inner", &self.inner)
             .finish()
     }
 }
 
-impl<T, F> WrapRunnable<T, F> {
+impl<T, F> WrapRun<T, F> {
     pub fn new<R, Fut>(inner: T, mapper: F) -> Self
     where
-        T: Run,
+        T: Runnable,
         F: FnOnce(T, EventStream<T::Interface>, Address<T::Interface>) -> Fut + Send + 'static,
         Fut: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
         R: Send + 'static,
@@ -223,9 +146,9 @@ impl<T, F> WrapRunnable<T, F> {
     }
 }
 
-impl<T, F, Fut, E> Run for WrapRunnable<T, F>
+impl<T, F, Fut, E> Runnable for WrapRun<T, F>
 where
-    T: Run + Send + 'static,
+    T: Runnable + Send + 'static,
     F: FnOnce(T, EventStream<T::Interface>, Address<T::Interface>) -> Fut + Send + 'static,
     Fut: Future<Output = Result<E, anyhow::Error>> + Send + 'static,
     E: Send + 'static,
@@ -245,14 +168,14 @@ where
 }
 
 #[derive(Debug, Clone)]
-pub struct ExtractAddressRunnable<T: Run> {
+pub struct ExtractAddressRunnable<T: Runnable> {
     inner: T,
     tx: mpsc::UnboundedSender<Address<T::Interface>>,
 }
 
-impl<T> Run for ExtractAddressRunnable<T>
+impl<T> Runnable for ExtractAddressRunnable<T>
 where
-    T: Run + Send + 'static,
+    T: Runnable + Send + 'static,
 {
     type Interface = T::Interface;
     type Exit = T::Exit;
@@ -273,8 +196,6 @@ where
 
 #[cfg(test)]
 mod test {
-    use tokio::sync::mpsc;
-
     use super::*;
 
     #[derive(Interface, ActorInterface, Debug)]
@@ -284,11 +205,11 @@ mod test {
     }
 
     #[derive(Clone, Debug)]
-    pub struct TestRunnable {
+    pub struct TestActor {
         number: u32,
     }
 
-    impl Actor for TestRunnable {
+    impl Actor for TestActor {
         type Interface = TestInterface;
         type Exit = ();
         type Error = anyhow::Error;
@@ -298,7 +219,7 @@ mod test {
         }
     }
 
-    impl HandleMessage<u32> for TestRunnable {
+    impl HandleMessage<u32> for TestActor {
         async fn handle_message(
             &mut self,
             _state: &mut ActorState<Self>,
@@ -310,9 +231,21 @@ mod test {
         }
     }
 
+    pub struct TestActorStarter(u32);
+
+    impl InitActor for TestActorStarter {
+        type Actor = TestActor;
+
+        fn init(&mut self) -> Self::Actor {
+            let actor = TestActor { number: self.0 };
+            self.0 += 1;
+            actor
+        }
+    }
+
     #[tokio::test]
     async fn test_map_exit_runnable() {
-        let (runnable, address) = TestRunnable { number: 42 }.extract_address();
+        // let (runnable, address) = TestRunnable { number: 42 }.extract_address();
 
         let supervisor = Supervisor::new()
             .with_strategy(SupervisionStrategy::OneForOne)
@@ -320,25 +253,20 @@ mod test {
             .with_children([
                 ChildSpec::new(
                     "ChildA",
-                    TestRunnable { number: 42 }
-                        .map(|exit| exit.map(|()| 12))
-                        .wrap(|inner, stream, address| async move {
+                    TestActor { number: 42 }.map(|exit| exit.map(|()| 12)).wrap(
+                        |inner, stream, address| async move {
                             inner.run(stream, address).await.map(|val| val.to_string())
-                        }),
+                        },
+                    ),
                 ),
-                ChildSpec::new("ChildB", TestRunnable { number: 42 })
+                ChildSpec::new("ChildB", TestActor { number: 42 })
                     .mode(RestartMode::Always)
                     .timeout(Duration::from_secs(10)),
                 ChildSpec::new(
                     "ChildC",
-                    Runnable::from_fn(async move |mut stream: EventStream<TestInterface>, _| {
-                        while let Some(msg) = stream.recv().await {
-                            println!("Received message: {:?}", msg);
-                        }
-
-                        Ok(())
-                    }),
+                    SpawnFn::from_fn(|| TestActor { number: 12 }.spawn()),
                 ),
+                ChildSpec::new("ChildD", TestActorStarter(0)),
             ])
             .spawn();
 

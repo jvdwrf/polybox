@@ -130,7 +130,7 @@ where
     }
 }
 
-impl<T: Send, R: InboxKind> Observable for Child<T, R> {
+impl<T, R: InboxKind> Observable for Child<T, R> {
     fn send_signal_payload(
         this: &Self,
         signal: Signal,
