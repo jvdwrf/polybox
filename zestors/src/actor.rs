@@ -56,13 +56,13 @@ pub trait Actor: Debug + Sized + Send + Sync + 'static {
 }
 
 impl<T: Actor> ActorRunner for T {
-    type Inbox = T::Interface;
+    type Interface = T::Interface;
     type Exit = T::Exit;
 
     fn run(
         mut self,
-        mut stream: EventStream<Self::Inbox>,
-        address: Address<Self::Inbox>,
+        mut stream: EventStream<Self::Interface>,
+        address: Address<Self::Interface>,
     ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static {
         async move {
             ActorState::new(address)

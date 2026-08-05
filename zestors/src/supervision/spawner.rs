@@ -1,5 +1,6 @@
 use super::*;
 use polybox::type_sets::Set;
+use tokio::sync::mpsc;
 
 pub struct DynSpawnFn(Box<dyn FnMut() -> Child + Send>);
 
@@ -9,11 +10,7 @@ impl DynSpawnFn {
         R: ActorBlueprint + Send + 'static,
     {
         Self(Box::new(move || {
-            value
-                .create_runner()
-                .map(|e| e.map(|_| ()))
-                .spawn()
-                .into_dyn()
+            value.build().map(|e| e.map(|_| ())).spawn().into_dyn()
         }))
     }
 
@@ -61,9 +58,49 @@ impl ActorSpawner for DynSpawnFn {
 
 impl<T: ActorBlueprint> ActorSpawner for T {
     type Exit = <T::Runner as ActorRunner>::Exit;
-    type Inbox = <T::Runner as ActorRunner>::Inbox;
+    type Inbox = <T::Runner as ActorRunner>::Interface;
 
     fn spawn_mut(&mut self) -> Child<Self::Exit, Self::Inbox> {
-        self.create_runner().spawn()
+        self.build().spawn()
+    }
+}
+
+pub trait ActorSpawnerExt: ActorSpawner + Sized {
+    // fn extract_address(
+    //     self,
+    // ) -> (
+    //     ExtractAddress<Self>,
+    //     mpsc::UnboundedReceiver<Address<Self::Inbox>>,
+    // ) {
+    //     let (tx, rx) = mpsc::unbounded_channel();
+    //     (ExtractAddress { inner: self, tx }, rx)
+    // }
+}
+impl<T: ActorSpawner> ActorSpawnerExt for T {}
+
+#[derive(Debug)]
+pub struct ExtractAddress<T: ActorSpawner> {
+    inner: T,
+    tx: mpsc::UnboundedSender<Address<T::Inbox>>,
+}
+
+impl<T: ActorSpawner> ActorSpawner for ExtractAddress<T> {
+    type Inbox = T::Inbox;
+    type Exit = T::Exit;
+
+    fn spawn_mut(&mut self) -> Child<Self::Exit, Self::Inbox> {
+        let Self { inner, tx } = self;
+        let child = inner.spawn_mut();
+        tx.send(child.address().clone()).ok();
+        child
+    }
+}
+
+impl<T: ActorSpawner + Clone> Clone for ExtractAddress<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            tx: self.tx.clone(),
+        }
     }
 }

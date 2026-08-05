@@ -1,3 +1,5 @@
+use tokio::sync::mpsc;
+
 use super::*;
 
 #[derive(Debug)]
@@ -42,6 +44,25 @@ impl<T: ActorSpawner> ChildSpec<T> {
             abort_timeout: self.abort_timeout,
             spawner: self.spawner.into(),
         }
+    }
+
+    pub fn supervise(
+        self,
+        supervisor: &mut Supervisor,
+    ) -> mpsc::UnboundedReceiver<Address<T::Inbox>>
+    where
+        T: ActorBlueprint + Send + 'static,
+    {
+        let (spawner, rx) = self.spawner.extract_address();
+
+        supervisor.add_dyn_child(ChildSpec {
+            id: self.id,
+            restart_mode: self.restart_mode,
+            abort_timeout: self.abort_timeout,
+            spawner: spawner.into(),
+        });
+
+        rx
     }
 }
 

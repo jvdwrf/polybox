@@ -1,3 +1,5 @@
+use tokio::sync::mpsc;
+
 use super::*;
 
 #[derive(Debug)]
@@ -49,20 +51,27 @@ impl Supervisor {
         self
     }
 
-    pub fn add_child<T>(&mut self, spec: ChildSpec<T>)
-    where
-        ChildSpec<T>: Into<ChildSpec>,
-    {
-        let supervisee = Supervisee::new(spec.into());
+    pub fn add_dyn_child(&mut self, spec: ChildSpec) {
+        let supervisee = Supervisee::new(spec);
         self.supervisees
             .insert(supervisee.spec.id.clone(), supervisee);
+    }
+
+    pub fn add_child<T>(
+        &mut self,
+        blueprint: ChildSpec<T>,
+    ) -> mpsc::UnboundedReceiver<Address<T::Inbox>>
+    where
+        T: ActorBlueprint + Send + 'static,
+    {
+        blueprint.supervise(self)
     }
 
     pub fn with_child<T>(mut self, spec: ChildSpec<T>) -> Self
     where
         ChildSpec<T>: Into<ChildSpec>,
     {
-        self.add_child(spec);
+        self.add_dyn_child(spec.into());
         self
     }
 
@@ -71,7 +80,7 @@ impl Supervisor {
         ChildSpec<T>: Into<ChildSpec>,
     {
         for spec in specs {
-            self.add_child(spec);
+            self.add_dyn_child(spec.into());
         }
         self
     }
@@ -149,7 +158,7 @@ impl Supervisor {
                 Event::Message(message) => match message {
                     SupervisorInterface::RegisterChild(RegisterChild(spec)) => {
                         tracing::trace!("Registering child: {:?}", spec.id);
-                        self.add_child(spec);
+                        self.add_dyn_child(spec);
                     }
 
                     SupervisorInterface::DeregisterChild((DeregisterChild(id), tx)) => {
