@@ -12,6 +12,7 @@ tracing.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 indexmap.workspace = true
+async-channel.workspace = true
 type-sets.workspace = true
 
 [features]

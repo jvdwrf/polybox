@@ -206,12 +206,12 @@ impl<T: Observable> SendSignal<Ping> for T {
 
 #[derive(Clone, Debug)]
 pub struct SignalSender {
-    sender: tokio::sync::mpsc::Sender<Signal>,
+    sender: async_channel::Sender<Signal>,
 }
 
 impl SignalSender {
     pub(crate) fn new() -> (Self, SignalReceiver) {
-        let (sender, receiver) = tokio::sync::mpsc::channel(1_000);
+        let (sender, receiver) = async_channel::bounded(1_000);
         (Self { sender }, SignalReceiver { receiver })
     }
 }
@@ -230,19 +230,19 @@ impl Observable for SignalSender {
 
 #[derive(Debug)]
 pub struct SignalReceiver {
-    receiver: tokio::sync::mpsc::Receiver<Signal>,
+    receiver: async_channel::Receiver<Signal>,
 }
 
 impl SignalReceiver {
     pub async fn recv(&mut self) -> Option<Signal> {
-        self.receiver.recv().await
+        self.receiver.recv().await.ok()
     }
 
     pub async fn recv_with<T>(&mut self, other: &mut Receiver<T>) -> Option<Event<T>> {
         select! {
             biased;
 
-            Some(signal) = self.receiver.recv() => {
+            Ok(signal) = self.receiver.recv() => {
                 Some(Event::Signal(signal))
             }
 
@@ -263,7 +263,7 @@ impl SignalReceiver {
             select! {
                 biased;
 
-                Some(signal) = self.receiver.recv() => {
+                Ok(signal) = self.receiver.recv() => {
                     Some(Event::Signal(signal))
                 }
 
@@ -274,7 +274,7 @@ impl SignalReceiver {
                 else => None,
             }
         } else {
-            if let Some(signal) = self.receiver.recv().await {
+            if let Ok(signal) = self.receiver.recv().await {
                 Some(Event::Signal(signal))
             } else {
                 None

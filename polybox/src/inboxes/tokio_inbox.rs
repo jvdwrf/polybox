@@ -4,26 +4,26 @@ use polybox_core::errors::{SendCheckedError, SendError};
 use std::sync::Arc;
 use type_sets::Members;
 
-/// A wrapper around a [`tokio::sync::mpsc::Sender`] that acts as a [`PolyBox`].
+/// A wrapper around a [`async_channel::Sender`] that acts as a [`PolyBox`].
 pub struct TokioInbox<T> {
-    sender: tokio::sync::mpsc::Sender<T>,
+    sender: async_channel::Sender<T>,
 }
 
 impl<T> TokioInbox<T> {
-    pub fn new(buffer: usize) -> (Self, tokio::sync::mpsc::Receiver<T>) {
-        let (sender, receiver) = tokio::sync::mpsc::channel(buffer);
+    pub fn new(buffer: usize) -> (Self, async_channel::Receiver<T>) {
+        let (sender, receiver) = async_channel::channel(buffer);
         (Self { sender }, receiver)
     }
 
-    pub fn inner(&self) -> &tokio::sync::mpsc::Sender<T> {
+    pub fn inner(&self) -> &async_channel::Sender<T> {
         &self.sender
     }
 
-    pub fn into_inner(self) -> tokio::sync::mpsc::Sender<T> {
+    pub fn into_inner(self) -> async_channel::Sender<T> {
         self.sender
     }
 
-    pub fn from_inner(sender: tokio::sync::mpsc::Sender<T>) -> Self {
+    pub fn from_inner(sender: async_channel::Sender<T>) -> Self {
         Self { sender }
     }
 }
