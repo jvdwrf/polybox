@@ -1,5 +1,3 @@
-use tokio::sync::{mpsc, watch};
-
 use super::*;
 
 #[derive(Debug)]
@@ -63,10 +61,7 @@ impl Supervisor {
         }
     }
 
-    pub fn add_child<T>(
-        &mut self,
-        blueprint: ChildSpec<T>,
-    ) -> watch::Receiver<Option<Address<T::Inbox>>>
+    pub fn add_child<T>(&mut self, blueprint: ChildSpec<T>) -> FutureAddress<T::Inbox>
     where
         T: ActorBlueprint + Send + 'static,
     {
@@ -76,7 +71,7 @@ impl Supervisor {
     pub fn add_children<T>(
         &mut self,
         blueprints: impl IntoIterator<Item = ChildSpec<T>>,
-    ) -> Vec<watch::Receiver<Option<Address<T::Inbox>>>>
+    ) -> Vec<FutureAddress<T::Inbox>>
     where
         T: ActorBlueprint + Send + 'static,
     {

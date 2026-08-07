@@ -1,5 +1,11 @@
+use std::{
+    pin::{Pin, pin},
+    sync::OnceLock,
+    task::{Poll, ready},
+};
+
 use super::*;
-use tokio::sync::{mpsc, watch};
+use tokio::sync::{Notify, mpsc, watch};
 
 pub trait ActorRunner: Send + Sized + 'static {
     type Interface: Interface;
@@ -53,13 +59,8 @@ pub trait ActorRunnerExt: ActorRunner {
         WrapRun::new(self, mapper)
     }
 
-    fn extract_address(
-        self,
-    ) -> (
-        ExtractAddressRunnable<Self>,
-        watch::Receiver<Option<Address<Self::Interface>>>,
-    ) {
-        let (tx, rx) = watch::channel(None);
+    fn extract_address(self) -> (ExtractAddressRunnable<Self>, FutureAddress<Self::Interface>) {
+        let (rx, tx) = FutureAddress::new();
         (ExtractAddressRunnable { inner: self, tx }, rx)
     }
 
@@ -170,7 +171,7 @@ where
 #[derive(Debug, Clone)]
 pub struct ExtractAddressRunnable<T: ActorRunner> {
     pub(super) inner: T,
-    pub(super) tx: watch::Sender<Option<Address<T::Interface>>>,
+    pub(super) tx: FutureAddressSender<T::Interface>,
 }
 
 impl<T> ActorRunner for ExtractAddressRunnable<T>
@@ -191,5 +192,49 @@ where
             tx.send(Some(address.clone())).ok();
             inner.run(stream, address).await
         }
+    }
+}
+
+pub struct FutureAddress<T: InboxKind> {
+    receiver: watch::Receiver<Option<Address<T>>>,
+}
+
+pub(crate) type FutureAddressSender<T> = watch::Sender<Option<Address<T>>>;
+
+impl<T: InboxKind> FutureAddress<T> {
+    pub(super) fn new() -> (Self, FutureAddressSender<T>) {
+        let (tx, rx) = watch::channel(None);
+        (Self { receiver: rx }, tx)
+    }
+
+    pub async fn get(&mut self) -> Option<Address<T>> {
+        self.await
+    }
+}
+
+impl<T: InboxKind> Debug for FutureAddress<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FutureAddress").finish()
+    }
+}
+
+impl<T: InboxKind> Clone for FutureAddress<T> {
+    fn clone(&self) -> Self {
+        Self {
+            receiver: self.receiver.clone(),
+        }
+    }
+}
+
+impl<T: InboxKind> Future for FutureAddress<T> {
+    type Output = Option<Address<T>>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        let res = ready!(pin!(self.receiver.wait_for(|x| x.is_some())).poll_unpin(cx));
+
+        Poll::Ready(
+            res.ok()
+                .map(|x| x.clone().expect("Wait for address that is some")),
+        )
     }
 }

@@ -69,9 +69,7 @@ enum MyInterface {
 
 impl Actor for MyActor {
     type Interface = MyInterface;
-
     type Error = anyhow::Error;
-
     type Exit = u32;
 
     async fn exit(&mut self, reason: state::ExitReason) -> Result<Self::Exit, Self::Error> {

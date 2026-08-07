@@ -33,9 +33,9 @@ pub trait ActorBlueprintExt: ActorBlueprint + Sized {
         self,
     ) -> (
         ExtractAddressBlueprint<Self>,
-        watch::Receiver<Option<Address<<Self::Runner as ActorRunner>::Interface>>>,
+        FutureAddress<<Self::Runner as ActorRunner>::Interface>,
     ) {
-        let (tx, rx) = watch::channel(None);
+        let (rx, tx) = FutureAddress::new();
         (ExtractAddressBlueprint { inner: self, tx }, rx)
     }
 }

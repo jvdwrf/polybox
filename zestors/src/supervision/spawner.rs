@@ -83,7 +83,7 @@ impl<T: ActorBlueprint> ActorSpawner for T {
 // #[derive(Debug)]
 // pub struct ExtractAddress<T: ActorSpawner> {
 //     inner: T,
-//     tx: watch::Sender<Address<T::Inbox>>,
+//     tx: Tx<Address<T::Inbox>>,
 // }
 
 // impl<T: ActorSpawner> ActorSpawner for ExtractAddress<T> {

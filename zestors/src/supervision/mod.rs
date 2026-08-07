@@ -117,6 +117,9 @@ mod test {
             );
 
             supervisor.spawn();
+
+            let addr_a = addr_a.await.unwrap();
+            let addr_b = addr_b.await.unwrap();
         }
 
         tokio::time::sleep(Duration::from_secs(1)).await;
