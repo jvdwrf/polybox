@@ -228,7 +228,7 @@ impl Observable for SignalSender {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SignalReceiver {
     receiver: async_channel::Receiver<Signal>,
 }

@@ -1,6 +1,5 @@
 use super::*;
 use polybox::type_sets::Set;
-use tokio::sync::{mpsc, watch};
 
 pub struct DynSpawnFn(Box<dyn FnMut() -> Child + Send>);
 
@@ -9,15 +8,18 @@ impl DynSpawnFn {
     where
         R: ActorBlueprint + Send + 'static,
     {
-        Self(Box::new(move || {
-            value.build().map(|e| e.map(|_| ())).spawn().into_dyn()
-        }))
-    }
+        // Construct the inboxes once, to re-use them when the actor is spawned multiple times.
+        let (inbox, receiver) = Inbox::new(1_000_000);
+        let (signal_inbox, signal_receiver) = SignalSender::new();
 
-    pub fn from_fn<T: InboxKind>(
-        mut spawn_fn: impl FnMut() -> Child<(), T> + Send + 'static,
-    ) -> Self {
-        Self(Box::new(move || spawn_fn().into_dyn().attached()))
+        Self(Box::new(move || {
+            let runner = value.build().map(|e| e.map(|_| ()));
+
+            let address = Address::new(inbox.clone(), signal_inbox.clone());
+            let stream = EventStream::new(receiver.clone(), signal_receiver.clone());
+            let handle = tokio::spawn(runner.run(stream, address.clone()));
+            Child::new(handle, address).into_dyn()
+        }))
     }
 
     pub fn call(&mut self) -> Child {

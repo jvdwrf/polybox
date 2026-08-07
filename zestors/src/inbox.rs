@@ -106,3 +106,11 @@ impl<T> std::fmt::Debug for Receiver<T> {
         f.debug_struct("Receiver").finish()
     }
 }
+
+impl<T> Clone for Receiver<T> {
+    fn clone(&self) -> Self {
+        Self {
+            receiver: self.receiver.clone(),
+        }
+    }
+}

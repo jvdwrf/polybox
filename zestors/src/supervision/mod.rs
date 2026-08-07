@@ -102,10 +102,6 @@ mod test {
                     .mode(RestartMode::Always)
                     .timeout(Duration::from_secs(10)),
             )
-            .with_child(ChildSpec::new(
-                "ChildC",
-                DynSpawnFn::from_fn(|| TestActor { number: 12 }.spawn()),
-            ))
             .with_child(ChildSpec::new("ChildD", TestActorStarter(0)))
             .spawn();
 

@@ -5,7 +5,7 @@ use polybox::{
     type_sets::{Members, Set},
     *,
 };
-use std::{fmt::Debug, marker::PhantomData};
+use std::{any::Any, fmt::Debug, marker::PhantomData};
 
 pub struct Address<T: InboxKind> {
     inbox: T::Inbox,
@@ -81,6 +81,7 @@ impl<T: InboxKind> Debug for Address<T> {
 pub trait InboxKind {
     type Inbox: PolyBox + Clone + Debug + Unpin;
     type Set: Members;
+    type Stream: Send + Sync + 'static;
 
     fn map_inbox_into_dyn_unchecked<R: Members>(address: Self::Inbox) -> DynInbox<R>;
 }
@@ -90,6 +91,7 @@ pub struct Dyn<T>(PhantomData<fn() -> T>);
 impl<T: Members> InboxKind for Dyn<T> {
     type Inbox = DynInbox<T>;
     type Set = T;
+    type Stream = Box<dyn Any + Send + Sync>;
 
     fn map_inbox_into_dyn_unchecked<R: Members>(inbox: Self::Inbox) -> DynInbox<R> {
         inbox.into_dyn_unchecked()
@@ -99,6 +101,7 @@ impl<T: Members> InboxKind for Dyn<T> {
 impl<T: Interface> InboxKind for T {
     type Inbox = Inbox<T>;
     type Set = T::Set;
+    type Stream = EventStream<T>;
 
     fn map_inbox_into_dyn_unchecked<R: Members>(inbox: Self::Inbox) -> DynInbox<R> {
         inbox.into_dyn_unchecked()

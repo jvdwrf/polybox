@@ -1,4 +1,4 @@
-use tokio::sync::{mpsc, watch};
+use tokio::sync::watch;
 
 use super::*;
 
