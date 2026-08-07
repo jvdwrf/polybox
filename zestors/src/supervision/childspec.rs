@@ -46,7 +46,7 @@ impl<T: ActorSpawner> ChildSpec<T> {
         }
     }
 
-    pub fn supervise(self, supervisor: &mut Supervisor) -> FutureAddress<T::Inbox>
+    pub fn supervise(self, supervisor: &mut Supervisor) -> SupervisionAddress<T::Inbox>
     where
         T: ActorBlueprint + Send + 'static,
     {

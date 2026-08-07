@@ -30,8 +30,8 @@ mod blueprint;
 pub use child_id::*;
 mod child_id;
 
-pub use supervised_child::*;
-mod supervised_child;
+pub use supervision_address::*;
+mod supervision_address;
 
 #[cfg(test)]
 mod test {

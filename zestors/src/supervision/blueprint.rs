@@ -33,9 +33,9 @@ pub trait ActorBlueprintExt: ActorBlueprint + Sized {
         self,
     ) -> (
         ExtractAddressBlueprint<Self>,
-        FutureAddress<<Self::Runner as ActorRunner>::Interface>,
+        SupervisionAddress<<Self::Runner as ActorRunner>::Interface>,
     ) {
-        let (rx, tx) = FutureAddress::new();
+        let (rx, tx) = SupervisionAddress::new();
         (ExtractAddressBlueprint { inner: self, tx }, rx)
     }
 }
