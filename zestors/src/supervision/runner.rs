@@ -1,5 +1,5 @@
 use super::*;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 pub trait ActorRunner: Send + Sized + 'static {
     type Interface: Interface;
@@ -57,9 +57,9 @@ pub trait ActorRunnerExt: ActorRunner {
         self,
     ) -> (
         ExtractAddressRunnable<Self>,
-        mpsc::UnboundedReceiver<Address<Self::Interface>>,
+        watch::Receiver<Option<Address<Self::Interface>>>,
     ) {
-        let (tx, rx) = mpsc::unbounded_channel();
+        let (tx, rx) = watch::channel(None);
         (ExtractAddressRunnable { inner: self, tx }, rx)
     }
 
@@ -170,7 +170,7 @@ where
 #[derive(Debug, Clone)]
 pub struct ExtractAddressRunnable<T: ActorRunner> {
     pub(super) inner: T,
-    pub(super) tx: mpsc::UnboundedSender<Address<T::Interface>>,
+    pub(super) tx: watch::Sender<Option<Address<T::Interface>>>,
 }
 
 impl<T> ActorRunner for ExtractAddressRunnable<T>
@@ -188,7 +188,7 @@ where
         let Self { inner, tx } = self;
 
         async move {
-            tx.send(address.clone()).ok();
+            tx.send(Some(address.clone())).ok();
             inner.run(stream, address).await
         }
     }

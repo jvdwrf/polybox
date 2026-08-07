@@ -31,6 +31,8 @@ fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
     let enum_name = &input.ident;
 
     let base_path: syn::Path = extract_base_path(&input.attrs, "interface", base);
+    let polybox_path: syn::Path =
+        syn::parse_str(&format!("{}::polybox", quote!(#base_path))).unwrap();
 
     // Ensure we are working with an enum
     let variants = match &input.data {
@@ -77,18 +79,18 @@ fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
                 });
 
                 into_matches.push(quote! {
-                    Self::#variant_name(payload) => #base_path::BoxedPayload::new::<#inner_type>(payload),
+                    Self::#variant_name(payload) => #polybox_path::BoxedPayload::new::<#inner_type>(payload),
                 });
 
                 from_impls.push(quote! {
-                    impl #base_path::FromPayload<#inner_type> for #enum_name {
-                        fn from_payload(payload: #base_path::Payload<#inner_type>) -> Self {
+                    impl #polybox_path::FromPayload<#inner_type> for #enum_name {
+                        fn from_payload(payload: #polybox_path::Payload<#inner_type>) -> Self {
                             Self::#variant_name(payload)
                         }
                     }
 
-                    impl #base_path::TryIntoPayload<#inner_type> for #enum_name {
-                        fn try_into_payload(self) -> Result<#base_path::Payload<#inner_type>, Self> {
+                    impl #polybox_path::TryIntoPayload<#inner_type> for #enum_name {
+                        fn try_into_payload(self) -> Result<#polybox_path::Payload<#inner_type>, Self> {
                             if let #enum_name::#variant_name(payload) = self {
                                 Ok(payload)
                             } else {
@@ -103,8 +105,8 @@ fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
     }
 
     let expanded = quote! {
-        impl #base_path::Interface for #enum_name {
-            fn try_from_boxed_payload(payload: #base_path::BoxedPayload) -> Result<Self, #base_path::BoxedPayload> {
+        impl #polybox_path::Interface for #enum_name {
+            fn try_from_boxed_payload(payload: #polybox_path::BoxedPayload) -> Result<Self, #polybox_path::BoxedPayload> {
                 #(#try_from_matches)*
                 Err(payload)
             }
@@ -116,7 +118,7 @@ fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
             //     Err(self)
             // }
 
-            fn into_boxed_payload(self) -> #base_path::BoxedPayload {
+            fn into_boxed_payload(self) -> #polybox_path::BoxedPayload {
                 match self {
                     #(#into_matches)*
                 }
@@ -124,22 +126,22 @@ fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
         }
 
 
-        impl #base_path::Message for #enum_name {
-            type Kind = #base_path::FireAndForget;
+        impl #polybox_path::Message for #enum_name {
+            type Kind = #polybox_path::FireAndForget;
         }
 
-        impl #base_path::type_sets::AsSet for #enum_name {
-            type Set = #base_path::type_sets::Set![#(#inner_types),*];
+        impl #polybox_path::type_sets::AsSet for #enum_name {
+            type Set = #polybox_path::type_sets::Set![#(#inner_types),*];
         }
 
-        impl #base_path::TryIntoPayload<#enum_name> for #enum_name {
-            fn try_into_payload(self) -> Result<#base_path::Payload<#enum_name>, Self> {
+        impl #polybox_path::TryIntoPayload<#enum_name> for #enum_name {
+            fn try_into_payload(self) -> Result<#polybox_path::Payload<#enum_name>, Self> {
                 Ok(self)
             }
         }
 
-        impl #base_path::FromPayload<#enum_name> for #enum_name {
-            fn from_payload(payload: #base_path::Payload<#enum_name>) -> Self {
+        impl #polybox_path::FromPayload<#enum_name> for #enum_name {
+            fn from_payload(payload: #polybox_path::Payload<#enum_name>) -> Self {
                 payload
             }
         }

@@ -1,4 +1,4 @@
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 use super::*;
 
@@ -33,9 +33,9 @@ pub trait ActorBlueprintExt: ActorBlueprint + Sized {
         self,
     ) -> (
         ExtractAddressBlueprint<Self>,
-        mpsc::UnboundedReceiver<Address<<Self::Runner as ActorRunner>::Interface>>,
+        watch::Receiver<Option<Address<<Self::Runner as ActorRunner>::Interface>>>,
     ) {
-        let (tx, rx) = mpsc::unbounded_channel();
+        let (tx, rx) = watch::channel(None);
         (ExtractAddressBlueprint { inner: self, tx }, rx)
     }
 }
@@ -43,7 +43,7 @@ impl<T: ActorBlueprint> ActorBlueprintExt for T {}
 
 pub struct ExtractAddressBlueprint<T: ActorBlueprint> {
     inner: T,
-    tx: mpsc::UnboundedSender<Address<<T::Runner as ActorRunner>::Interface>>,
+    tx: watch::Sender<Option<Address<<T::Runner as ActorRunner>::Interface>>>,
 }
 
 impl<T: ActorBlueprint> ActorBlueprint for ExtractAddressBlueprint<T> {

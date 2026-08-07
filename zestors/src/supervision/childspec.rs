@@ -1,4 +1,4 @@
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 use super::*;
 
@@ -49,7 +49,7 @@ impl<T: ActorSpawner> ChildSpec<T> {
     pub fn supervise(
         self,
         supervisor: &mut Supervisor,
-    ) -> mpsc::UnboundedReceiver<Address<T::Inbox>>
+    ) -> watch::Receiver<Option<Address<T::Inbox>>>
     where
         T: ActorBlueprint + Send + 'static,
     {

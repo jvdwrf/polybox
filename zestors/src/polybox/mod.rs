@@ -10,7 +10,6 @@ pub mod oneshot;
 mod payload;
 mod sends;
 
-pub use polybox_codegen::{InterfaceZestors as Interface, MessageZestors as Message};
 pub use type_sets;
 pub use {inbox::*, interface::*, message::*, payload::*, sends::*};
 

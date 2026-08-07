@@ -1,4 +1,4 @@
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 use super::*;
 
@@ -57,14 +57,33 @@ impl Supervisor {
             .insert(supervisee.spec.id.clone(), supervisee);
     }
 
+    pub fn add_dyn_children(&mut self, specs: impl IntoIterator<Item = ChildSpec>) {
+        for spec in specs {
+            self.add_dyn_child(spec);
+        }
+    }
+
     pub fn add_child<T>(
         &mut self,
         blueprint: ChildSpec<T>,
-    ) -> mpsc::UnboundedReceiver<Address<T::Inbox>>
+    ) -> watch::Receiver<Option<Address<T::Inbox>>>
     where
         T: ActorBlueprint + Send + 'static,
     {
         blueprint.supervise(self)
+    }
+
+    pub fn add_children<T>(
+        &mut self,
+        blueprints: impl IntoIterator<Item = ChildSpec<T>>,
+    ) -> Vec<watch::Receiver<Option<Address<T::Inbox>>>>
+    where
+        T: ActorBlueprint + Send + 'static,
+    {
+        blueprints
+            .into_iter()
+            .map(|blueprint| blueprint.supervise(self))
+            .collect()
     }
 
     pub fn with_child<T>(mut self, spec: ChildSpec<T>) -> Self

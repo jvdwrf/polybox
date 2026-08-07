@@ -1,8 +1,8 @@
-use polybox::{Interface, Payload, Sends as _};
 use std::time::Duration;
 use zestors::{
     actor::{Actor, HandleMessage},
     event_stream::EventStream,
+    polybox::{Payload, Sends as _},
     signals::{Event, SendSignal, Shutdown, Signal},
     state::ActorState,
     supervision::ActorRunnerExt as _,

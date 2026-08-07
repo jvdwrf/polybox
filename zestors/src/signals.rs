@@ -1,20 +1,25 @@
 use crate::*;
-use polybox::{Message, Payload, errors::SendError, oneshot::new_request};
+use polybox::{Payload, errors::SendError, oneshot::new_request};
 use tokio::select;
 
 #[derive(Message, Debug)]
+#[msg(path = "crate")]
 pub struct Shutdown;
 
 #[derive(Message, Debug)]
+#[msg(path = "crate")]
 pub struct Exit;
 
 #[derive(Message, Debug)]
+#[msg(path = "crate")]
 pub struct Suspend;
 
 #[derive(Message, Debug)]
+#[msg(path = "crate")]
 pub struct Resume;
 
 #[derive(Message, Debug)]
+#[msg(path = "crate")]
 #[msg(reply = Status)]
 pub struct GetStatus;
 
@@ -26,6 +31,7 @@ pub enum Status {
 }
 
 #[derive(Message, Debug)]
+#[msg(path = "crate")]
 #[msg(reply = State)]
 pub struct GetState;
 
@@ -37,6 +43,7 @@ pub struct State {
 }
 
 #[derive(Message, Debug)]
+#[msg(path = "crate")]
 #[msg(reply = ())]
 pub struct Ping;
 

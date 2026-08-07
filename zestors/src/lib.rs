@@ -24,13 +24,15 @@ where
 pub mod actor;
 pub mod address;
 pub mod child;
+pub mod event_stream;
 pub mod inbox;
 pub mod signals;
 pub mod state;
-pub use polybox;
-pub mod event_stream;
 pub mod supervision;
+pub use ::type_sets;
 pub(crate) use polybox::*;
+
+pub mod polybox;
 
 pub(crate) mod _prelude {
     #![allow(unused_imports)]

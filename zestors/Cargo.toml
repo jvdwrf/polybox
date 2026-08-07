@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-polybox.workspace = true
+# polybox.workspace = true
 polybox-codegen.workspace = true
 tokio.workspace = true
 futures.workspace = true
@@ -12,6 +12,7 @@ tracing.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 indexmap.workspace = true
+type-sets.workspace = true
 
 [features]
-_ra = ["polybox/_ra"]
+_ra = []
