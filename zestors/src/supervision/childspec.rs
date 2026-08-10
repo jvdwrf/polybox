@@ -2,14 +2,14 @@ use super::*;
 
 #[derive(Debug)]
 pub struct ChildSpec<T = DynSpawner> {
-    pub id: ChildId,
+    pub id: Pid,
     pub restart_mode: RestartMode,
     pub abort_timeout: Duration,
     pub spawner: T,
 }
 
 impl<T> ChildSpec<T> {
-    pub fn new(id: impl Into<ChildId>, spawner: T) -> Self {
+    pub fn new(id: impl Into<Pid>, spawner: T) -> Self {
         Self {
             id: id.into(),
             restart_mode: RestartMode::OnError,

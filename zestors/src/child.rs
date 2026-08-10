@@ -158,9 +158,9 @@ impl<T: Send, R: InboxKind> DynPolyBox for Child<T, R> {
 
 impl<T: Send, R: InboxKind> PolyBox for Child<T, R> {
     type Set = Set![];
-    type Dyn<S: Members> = Child<T, Dyn<S>>;
+    type Dyn<S: Members + 'static> = Child<T, Dyn<S>>;
 
-    fn into_dyn_unchecked<S: Members>(self) -> Child<T, Dyn<S>> {
+    fn into_dyn_unchecked<S: Members + 'static>(self) -> Child<T, Dyn<S>> {
         let (handle, address) = self.into_parts();
         Child::new(handle, address.into_dyn_unchecked())
     }

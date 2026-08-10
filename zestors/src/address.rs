@@ -6,10 +6,6 @@ use polybox::{
 };
 use std::{any::Any, fmt::Debug, marker::PhantomData};
 
-// struct _Address<T: InboxKind = Dyn<Set![]>> {
-//     val:
-// }
-
 pub struct Address<T: InboxKind = Dyn<Set![]>> {
     inbox: T::Inbox,
     signal_inbox: SignalSender,
@@ -57,9 +53,9 @@ impl<T: InboxKind> DynPolyBox for Address<T> {
 
 impl<T: InboxKind> PolyBox for Address<T> {
     type Set = T::Set;
-    type Dyn<R: Members> = Address<Dyn<R>>;
+    type Dyn<R: Members + 'static> = Address<Dyn<R>>;
 
-    fn into_dyn_unchecked<R: Members>(self) -> Address<Dyn<R>> {
+    fn into_dyn_unchecked<R: Members + 'static>(self) -> Address<Dyn<R>> {
         Address {
             inbox: T::map_inbox_into_dyn_unchecked(self.inbox),
             signal_inbox: self.signal_inbox,
@@ -116,20 +112,20 @@ impl<T: InboxKind> Debug for Address<T> {
 
 pub trait InboxKind {
     type Inbox: PolyBox + Clone + Debug + Unpin;
-    type Set: Members;
+    type Set: Members + 'static;
     type Stream: Send + Sync + 'static;
 
-    fn map_inbox_into_dyn_unchecked<R: Members>(address: Self::Inbox) -> DynInbox<R>;
+    fn map_inbox_into_dyn_unchecked<R: Members + 'static>(address: Self::Inbox) -> DynInbox<R>;
 }
 
 pub struct Dyn<T>(PhantomData<fn() -> T>);
 
-impl<T: Members> InboxKind for Dyn<T> {
+impl<T: Members + 'static> InboxKind for Dyn<T> {
     type Inbox = DynInbox<T>;
     type Set = T;
     type Stream = Box<dyn Any + Send + Sync>;
 
-    fn map_inbox_into_dyn_unchecked<R: Members>(inbox: Self::Inbox) -> DynInbox<R> {
+    fn map_inbox_into_dyn_unchecked<R: Members + 'static>(inbox: Self::Inbox) -> DynInbox<R> {
         inbox.into_dyn_unchecked()
     }
 }
@@ -139,7 +135,7 @@ impl<T: Interface> InboxKind for T {
     type Set = T::Set;
     type Stream = EventStream<T>;
 
-    fn map_inbox_into_dyn_unchecked<R: Members>(inbox: Self::Inbox) -> DynInbox<R> {
+    fn map_inbox_into_dyn_unchecked<R: Members + 'static>(inbox: Self::Inbox) -> DynInbox<R> {
         inbox.into_dyn_unchecked()
     }
 }

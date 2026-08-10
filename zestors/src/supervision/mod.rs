@@ -3,10 +3,8 @@ use futures::{FutureExt, Stream, StreamExt as _};
 use indexmap::IndexMap;
 use std::{
     collections::VecDeque,
-    fmt::{Debug, Display},
-    ops::Deref,
+    fmt::Debug,
     pin::Pin,
-    sync::Arc,
     task::{Context, Poll},
     time::Duration,
 };
@@ -26,9 +24,6 @@ mod spawner;
 
 pub use blueprint::*;
 mod blueprint;
-
-pub use child_id::*;
-mod child_id;
 
 pub use supervision_address::*;
 mod supervision_address;

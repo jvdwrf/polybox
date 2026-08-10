@@ -37,7 +37,7 @@ impl<T> Inbox<T> {
 
 impl<T: Interface> PolyBox for Inbox<T> {
     type Set = T::Set;
-    type Dyn<R: Members> = DynInbox<R>;
+    type Dyn<R: Members + 'static> = DynInbox<R>;
 
     fn into_dyn_unchecked<R>(self) -> DynInbox<R> {
         DynInbox::new_unchecked(Arc::new(self))

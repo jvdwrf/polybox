@@ -2,10 +2,11 @@ use super::*;
 
 #[derive(Debug)]
 pub struct Supervisor {
-    supervisees: IndexMap<ChildId, Supervisee>,
+    supervisees: IndexMap<Pid, Supervisee>,
     strategy: SupervisionStrategy,
     restart_intensity: RestartIntensity,
     restarts: VecDeque<Instant>,
+    registry: Registry,
 }
 
 #[derive(Message, Debug)]
@@ -14,7 +15,7 @@ pub struct RegisterChild(ChildSpec);
 
 #[derive(Message, Debug)]
 #[msg(path = crate, reply = "Option<Supervisee>")]
-pub struct DeregisterChild(ChildId);
+pub struct DeregisterChild(Pid);
 
 #[derive(Interface, Debug)]
 #[interface(crate = "crate")]
@@ -36,6 +37,7 @@ impl Supervisor {
             strategy: SupervisionStrategy::default(),
             restart_intensity: RestartIntensity::default(),
             restarts: VecDeque::new(),
+            registry: Registry::global().clone(),
         }
     }
 
@@ -255,7 +257,7 @@ impl Supervisor {
         self.restart_intensity.allow_restart(&mut self.restarts)
     }
 
-    fn affected_supervisees_mut<'a>(&'a mut self, id: &'a ChildId) -> Vec<&'a mut Supervisee> {
+    fn affected_supervisees_mut<'a>(&'a mut self, id: &'a Pid) -> Vec<&'a mut Supervisee> {
         match self.strategy {
             SupervisionStrategy::OneForOne => vec![
                 self.supervisees
@@ -310,7 +312,7 @@ impl Stream for Supervisor {
 
 #[derive(Debug)]
 pub struct ChildTermination {
-    pub id: ChildId,
+    pub id: Pid,
     pub exit: Result<(), JoinError>,
     pub reference: Child<()>,
 }
@@ -343,7 +345,7 @@ impl Default for SupervisionStrategy {
 #[derive(Debug, thiserror::Error)]
 #[error("Terminal child error: {id}, error: {error:?}")]
 pub struct RestartLimitReached {
-    pub id: ChildId,
+    pub id: Pid,
     pub error: Option<JoinError>,
 }
 

@@ -6,8 +6,8 @@ use type_sets::SubsetOf;
 /// A trait that allows for conversions to [`DynInbox`].
 pub trait PolyBox: DynPolyBox {
     /// The set of message types that this inbox can accept.
-    type Set: Members;
-    type Dyn<T: Members>;
+    type Set: Members + 'static;
+    type Dyn<T: Members + 'static>;
 
     /// Converts into a dynamic inbox without checking if the types are compatible.
     ///
@@ -179,9 +179,9 @@ impl<T> DynInbox<T> {
     }
 }
 
-impl<T: Members> PolyBox for DynInbox<T> {
+impl<T: Members + 'static> PolyBox for DynInbox<T> {
     type Set = T;
-    type Dyn<R: Members> = DynInbox<R>;
+    type Dyn<R: Members + 'static> = DynInbox<R>;
 
     fn into_dyn_unchecked<R>(self) -> DynInbox<R> {
         DynInbox::new_unchecked(self.inbox)
@@ -191,7 +191,7 @@ impl<T: Members> PolyBox for DynInbox<T> {
 impl<T, R> Sends<T> for DynInbox<R>
 where
     T: Message<Kind: MessageSpecifier<T, Output: Send, Payload: Send>>,
-    R: Members + Contains<T>,
+    R: Members + 'static + Contains<T>,
 {
     async fn send(&self, msg: T) -> Result<Output<T>, SendError<T>> {
         self.send_checked(msg).await.map_err(|e| match e {
