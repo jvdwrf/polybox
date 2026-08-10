@@ -1,5 +1,5 @@
 use crate::_prelude::*;
-use dashmap::DashMap;
+use dashmap::{DashMap, mapref::entry};
 use std::sync::{
     OnceLock,
     atomic::{AtomicU64, Ordering},
@@ -7,7 +7,7 @@ use std::sync::{
 
 #[derive(Debug, Clone)]
 pub struct Registry {
-    processes: DashMap<Pid, RegistryEntry>,
+    processes: DashMap<Pid, Option<RegistryEntry>>,
     next_pid: Arc<AtomicU64>,
 }
 
@@ -21,11 +21,27 @@ impl Registry {
         }
     }
 
-    pub fn next_pid(&self) -> Pid {
+    fn next_pid(&self) -> Pid {
+        Pid::new(self.next_pid.fetch_add(1, Ordering::Relaxed))
+    }
+
+    pub fn reserve_incr_pid(&self) -> Pid {
         loop {
-            let pid = Pid::new(self.next_pid.fetch_add(1, Ordering::Relaxed));
+            let pid = self.next_pid();
 
             if !self.contains(&pid) {
+                self.processes.insert(pid.clone(), None);
+                return pid;
+            }
+        }
+    }
+
+    pub fn add_incr(&self, entry: Option<RegistryEntry>) -> Pid {
+        loop {
+            let pid = self.next_pid();
+
+            if let entry::Entry::Vacant(p) = self.processes.entry(pid.clone()) {
+                p.insert(entry);
                 return pid;
             }
         }
@@ -40,7 +56,7 @@ impl Registry {
         pid: Pid,
         address: impl Into<RegistryEntry>,
     ) -> Option<RegistryEntry> {
-        self.processes.insert(pid, address.into())
+        self.processes.insert(pid, Some(address.into())).flatten()
     }
 
     /// Add a process to the registry if not already present.
@@ -49,29 +65,43 @@ impl Registry {
         pid: Pid,
         entry: impl Into<RegistryEntry<T>>,
     ) -> Result<(), RegistryAddError<T>> {
-        if let Some(_) = self.processes.get(&pid) {
+        let entry = entry.into();
+
+        // If the pid is already present and the address is different, return an error.
+        if let Some(val) = self.processes.get(&pid)
+            && let Some(val) = val.as_ref()
+            && !val.address().is_same_process(entry.address())
+        {
             return Err(RegistryAddError {
                 pid,
                 entry: entry.into(),
             });
-        } else {
-            self.processes.insert(pid, entry.into().into_dyn());
-            Ok(())
         }
+
+        self.processes.insert(pid, Some(entry.into_dyn()));
+
+        Ok(())
     }
 
     pub fn get(&self, pid: &Pid) -> Option<RegistryEntry> {
-        self.processes.get(pid).map(|entry| entry.value().clone())
+        self.processes
+            .get(pid)
+            .map(|entry| entry.value().clone())
+            .flatten()
     }
 
     pub fn get_address(&self, pid: &Pid) -> Option<Address> {
         self.processes
             .get(pid)
-            .map(|entry| entry.value().address().clone())
+            .map(|entry| entry.value().as_ref().map(|e| e.address().clone()))
+            .flatten()
     }
 
     pub fn remove(&self, pid: &Pid) -> Option<RegistryEntry> {
-        self.processes.remove(pid).map(|(_, address)| address)
+        self.processes
+            .remove(pid)
+            .map(|(_, address)| address)
+            .flatten()
     }
 
     pub fn contains(&self, pid: &Pid) -> bool {
@@ -90,6 +120,10 @@ enum _RegistryEntry<T: InboxKind> {
 }
 
 impl<T: InboxKind> RegistryEntry<T> {
+    pub fn new(data: impl Into<RegistryEntry<T>>) -> Self {
+        data.into()
+    }
+
     pub fn address(&self) -> &Address<T> {
         match &self.inner {
             _RegistryEntry::Data(data) => &data.address,
@@ -173,9 +207,18 @@ impl<T: InboxKind> std::fmt::Debug for RegistryEntry<T> {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(thiserror::Error)]
 #[error("Failed to add entry for pid {pid}")]
-pub struct RegistryAddError<T: InboxKind> {
+pub struct RegistryAddError<T: InboxKind = Dyn<Set![]>> {
     pid: Pid,
     entry: RegistryEntry<T>,
+}
+
+impl<T: InboxKind> std::fmt::Debug for RegistryAddError<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RegistryAddError")
+            .field("pid", &self.pid)
+            .field("entry", &self.entry)
+            .finish()
+    }
 }

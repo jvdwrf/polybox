@@ -52,13 +52,8 @@ pub trait ActorRunnerExt: ActorRunner {
         WrapRun::new(self, mapper)
     }
 
-    fn extract_address(
-        self,
-    ) -> (
-        ExtractAddressRunnable<Self>,
-        SupervisionAddress<Self::Interface>,
-    ) {
-        let (rx, tx) = SupervisionAddress::new();
+    fn extract_address(self) -> (ExtractAddressRunnable<Self>, AddressFuture<Self::Interface>) {
+        let (rx, tx) = AddressFuture::new();
         (ExtractAddressRunnable { inner: self, tx }, rx)
     }
 

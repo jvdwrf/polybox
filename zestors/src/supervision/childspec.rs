@@ -35,6 +35,13 @@ impl<T> ChildSpec<T> {
         self.spawner.spawn_mut()
     }
 
+    pub fn get_data(&self) -> ProcessData
+    where
+        T: SpawnMut,
+    {
+        self.spawner.get_data()
+    }
+
     pub fn into_dyn(self) -> ChildSpec
     where
         T: Into<DynSpawner>,
@@ -50,20 +57,11 @@ impl<T> ChildSpec<T> {
     pub fn supervise(
         self,
         supervisor: &mut Supervisor,
-    ) -> SupervisionAddress<<T::Runner as ActorRunner>::Interface>
+    ) -> AddressFuture<<T::Runner as ActorRunner>::Interface>
     where
         T: ActorBlueprint + Send + 'static,
     {
-        let (spawner, rx) = self.spawner.extract_address();
-
-        supervisor.add_dyn_child(ChildSpec {
-            id: self.id,
-            restart_mode: self.restart_mode,
-            abort_timeout: self.abort_timeout,
-            spawner: spawner.into(),
-        });
-
-        rx
+        supervisor.add_child(self)
     }
 }
 

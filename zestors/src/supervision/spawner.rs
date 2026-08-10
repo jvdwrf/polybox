@@ -2,6 +2,7 @@ use super::*;
 
 pub trait SpawnMut: Debug {
     fn spawn_mut(&mut self) -> Child;
+    fn get_data(&self) -> ProcessData;
 }
 
 pub struct Spawner<R: ActorBlueprint> {
@@ -20,6 +21,10 @@ impl<R: ActorBlueprint> SpawnMut for Spawner<R> {
             .clone()
             .spawn(|stream, address| runner.run(stream, address))
             .into_dyn()
+    }
+
+    fn get_data(&self) -> ProcessData {
+        self.data.clone().into_any()
     }
 }
 
@@ -60,6 +65,10 @@ pub struct DynSpawner(Box<dyn SpawnMut + Send>);
 impl SpawnMut for DynSpawner {
     fn spawn_mut(&mut self) -> Child {
         self.0.spawn_mut()
+    }
+
+    fn get_data(&self) -> ProcessData {
+        self.0.get_data()
     }
 }
 

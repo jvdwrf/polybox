@@ -17,15 +17,14 @@ where
     ProcessData::new().spawn(f)
 }
 
-pub(crate) fn spawn_with<T, R, F>(
-    data: ProcessData<T>,
-    f: impl FnOnce(EventStream<T>, Address<T>) -> F,
-) -> Child<R, T>
+pub(crate) fn spawn_with_data<I, O, F>(
+    data: ProcessData<I>,
+    f: impl FnOnce(EventStream<I>, Address<I>) -> F,
+) -> Child<O, I>
 where
-    T: Interface,
-    R: Send + 'static,
-    F: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
-    F::Output: Send + 'static,
+    I: Interface,
+    O: Send + 'static,
+    F: Future<Output = Result<O, anyhow::Error>> + Send + 'static,
 {
     let ProcessData {
         address,
@@ -105,7 +104,7 @@ impl<T: Interface> ProcessData<T> {
         F: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
         F::Output: Send + 'static,
     {
-        spawn_with(self, f)
+        spawn_with_data(self, f)
     }
 }
 

@@ -24,13 +24,13 @@ pub trait ActorBlueprintExt: ActorBlueprint + Sized {
         DynSpawner::new(self)
     }
 
-    fn extract_address(
+    fn split_address(
         self,
     ) -> (
         ExtractAddressBlueprint<Self>,
-        SupervisionAddress<<Self::Runner as ActorRunner>::Interface>,
+        AddressFuture<<Self::Runner as ActorRunner>::Interface>,
     ) {
-        let (rx, tx) = SupervisionAddress::new();
+        let (rx, tx) = AddressFuture::new();
         (ExtractAddressBlueprint { inner: self, tx }, rx)
     }
 }

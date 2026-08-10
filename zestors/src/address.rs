@@ -5,11 +5,13 @@ use polybox::{
     type_sets::{Members, Set},
 };
 use std::{any::Any, fmt::Debug, marker::PhantomData, sync::Arc};
+use uuid::Uuid;
 
 pub struct Address<T: InboxKind = Dyn<Set![]>> {
     inbox: T::Inbox,
     signal_inbox: SignalSender,
     process_watcher: ProcessWatcher,
+    uuid: Uuid,
 }
 
 pub type DynAddress<T = Set![]> = Address<Dyn<T>>;
@@ -60,6 +62,7 @@ impl<T: InboxKind> PolyBox for Address<T> {
             inbox: T::map_inbox_into_dyn_unchecked(self.inbox),
             signal_inbox: self.signal_inbox,
             process_watcher: self.process_watcher,
+            uuid: self.uuid,
         }
     }
 }
@@ -70,6 +73,7 @@ impl<T: InboxKind> Clone for Address<T> {
             inbox: self.inbox.clone(),
             signal_inbox: self.signal_inbox.clone(),
             process_watcher: self.process_watcher.clone(),
+            uuid: self.uuid,
         }
     }
 }
@@ -84,6 +88,7 @@ impl<T: InboxKind> Address<T> {
             inbox,
             signal_inbox,
             process_watcher,
+            uuid: Uuid::new_v4(),
         }
     }
 
@@ -98,6 +103,10 @@ impl<T: InboxKind> Address<T> {
     pub fn is_alive(&self) -> bool {
         self.process_watcher.is_alive()
     }
+
+    pub fn is_same_process<R: InboxKind>(&self, other: &Address<R>) -> bool {
+        self.uuid == other.uuid
+    }
 }
 
 impl<T: Members + 'static> Address<Dyn<T>> {
@@ -108,6 +117,7 @@ impl<T: Members + 'static> Address<Dyn<T>> {
             inbox,
             signal_inbox: self.signal_inbox.clone(),
             process_watcher: self.process_watcher.clone(),
+            uuid: self.uuid,
         })
     }
 }

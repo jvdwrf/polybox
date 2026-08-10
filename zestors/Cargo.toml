@@ -17,6 +17,7 @@ smol_str.workspace = true
 type-sets.workspace = true
 serde.workspace = true
 dashmap.workspace = true
+uuid.workspace = true
 
 [features]
 _ra = []

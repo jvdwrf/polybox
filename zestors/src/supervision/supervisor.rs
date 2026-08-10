@@ -65,24 +65,33 @@ impl Supervisor {
 
     pub fn add_child<T>(
         &mut self,
-        blueprint: ChildSpec<T>,
-    ) -> SupervisionAddress<<T::Runner as ActorRunner>::Interface>
+        spec: ChildSpec<T>,
+    ) -> AddressFuture<<T::Runner as ActorRunner>::Interface>
     where
         T: ActorBlueprint + Send + 'static,
     {
-        blueprint.supervise(self)
+        let (spawner, address) = spec.spawner.split_address();
+
+        self.add_dyn_child(ChildSpec {
+            id: spec.id,
+            restart_mode: spec.restart_mode,
+            abort_timeout: spec.abort_timeout,
+            spawner: spawner.into(),
+        });
+
+        address
     }
 
     pub fn add_children<T>(
         &mut self,
-        blueprints: impl IntoIterator<Item = ChildSpec<T>>,
-    ) -> Vec<SupervisionAddress<<T::Runner as ActorRunner>::Interface>>
+        specs: impl IntoIterator<Item = ChildSpec<T>>,
+    ) -> Vec<AddressFuture<<T::Runner as ActorRunner>::Interface>>
     where
         T: ActorBlueprint + Send + 'static,
     {
-        blueprints
+        specs
             .into_iter()
-            .map(|blueprint| blueprint.supervise(self))
+            .map(|blueprint| self.add_child(blueprint))
             .collect()
     }
 
@@ -111,6 +120,17 @@ impl Supervisor {
         })
     }
 
+    fn spawn_supervisee(
+        supervisee: &mut Supervisee,
+        registry: &Registry,
+    ) -> Result<(), RegistryAddError> {
+        // We only have to add the children to the registry the first time they are spawned,
+        // since it will persist across restarts.
+        let child = supervisee.spec.spawn();
+        supervisee.child = Some(child);
+        registry.add(supervisee.spec.id.clone(), supervisee.spec.get_data())
+    }
+
     async fn run(
         mut self,
         mut stream: EventStream<SupervisorInterface>,
@@ -119,23 +139,24 @@ impl Supervisor {
         let mut suspended = false;
         let start_time = Instant::now();
 
+        for supervisee in self.supervisees.values_mut() {
+            Self::spawn_supervisee(supervisee, &self.registry)?;
+        }
+
         loop {
             let msg = tokio::select! {
                 biased;
                 Some(msg) = stream.recv_enabled(!suspended) => {
-                    Some(msg)
+                    msg
                 }
                 Some(item) = self.next() => {
                     self.handle_child_termination(item).await?;
-                    None
+                    continue;
                 }
+
                 _ = futures::future::pending::<()>() => {
                     unreachable!()
                 }
-            };
-
-            let Some(msg) = msg else {
-                continue;
             };
 
             match msg {
@@ -210,7 +231,7 @@ impl Supervisor {
             .expect("child should be present")
             .spec;
 
-        // Check if a restart is required
+        // No restart is required -> Deregister the child and return early
         {
             let mode = spec.restart_mode;
             let ((RestartMode::Always, _) | (RestartMode::OnError, Err(_))) = (mode, exit) else {
@@ -223,11 +244,19 @@ impl Supervisor {
                     }
                 };
 
+                let removed_child = self.registry.remove(id);
+
+                if removed_child.is_none() {
+                    tracing::warn!(
+                        "Child {id} was not found in the registry during deregistration."
+                    );
+                }
+
                 return Ok(());
             };
         }
 
-        // Check if restart limit has been reached
+        // Restart limit reached -> Return an error
         {
             if !self.allow_restart() {
                 return Err(RestartLimitReached {
@@ -237,6 +266,7 @@ impl Supervisor {
             }
         }
 
+        // Restart the affected children
         Self::restart_children(&mut self.affected_supervisees_mut(id)).await;
 
         Ok(())
@@ -353,6 +383,13 @@ pub struct RestartLimitReached {
 pub enum SupervisorError {
     #[error("Restart limit reached for child {0}")]
     RestartLimit(#[from] RestartLimitReached),
+
+    #[error("Another process is already registered with the same pid")]
+    RegistryAddError(
+        #[source]
+        #[from]
+        RegistryAddError,
+    ),
 }
 
 struct ShutdownSupervisees<'a, 'b> {
