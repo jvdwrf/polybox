@@ -1,0 +1,3 @@
+- [ ] Drain inboxes
+  - [ ] before starting process
+  - [ ] after process exit

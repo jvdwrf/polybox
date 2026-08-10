@@ -56,6 +56,10 @@ impl ProcessWatcher {
     pub fn peek(&self) -> ProcessStatus {
         *self.watcher.borrow()
     }
+
+    pub fn is_alive(&self) -> bool {
+        matches!(self.peek(), ProcessStatus::Alive)
+    }
 }
 
 #[derive(Clone, Debug)]

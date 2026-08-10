@@ -138,6 +138,7 @@ pub mod child;
 pub mod event_stream;
 pub mod exit_watcher;
 pub mod inbox;
+pub mod registry;
 pub mod signals;
 pub mod state;
 pub mod supervision;
@@ -151,7 +152,7 @@ pub(crate) mod _prelude {
     #![allow(unused_imports)]
     pub(crate) use crate::{
         actor::*, address::*, child::*, event_stream::*, exit_watcher::*, inbox::*, polybox::*,
-        signals::*, state::*, supervision::*, *,
+        registry::*, signals::*, state::*, supervision::*, *,
     };
 }
 
