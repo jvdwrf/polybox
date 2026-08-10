@@ -1,5 +1,3 @@
-use std::panic::AssertUnwindSafe;
-
 use crate::{
     _prelude::*,
     address::Address,
@@ -7,6 +5,7 @@ use crate::{
     inbox::{Inbox, Receiver},
     signals::{Signal, SignalSender},
 };
+use std::{ops::Deref, panic::AssertUnwindSafe, sync::Arc};
 
 pub fn spawn<T, R, F>(f: impl FnOnce(EventStream<T>, Address<T>) -> F) -> Child<R, T>
 where
@@ -29,15 +28,12 @@ where
     F::Output: Send + 'static,
 {
     let ProcessData {
-        inbox,
+        address,
         receiver,
-        signal_sender,
         signal_receiver,
-        exit_watcher,
         mut exit_alerter,
     } = data;
 
-    let address = Address::new(inbox, signal_sender, exit_watcher);
     let stream = EventStream::new(receiver, signal_receiver);
     let spawned_future = AssertUnwindSafe(f(stream, address.clone())).catch_unwind();
 
@@ -70,53 +66,34 @@ where
     Child::new(handle, address)
 }
 
-pub(crate) struct ProcessData<T> {
-    inbox: Inbox<T>,
-    receiver: Receiver<T>,
-    signal_sender: SignalSender,
+pub struct ProcessData<T: InboxKind = Dyn<Set![]>> {
+    address: Address<T>,
+    receiver: T::Receiver,
     signal_receiver: SignalReceiver,
-    exit_watcher: ProcessWatcher,
     exit_alerter: ProcessAlerter,
 }
 
-impl<T> std::fmt::Debug for ProcessData<T> {
+impl<T: InboxKind> std::fmt::Debug for ProcessData<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ProcessData")
-            .field("inbox", &self.inbox)
-            .field("receiver", &self.receiver)
-            .field("signal_sender", &self.signal_sender)
+            .field("address", &self.address)
+            .field("receiver", &"Receiver")
             .field("signal_receiver", &self.signal_receiver)
-            .field("exit_watcher", &self.exit_watcher)
             .field("exit_alerter", &self.exit_alerter)
             .finish()
     }
 }
 
-impl<T> Clone for ProcessData<T> {
-    fn clone(&self) -> Self {
-        Self {
-            inbox: self.inbox.clone(),
-            receiver: self.receiver.clone(),
-            signal_sender: self.signal_sender.clone(),
-            signal_receiver: self.signal_receiver.clone(),
-            exit_watcher: self.exit_watcher.clone(),
-            exit_alerter: self.exit_alerter.clone(),
-        }
-    }
-}
-
-impl<T> ProcessData<T> {
+impl<T: Interface> ProcessData<T> {
     pub fn new() -> Self {
         let (inbox, receiver) = Inbox::new();
         let (signal_sender, signal_receiver) = SignalSender::new();
         let (exit_watcher, exit_alerter) = ProcessWatcher::new();
 
         Self {
-            inbox,
+            address: Address::new(inbox, signal_sender, exit_watcher),
             receiver,
-            signal_sender,
             signal_receiver,
-            exit_watcher,
             exit_alerter,
         }
     }
@@ -129,6 +106,58 @@ impl<T> ProcessData<T> {
         F::Output: Send + 'static,
     {
         spawn_with(self, f)
+    }
+}
+
+impl<T: InboxKind> ProcessData<T> {
+    pub fn into_any(self) -> ProcessData {
+        let ProcessData {
+            address,
+            receiver,
+            signal_receiver,
+            exit_alerter,
+        } = self;
+
+        ProcessData {
+            address: address.into_dyn(),
+            receiver: T::map_receiver_into_any(receiver),
+            signal_receiver,
+            exit_alerter,
+        }
+    }
+}
+
+impl ProcessData {
+    pub fn downcast<T: Interface>(self) -> Result<ProcessData<T>, Self> {
+        let address = match self.address.downcast_ref::<T>() {
+            Some(addr) => addr,
+            None => return Err(self),
+        };
+
+        let receiver = self
+            .receiver
+            .downcast::<Receiver<T>>()
+            .expect("Receiver should have the same type as the address")
+            .deref()
+            .clone();
+
+        Ok(ProcessData {
+            address,
+            receiver,
+            signal_receiver: self.signal_receiver,
+            exit_alerter: self.exit_alerter,
+        })
+    }
+}
+
+impl<T: InboxKind> Clone for ProcessData<T> {
+    fn clone(&self) -> Self {
+        Self {
+            address: self.address.clone(),
+            receiver: self.receiver.clone(),
+            signal_receiver: self.signal_receiver.clone(),
+            exit_alerter: self.exit_alerter.clone(),
+        }
     }
 }
 

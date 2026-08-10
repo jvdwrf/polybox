@@ -4,7 +4,7 @@ use polybox::{
     errors::SendError,
     type_sets::{Members, Set},
 };
-use std::{any::Any, fmt::Debug, marker::PhantomData};
+use std::{any::Any, fmt::Debug, marker::PhantomData, sync::Arc};
 
 pub struct Address<T: InboxKind = Dyn<Set![]>> {
     inbox: T::Inbox,
@@ -100,6 +100,18 @@ impl<T: InboxKind> Address<T> {
     }
 }
 
+impl<T: Members + 'static> Address<Dyn<T>> {
+    pub fn downcast_ref<R: Interface>(&self) -> Option<Address<R>> {
+        let inbox = self.inbox.downcast_ref::<R>()?.clone();
+
+        Some(Address {
+            inbox,
+            signal_inbox: self.signal_inbox.clone(),
+            process_watcher: self.process_watcher.clone(),
+        })
+    }
+}
+
 impl<T: InboxKind> Debug for Address<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Address")
@@ -110,12 +122,15 @@ impl<T: InboxKind> Debug for Address<T> {
     }
 }
 
-pub trait InboxKind {
+pub trait InboxKind: 'static {
     type Inbox: PolyBox + Clone + Debug + Unpin;
     type Set: Members + 'static;
-    type Stream: Send + Sync + 'static;
+    type Receiver: Clone + Send + Sync + 'static;
+    // type Stream: Send + Sync + 'static;
 
     fn map_inbox_into_dyn_unchecked<R: Members + 'static>(address: Self::Inbox) -> DynInbox<R>;
+
+    fn map_receiver_into_any(receiver: Self::Receiver) -> Arc<dyn Any + Send + Sync>;
 }
 
 pub struct Dyn<T>(PhantomData<fn() -> T>);
@@ -123,19 +138,27 @@ pub struct Dyn<T>(PhantomData<fn() -> T>);
 impl<T: Members + 'static> InboxKind for Dyn<T> {
     type Inbox = DynInbox<T>;
     type Set = T;
-    type Stream = Box<dyn Any + Send + Sync>;
+    type Receiver = Arc<dyn Any + Send + Sync>;
 
     fn map_inbox_into_dyn_unchecked<R: Members + 'static>(inbox: Self::Inbox) -> DynInbox<R> {
         inbox.into_dyn_unchecked()
+    }
+
+    fn map_receiver_into_any(receiver: Self::Receiver) -> Arc<dyn Any + Send + Sync> {
+        receiver
     }
 }
 
 impl<T: Interface> InboxKind for T {
     type Inbox = Inbox<T>;
     type Set = T::Set;
-    type Stream = EventStream<T>;
+    type Receiver = Receiver<T>;
 
     fn map_inbox_into_dyn_unchecked<R: Members + 'static>(inbox: Self::Inbox) -> DynInbox<R> {
         inbox.into_dyn_unchecked()
+    }
+
+    fn map_receiver_into_any(receiver: Self::Receiver) -> Arc<dyn Any + Send + Sync> {
+        Arc::new(receiver)
     }
 }

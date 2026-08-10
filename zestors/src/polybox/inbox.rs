@@ -1,6 +1,12 @@
 use crate::*;
 use futures::future::BoxFuture;
-use std::{any::TypeId, fmt::Debug, future::Future, marker::PhantomData, sync::Arc};
+use std::{
+    any::{Any, TypeId},
+    fmt::Debug,
+    future::Future,
+    marker::PhantomData,
+    sync::Arc,
+};
 use type_sets::SubsetOf;
 
 /// A trait that allows for conversions to [`DynInbox`].
@@ -130,6 +136,9 @@ pub trait DynPolyBox: Send + Sync {
     }
 }
 
+pub(crate) trait AnyDynPolyBox: Any + DynPolyBox {}
+impl<T: Any + DynPolyBox> AnyDynPolyBox for T {}
+
 /// A dynamic inbox that can accept messages of any type, as long as they are part of the specified set.
 ///
 /// An inbox is typed as: `DynInbox<Set![Msg1, Msg2, ...]>`.
@@ -138,7 +147,7 @@ pub trait DynPolyBox: Send + Sync {
 /// - Into more specific subsets -> [`PolyboxExt::into_dyn_subset`].
 /// - Into more general supersets -> [`PolyboxExt::into_dyn_checked`] or [`PolyBox::into_dyn_unchecked`].
 pub struct DynInbox<T> {
-    inbox: Arc<dyn DynPolyBox>,
+    inbox: Arc<dyn AnyDynPolyBox>,
     _t: PhantomData<fn() -> T>,
 }
 
@@ -160,7 +169,7 @@ impl<T> Debug for DynInbox<T> {
 }
 
 impl<T> DynInbox<T> {
-    pub fn new_unchecked(inbox: Arc<dyn DynPolyBox>) -> Self {
+    pub(crate) fn new_unchecked(inbox: Arc<dyn AnyDynPolyBox>) -> Self {
         Self {
             inbox,
             _t: PhantomData,
@@ -177,6 +186,15 @@ impl<T> DynInbox<T> {
             _t: PhantomData,
         }
     }
+
+    pub fn downcast_ref<R: Interface>(&self) -> Option<&Inbox<R>> {
+        let inbox = &self.inbox as &dyn Any;
+        inbox.downcast_ref::<Inbox<R>>()
+    }
+
+    // pub fn downcast<R: Interface>(self) -> Result<Inbox<R>, Self> {
+    //     self.downcast_ref().cloned().ok_or(self)
+    // }
 }
 
 impl<T: Members + 'static> PolyBox for DynInbox<T> {
