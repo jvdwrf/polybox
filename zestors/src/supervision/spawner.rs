@@ -1,7 +1,7 @@
 use super::*;
 
-pub trait SpawnMut: Debug {
-    fn spawn_mut(&mut self) -> Child;
+pub trait Spawn: Debug {
+    fn spawn(&self) -> Child;
     fn get_data(&self) -> ProcessData;
 }
 
@@ -10,8 +10,8 @@ pub struct Spawner<R: ActorBlueprint> {
     data: ProcessData<<R::Runner as ActorRunner>::Interface>,
 }
 
-impl<R: ActorBlueprint> SpawnMut for Spawner<R> {
-    fn spawn_mut(&mut self) -> Child {
+impl<R: ActorBlueprint> Spawn for Spawner<R> {
+    fn spawn(&self) -> Child {
         let runner = self
             .blueprint
             .instantiate()
@@ -38,9 +38,9 @@ impl<R: ActorBlueprint> Spawner<R> {
 
     pub fn into_dyn(self) -> DynSpawner
     where
-        R: Send + 'static,
+        R: Send + Sync + 'static,
     {
-        DynSpawner(Box::new(self))
+        DynSpawner(Arc::new(self))
     }
 }
 
@@ -59,12 +59,12 @@ impl<R: ActorBlueprint> Debug for Spawner<R> {
     }
 }
 
-#[derive(Debug)]
-pub struct DynSpawner(Box<dyn SpawnMut + Send>);
+#[derive(Debug, Clone)]
+pub struct DynSpawner(Arc<dyn Spawn + Send + Sync + 'static>);
 
-impl SpawnMut for DynSpawner {
-    fn spawn_mut(&mut self) -> Child {
-        self.0.spawn_mut()
+impl Spawn for DynSpawner {
+    fn spawn(&self) -> Child {
+        self.0.spawn()
     }
 
     fn get_data(&self) -> ProcessData {
@@ -75,15 +75,15 @@ impl SpawnMut for DynSpawner {
 impl DynSpawner {
     pub fn new<R>(blueprint: R) -> Self
     where
-        R: ActorBlueprint + Send + 'static,
+        R: ActorBlueprint + Send + Sync + 'static,
     {
-        DynSpawner(Box::new(Spawner::new(blueprint)))
+        DynSpawner(Arc::new(Spawner::new(blueprint)))
     }
 }
 
 impl<R> From<R> for DynSpawner
 where
-    R: ActorBlueprint + Send + 'static,
+    R: ActorBlueprint + Send + Sync + 'static,
 {
     fn from(value: R) -> Self {
         Self::new(value)

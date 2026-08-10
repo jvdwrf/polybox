@@ -18,6 +18,15 @@ impl<T> ChildSpec<T> {
         }
     }
 
+    pub fn new_uuid(spawner: T) -> Self {
+        Self {
+            id: Pid::rand_uuid(),
+            restart_mode: RestartMode::OnError,
+            abort_timeout: Duration::from_millis(5_000),
+            spawner: spawner.into(),
+        }
+    }
+
     pub fn mode(mut self, restart_mode: RestartMode) -> Self {
         self.restart_mode = restart_mode;
         self
@@ -30,14 +39,14 @@ impl<T> ChildSpec<T> {
 
     pub fn spawn(&mut self) -> Child
     where
-        T: SpawnMut,
+        T: Spawn,
     {
-        self.spawner.spawn_mut()
+        self.spawner.spawn()
     }
 
     pub fn get_data(&self) -> ProcessData
     where
-        T: SpawnMut,
+        T: Spawn,
     {
         self.spawner.get_data()
     }
@@ -59,19 +68,54 @@ impl<T> ChildSpec<T> {
         supervisor: &mut Supervisor,
     ) -> AddressFuture<<T::Runner as ActorRunner>::Interface>
     where
-        T: ActorBlueprint + Send + 'static,
+        T: ActorBlueprint + Send + Sync + 'static,
     {
         supervisor.add_child(self)
     }
+
+    pub fn split_address(
+        self,
+    ) -> (
+        ChildSpec<ExtractAddressBlueprint<T>>,
+        AddressFuture<<T::Runner as ActorRunner>::Interface>,
+    )
+    where
+        T: ActorBlueprint + Send + Sync + 'static,
+    {
+        let (rx, tx) = AddressFuture::new();
+
+        let spec = ChildSpec {
+            id: self.id,
+            restart_mode: self.restart_mode,
+            abort_timeout: self.abort_timeout,
+            spawner: ExtractAddressBlueprint {
+                inner: self.spawner,
+                tx,
+            },
+        };
+
+        (spec, rx)
+    }
 }
 
-impl<T: ActorBlueprint + Send + 'static> From<ChildSpec<T>> for ChildSpec<DynSpawner> {
+impl<T: Clone> Clone for ChildSpec<T> {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id.clone(),
+            restart_mode: self.restart_mode,
+            abort_timeout: self.abort_timeout,
+            spawner: self.spawner.clone(),
+        }
+    }
+}
+
+impl<T: ActorBlueprint + Send + Sync + 'static> From<ChildSpec<T>> for ChildSpec<DynSpawner> {
     fn from(value: ChildSpec<T>) -> Self {
         ChildSpec {
             id: value.id,
             restart_mode: value.restart_mode,
             abort_timeout: value.abort_timeout,
-            spawner: value.spawner.into(),
+            spawner: DynSpawner::new(value.spawner),
         }
     }
 }

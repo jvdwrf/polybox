@@ -1,14 +1,10 @@
 use crate::_prelude::*;
-use dashmap::{DashMap, mapref::entry};
-use std::sync::{
-    OnceLock,
-    atomic::{AtomicU64, Ordering},
-};
+use dashmap::DashMap;
+use std::sync::OnceLock;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Registry {
     processes: DashMap<Pid, Option<RegistryEntry>>,
-    next_pid: Arc<AtomicU64>,
 }
 
 static REGISTRY: OnceLock<Registry> = OnceLock::new();
@@ -17,37 +13,10 @@ impl Registry {
     fn new() -> Self {
         Self {
             processes: DashMap::new(),
-            next_pid: Arc::new(AtomicU64::new(1)),
         }
     }
 
-    fn next_pid(&self) -> Pid {
-        Pid::new(self.next_pid.fetch_add(1, Ordering::Relaxed))
-    }
-
-    pub fn reserve_incr_pid(&self) -> Pid {
-        loop {
-            let pid = self.next_pid();
-
-            if !self.contains(&pid) {
-                self.processes.insert(pid.clone(), None);
-                return pid;
-            }
-        }
-    }
-
-    pub fn add_incr(&self, entry: Option<RegistryEntry>) -> Pid {
-        loop {
-            let pid = self.next_pid();
-
-            if let entry::Entry::Vacant(p) = self.processes.entry(pid.clone()) {
-                p.insert(entry);
-                return pid;
-            }
-        }
-    }
-
-    pub fn global() -> &'static Self {
+    pub fn node() -> &'static Self {
         REGISTRY.get_or_init(Self::new)
     }
 
@@ -60,7 +29,7 @@ impl Registry {
     }
 
     /// Add a process to the registry if not already present.
-    pub fn add<T: InboxKind>(
+    pub fn register<T: InboxKind>(
         &self,
         pid: Pid,
         entry: impl Into<RegistryEntry<T>>,

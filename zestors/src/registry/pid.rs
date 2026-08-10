@@ -1,11 +1,12 @@
 use crate::_prelude::*;
 use smol_str::SmolStr;
 use std::{borrow::Cow, fmt::Display, sync::Arc};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Pid {
     Named(SmolStr),
-    Indexed(u64),
+    Random(Uuid),
 }
 
 impl Pid {
@@ -16,13 +17,23 @@ impl Pid {
     pub fn new_static(s: &'static str) -> Self {
         Pid::Named(SmolStr::new_static(s))
     }
+
+    pub fn rand_uuid() -> Self {
+        Pid::Random(Uuid::now_v7())
+    }
+}
+
+impl Default for Pid {
+    fn default() -> Self {
+        Pid::rand_uuid()
+    }
 }
 
 impl Display for Pid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Pid::Named(s) => write!(f, "{}", s),
-            Pid::Indexed(i) => write!(f, "{}", i),
+            Pid::Random(i) => write!(f, "{}", i),
         }
     }
 }
@@ -73,35 +84,5 @@ impl<'a> From<Cow<'a, str>> for Pid {
     #[inline]
     fn from(s: Cow<'a, str>) -> Pid {
         Pid::Named(SmolStr::from(s))
-    }
-}
-
-impl From<usize> for Pid {
-    fn from(value: usize) -> Self {
-        Pid::Indexed(value as u64)
-    }
-}
-
-impl From<u64> for Pid {
-    fn from(value: u64) -> Self {
-        Pid::Indexed(value)
-    }
-}
-
-impl From<u32> for Pid {
-    fn from(value: u32) -> Self {
-        Pid::Indexed(value.into())
-    }
-}
-
-impl From<u16> for Pid {
-    fn from(value: u16) -> Self {
-        Pid::Indexed(value.into())
-    }
-}
-
-impl From<u8> for Pid {
-    fn from(value: u8) -> Self {
-        Pid::Indexed(value.into())
     }
 }

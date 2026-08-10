@@ -30,6 +30,8 @@ mod supervision_address;
 
 #[cfg(test)]
 mod test {
+    use std::sync::atomic::AtomicU32;
+
     use super::*;
 
     #[derive(Interface, ActorInterface, Debug)]
@@ -66,14 +68,14 @@ mod test {
     }
 
     #[derive(Debug)]
-    pub struct TestActorStarter(u32);
+    pub struct TestActorStarter(AtomicU32);
 
     impl ActorBlueprint for TestActorStarter {
         type Runner = TestActor;
 
-        fn instantiate(&mut self) -> Self::Runner {
-            let actor = TestActor { number: self.0 };
-            self.0 += 1;
+        fn instantiate(&self) -> Self::Runner {
+            let number = self.0.load(std::sync::atomic::Ordering::Relaxed);
+            let actor = TestActor { number };
             actor
         }
     }
@@ -82,7 +84,7 @@ mod test {
     async fn test_map_exit_runnable() {
         // let (runnable, address) = TestRunnable { number: 42 }.extract_address();
 
-        let supervisor = Supervisor::new()
+        let supervisor = Supervisor::blueprint()
             .with_strategy(SupervisionStrategy::OneForOne)
             .with_intensity(RestartIntensity::default())
             .with_child(ChildSpec::new(
@@ -98,11 +100,11 @@ mod test {
                     .mode(RestartMode::Always)
                     .timeout(Duration::from_secs(10)),
             )
-            .with_child(ChildSpec::new("ChildD", TestActorStarter(0)))
-            .spawn();
+            .with_child(ChildSpec::new("ChildD", TestActorStarter(0.into())))
+            .spawn_ref();
 
         {
-            let mut supervisor = Supervisor::new();
+            let mut supervisor = Supervisor::blueprint();
 
             let addr_a = supervisor.add_child(
                 ChildSpec::new("ChildA", TestActor { number: 42 }).mode(RestartMode::Always),
@@ -112,7 +114,7 @@ mod test {
                 ChildSpec::new("ChildB", TestActor { number: 42 }).mode(RestartMode::Always),
             );
 
-            supervisor.spawn();
+            supervisor.spawn_ref();
 
             let addr_a = addr_a.await.unwrap();
             let addr_b = addr_b.await.unwrap();

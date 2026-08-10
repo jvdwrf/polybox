@@ -1,12 +1,119 @@
 use super::*;
 
 #[derive(Debug)]
+pub struct SupervisorBlueprint {
+    supervisees: IndexMap<Pid, ChildSpec>,
+    strategy: SupervisionStrategy,
+    restart_intensity: RestartIntensity,
+}
+
+impl SupervisorBlueprint {
+    pub fn new() -> Self {
+        Self {
+            supervisees: Default::default(),
+            strategy: SupervisionStrategy::default(),
+            restart_intensity: RestartIntensity::default(),
+        }
+    }
+
+    pub fn with_strategy(mut self, strategy: SupervisionStrategy) -> Self {
+        self.strategy = strategy;
+        self
+    }
+
+    pub fn with_intensity(mut self, restart_intensity: RestartIntensity) -> Self {
+        self.restart_intensity = restart_intensity;
+        self
+    }
+
+    pub fn with_child<T>(mut self, spec: ChildSpec<T>) -> Self
+    where
+        ChildSpec<T>: Into<ChildSpec>,
+    {
+        let spec = spec.into();
+        self.supervisees.insert(spec.id.clone(), spec);
+        self
+    }
+
+    pub fn with_children<T>(mut self, specs: impl IntoIterator<Item = ChildSpec<T>>) -> Self
+    where
+        ChildSpec<T>: Into<ChildSpec>,
+    {
+        for spec in specs {
+            let spec = spec.into();
+            self.supervisees.insert(spec.id.clone(), spec);
+        }
+        self
+    }
+
+    pub fn add_dyn_child(&mut self, spec: ChildSpec) {
+        self.supervisees.insert(spec.id.clone(), spec);
+    }
+
+    pub fn add_dyn_children(&mut self, specs: impl IntoIterator<Item = ChildSpec>) {
+        for spec in specs {
+            self.add_dyn_child(spec);
+        }
+    }
+
+    pub fn add_child<T>(
+        &mut self,
+        spec: ChildSpec<T>,
+    ) -> AddressFuture<<T::Runner as ActorRunner>::Interface>
+    where
+        T: ActorBlueprint + Send + Sync + 'static,
+    {
+        let (spec, address) = spec.split_address();
+
+        self.add_dyn_child(ChildSpec {
+            id: spec.id.clone(),
+            restart_mode: spec.restart_mode,
+            abort_timeout: spec.abort_timeout,
+            spawner: DynSpawner::new(spec.spawner),
+        });
+
+        address
+    }
+
+    pub fn add_children<T>(
+        &mut self,
+        specs: impl IntoIterator<Item = ChildSpec<T>>,
+    ) -> Vec<AddressFuture<<T::Runner as ActorRunner>::Interface>>
+    where
+        T: ActorBlueprint + Send + Sync + 'static,
+    {
+        specs
+            .into_iter()
+            .map(|blueprint| self.add_child(blueprint))
+            .collect()
+    }
+}
+
+impl ActorBlueprint for SupervisorBlueprint {
+    type Runner = Supervisor;
+
+    fn instantiate(&self) -> Self::Runner {
+        Supervisor {
+            supervisees: self
+                .supervisees
+                .iter()
+                .map(|(id, spec)| (id.clone(), Supervisee::new(spec.clone())))
+                .collect(),
+            strategy: self.strategy,
+            restart_intensity: self.restart_intensity.clone(),
+            restarts: VecDeque::new(),
+            registry: Registry::node().clone(),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Supervisor {
     supervisees: IndexMap<Pid, Supervisee>,
     strategy: SupervisionStrategy,
     restart_intensity: RestartIntensity,
     restarts: VecDeque<Instant>,
-    registry: Registry,
+    registry: &'static Registry,
 }
 
 #[derive(Message, Debug)]
@@ -31,24 +138,18 @@ impl Default for Supervisor {
 }
 
 impl Supervisor {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             supervisees: Default::default(),
             strategy: SupervisionStrategy::default(),
             restart_intensity: RestartIntensity::default(),
             restarts: VecDeque::new(),
-            registry: Registry::global().clone(),
+            registry: Registry::node().clone(),
         }
     }
 
-    pub fn with_strategy(mut self, strategy: SupervisionStrategy) -> Self {
-        self.strategy = strategy;
-        self
-    }
-
-    pub fn with_intensity(mut self, restart_intensity: RestartIntensity) -> Self {
-        self.restart_intensity = restart_intensity;
-        self
+    pub fn blueprint() -> SupervisorBlueprint {
+        SupervisorBlueprint::new()
     }
 
     pub fn add_dyn_child(&mut self, spec: ChildSpec) {
@@ -68,7 +169,7 @@ impl Supervisor {
         spec: ChildSpec<T>,
     ) -> AddressFuture<<T::Runner as ActorRunner>::Interface>
     where
-        T: ActorBlueprint + Send + 'static,
+        T: ActorBlueprint + Send + Sync + 'static,
     {
         let (spawner, address) = spec.spawner.split_address();
 
@@ -76,7 +177,7 @@ impl Supervisor {
             id: spec.id,
             restart_mode: spec.restart_mode,
             abort_timeout: spec.abort_timeout,
-            spawner: spawner.into(),
+            spawner: DynSpawner::new(spawner),
         });
 
         address
@@ -87,7 +188,7 @@ impl Supervisor {
         specs: impl IntoIterator<Item = ChildSpec<T>>,
     ) -> Vec<AddressFuture<<T::Runner as ActorRunner>::Interface>>
     where
-        T: ActorBlueprint + Send + 'static,
+        T: ActorBlueprint + Send + Sync + 'static,
     {
         specs
             .into_iter()
@@ -113,13 +214,6 @@ impl Supervisor {
         self
     }
 
-    pub fn spawn(self) -> Child<(), SupervisorInterface> {
-        crate::spawn(async move |stream, address| {
-            self.run(stream, address).await?;
-            Ok(())
-        })
-    }
-
     fn spawn_supervisee(
         supervisee: &mut Supervisee,
         registry: &Registry,
@@ -128,89 +222,7 @@ impl Supervisor {
         // since it will persist across restarts.
         let child = supervisee.spec.spawn();
         supervisee.child = Some(child);
-        registry.add(supervisee.spec.id.clone(), supervisee.spec.get_data())
-    }
-
-    async fn run(
-        mut self,
-        mut stream: EventStream<SupervisorInterface>,
-        _address: Address<SupervisorInterface>,
-    ) -> Result<(), SupervisorError> {
-        let mut suspended = false;
-        let start_time = Instant::now();
-
-        for supervisee in self.supervisees.values_mut() {
-            Self::spawn_supervisee(supervisee, &self.registry)?;
-        }
-
-        loop {
-            let msg = tokio::select! {
-                biased;
-                Some(msg) = stream.recv_enabled(!suspended) => {
-                    msg
-                }
-                Some(item) = self.next() => {
-                    self.handle_child_termination(item).await?;
-                    continue;
-                }
-
-                _ = futures::future::pending::<()>() => {
-                    unreachable!()
-                }
-            };
-
-            match msg {
-                Event::Signal(signal) => match signal {
-                    Signal::Shutdown(_) | Signal::Exit(_) => {
-                        self.shutdown().await;
-                        break;
-                    }
-                    Signal::Suspend(_) => {
-                        suspended = true;
-                    }
-                    Signal::Resume(_) => {
-                        suspended = false;
-                    }
-                    Signal::GetStatus((_, tx)) => {
-                        let status = if suspended {
-                            signals::Status::Suspended
-                        } else {
-                            signals::Status::Running
-                        };
-                        tx.send(status).ok();
-                    }
-                    Signal::GetState((_, tx)) => {
-                        tx.send(State {
-                            status: if suspended {
-                                signals::Status::Suspended
-                            } else {
-                                signals::Status::Running
-                            },
-                            uptime: start_time.elapsed(),
-                            description: "Supervisor".to_string(),
-                        })
-                        .ok();
-                    }
-                    Signal::Ping((_, tx)) => {
-                        tx.send(()).ok();
-                    }
-                },
-                Event::Message(message) => match message {
-                    SupervisorInterface::RegisterChild(RegisterChild(spec)) => {
-                        tracing::trace!("Registering child: {:?}", spec.id);
-                        self.add_dyn_child(spec);
-                    }
-
-                    SupervisorInterface::DeregisterChild((DeregisterChild(id), tx)) => {
-                        tracing::trace!("Deregistering child: {:?}", id);
-                        let supervisee = self.supervisees.shift_remove(&id);
-                        tx.send(supervisee).ok();
-                    }
-                },
-            }
-        }
-
-        Ok(())
+        registry.register(supervisee.spec.id.clone(), supervisee.spec.get_data())
     }
 
     async fn shutdown(&mut self) {
@@ -337,6 +349,93 @@ impl Stream for Supervisor {
         }
 
         Poll::Pending
+    }
+}
+
+impl ActorRunner for Supervisor {
+    type Interface = SupervisorInterface;
+    type Exit = ();
+
+    async fn run(
+        mut self,
+        mut stream: EventStream<Self::Interface>,
+        _address: Address<Self::Interface>,
+    ) -> Result<Self::Exit, anyhow::Error> {
+        let mut suspended = false;
+        let start_time = Instant::now();
+
+        for supervisee in self.supervisees.values_mut() {
+            Self::spawn_supervisee(supervisee, &self.registry)?;
+        }
+
+        loop {
+            let msg = tokio::select! {
+                biased;
+                Some(msg) = stream.recv_enabled(!suspended) => {
+                    msg
+                }
+                Some(item) = self.next() => {
+                    self.handle_child_termination(item).await?;
+                    continue;
+                }
+
+                _ = futures::future::pending::<()>() => {
+                    unreachable!()
+                }
+            };
+
+            match msg {
+                Event::Signal(signal) => match signal {
+                    Signal::Shutdown(_) | Signal::Exit(_) => {
+                        self.shutdown().await;
+                        break;
+                    }
+                    Signal::Suspend(_) => {
+                        suspended = true;
+                    }
+                    Signal::Resume(_) => {
+                        suspended = false;
+                    }
+                    Signal::GetStatus((_, tx)) => {
+                        let status = if suspended {
+                            signals::Status::Suspended
+                        } else {
+                            signals::Status::Running
+                        };
+                        tx.send(status).ok();
+                    }
+                    Signal::GetState((_, tx)) => {
+                        tx.send(State {
+                            status: if suspended {
+                                signals::Status::Suspended
+                            } else {
+                                signals::Status::Running
+                            },
+                            uptime: start_time.elapsed(),
+                            description: "Supervisor".to_string(),
+                        })
+                        .ok();
+                    }
+                    Signal::Ping((_, tx)) => {
+                        tx.send(()).ok();
+                    }
+                },
+                Event::Message(message) => match message {
+                    SupervisorInterface::RegisterChild(RegisterChild(spec)) => {
+                        tracing::trace!("Registering child: {:?}", spec.id);
+                        self.add_dyn_child(spec);
+                    }
+
+                    SupervisorInterface::DeregisterChild((DeregisterChild(id), tx)) => {
+                        tracing::trace!("Deregistering child: {:?}", id);
+                        let supervisee = self.supervisees.shift_remove(&id);
+                        tx.send(supervisee).ok();
+                    }
+                },
+            }
+        }
+
+        Ok(())
     }
 }
 
