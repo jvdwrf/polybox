@@ -5,12 +5,7 @@ pub trait ActorSpawner {
 }
 
 pub struct SpawnFn<R: ActorBlueprint> {
-    inbox: Inbox<<R::Runner as ActorRunner>::Interface>,
-    receiver: Receiver<<R::Runner as ActorRunner>::Interface>,
-    signal_sender: SignalSender,
-    signal_receiver: SignalReceiver,
-    exit_watcher: ProcessWatcher,
-    exit_alerter: ProcessAlerter,
+    data: SpawnData<<R::Runner as ActorRunner>::Interface>,
     blueprint: R,
 }
 
@@ -21,29 +16,17 @@ impl<R: ActorBlueprint> ActorSpawner for SpawnFn<R> {
             .instantiate()
             .map(|res| res.map(std::mem::forget));
 
-        crate::spawn_with(
-            (self.inbox.clone(), self.receiver.clone()),
-            (self.signal_sender.clone(), self.signal_receiver.clone()),
-            (self.exit_watcher.clone(), self.exit_alerter.clone()),
-            |stream, address| runner.run(stream, address),
-        )
-        .into_dyn()
+        self.data
+            .clone()
+            .spawn(|stream, address| runner.run(stream, address))
+            .into_dyn()
     }
 }
 
 impl<R: ActorBlueprint> SpawnFn<R> {
     pub fn new(blueprint: R) -> Self {
-        let (inbox, receiver) = Inbox::new();
-        let (signal_sender, signal_receiver) = SignalSender::new();
-        let (exit_watcher, exit_alerter) = ProcessWatcher::new();
-
         Self {
-            inbox,
-            receiver,
-            signal_sender,
-            signal_receiver,
-            exit_watcher,
-            exit_alerter,
+            data: SpawnData::new(),
             blueprint,
         }
     }

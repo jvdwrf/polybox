@@ -15,21 +15,18 @@ where
     F: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
     F::Output: Send + 'static,
 {
-    let (inbox, receiver) = Inbox::new();
-    let (signal_inbox, signal_receiver) = SignalSender::new();
-    let (exit_watcher, exit_alerter) = ProcessWatcher::new();
-    spawn_with(
-        (inbox, receiver),
-        (signal_inbox, signal_receiver),
-        (exit_watcher, exit_alerter),
-        f,
-    )
+    SpawnData::new().spawn(f)
 }
 
 pub(crate) fn spawn_with<T, R, F>(
-    (inbox, receiver): (Inbox<T>, Receiver<T>),
-    (signal_inbox, signal_receiver): (SignalSender, SignalReceiver),
-    (exit_watcher, mut exit_alerter): (ProcessWatcher, ProcessAlerter),
+    SpawnData {
+        inbox,
+        receiver,
+        signal_sender,
+        signal_receiver,
+        exit_watcher,
+        mut exit_alerter,
+    }: SpawnData<T>,
     f: impl FnOnce(EventStream<T>, Address<T>) -> F,
 ) -> Child<R, T>
 where
@@ -38,7 +35,7 @@ where
     F: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
     F::Output: Send + 'static,
 {
-    let address = Address::new(inbox, signal_inbox, exit_watcher);
+    let address = Address::new(inbox, signal_sender, exit_watcher);
     let stream = EventStream::new(receiver, signal_receiver);
     let spawned_future = AssertUnwindSafe(f(stream, address.clone())).catch_unwind();
 
@@ -69,6 +66,55 @@ where
         }
     });
     Child::new(handle, address)
+}
+
+pub(crate) struct SpawnData<T> {
+    inbox: Inbox<T>,
+    receiver: Receiver<T>,
+    signal_sender: SignalSender,
+    signal_receiver: SignalReceiver,
+    exit_watcher: ProcessWatcher,
+    exit_alerter: ProcessAlerter,
+}
+
+impl<T> Clone for SpawnData<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inbox: self.inbox.clone(),
+            receiver: self.receiver.clone(),
+            signal_sender: self.signal_sender.clone(),
+            signal_receiver: self.signal_receiver.clone(),
+            exit_watcher: self.exit_watcher.clone(),
+            exit_alerter: self.exit_alerter.clone(),
+        }
+    }
+}
+
+impl<T> SpawnData<T> {
+    pub fn new() -> Self {
+        let (inbox, receiver) = Inbox::new();
+        let (signal_sender, signal_receiver) = SignalSender::new();
+        let (exit_watcher, exit_alerter) = ProcessWatcher::new();
+
+        Self {
+            inbox,
+            receiver,
+            signal_sender,
+            signal_receiver,
+            exit_watcher,
+            exit_alerter,
+        }
+    }
+
+    pub fn spawn<R, F>(self, f: impl FnOnce(EventStream<T>, Address<T>) -> F) -> Child<R, T>
+    where
+        T: Interface,
+        R: Send + 'static,
+        F: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        spawn_with(self, f)
+    }
 }
 
 pub mod actor;
