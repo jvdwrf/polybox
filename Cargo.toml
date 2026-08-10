@@ -19,3 +19,6 @@ tracing = "0.1"
 anyhow = "1"
 indexmap = "2"
 async-channel = "2"
+smol_str = { version = "0.3", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+dashmap = { version = "6", features = ["serde"] }

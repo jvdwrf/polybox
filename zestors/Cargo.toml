@@ -13,7 +13,10 @@ anyhow.workspace = true
 thiserror.workspace = true
 indexmap.workspace = true
 async-channel.workspace = true
+smol_str.workspace = true
 type-sets.workspace = true
+serde.workspace = true
+dashmap.workspace = true
 
 [features]
 _ra = []

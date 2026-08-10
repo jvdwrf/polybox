@@ -154,6 +154,8 @@ pub(crate) mod _prelude {
         actor::*, address::*, child::*, event_stream::*, exit_watcher::*, inbox::*, polybox::*,
         registry::*, signals::*, state::*, supervision::*, *,
     };
+
+    pub(crate) use serde::{Deserialize, Serialize};
 }
 
 pub use polybox_codegen::{

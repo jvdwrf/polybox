@@ -6,7 +6,11 @@ use polybox::{
 };
 use std::{any::Any, fmt::Debug, marker::PhantomData};
 
-pub struct Address<T: InboxKind> {
+// struct _Address<T: InboxKind = Dyn<Set![]>> {
+//     val:
+// }
+
+pub struct Address<T: InboxKind = Dyn<Set![]>> {
     inbox: T::Inbox,
     signal_inbox: SignalSender,
     process_watcher: ProcessWatcher,
