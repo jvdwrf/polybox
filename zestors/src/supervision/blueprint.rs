@@ -2,13 +2,13 @@ use tokio::sync::watch;
 
 use super::*;
 
-pub trait ActorBlueprint {
+pub trait ActorBlueprint: Debug {
     type Runner: ActorRunner;
 
     fn instantiate(&mut self) -> Self::Runner;
 }
 
-impl<T: ActorRunner + Clone> ActorBlueprint for T {
+impl<T: ActorRunner + Clone + Debug> ActorBlueprint for T {
     type Runner = T;
 
     fn instantiate(&mut self) -> Self::Runner {
@@ -17,11 +17,11 @@ impl<T: ActorRunner + Clone> ActorBlueprint for T {
 }
 
 pub trait ActorBlueprintExt: ActorBlueprint + Sized {
-    fn into_spawn_fn(self) -> DynSpawnFn
+    fn into_spawn_fn(self) -> DynSpawner
     where
         Self: Send + 'static,
     {
-        DynSpawnFn::new(self)
+        DynSpawner::new(self)
     }
 
     fn extract_address(
@@ -49,5 +49,13 @@ impl<T: ActorBlueprint> ActorBlueprint for ExtractAddressBlueprint<T> {
             inner: self.inner.instantiate(),
             tx: self.tx.clone(),
         }
+    }
+}
+
+impl<T: ActorBlueprint> Debug for ExtractAddressBlueprint<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExtractAddressBlueprint")
+            .field("inner", &self.inner)
+            .finish()
     }
 }

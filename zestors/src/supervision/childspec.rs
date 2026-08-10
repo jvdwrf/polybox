@@ -1,7 +1,7 @@
 use super::*;
 
 #[derive(Debug)]
-pub struct ChildSpec<T = DynSpawnFn> {
+pub struct ChildSpec<T = DynSpawner> {
     pub id: ChildId,
     pub restart_mode: RestartMode,
     pub abort_timeout: Duration,
@@ -30,14 +30,14 @@ impl<T> ChildSpec<T> {
 
     pub fn spawn(&mut self) -> Child
     where
-        T: ActorSpawner,
+        T: SpawnMut,
     {
         self.spawner.spawn_mut()
     }
 
     pub fn into_dyn(self) -> ChildSpec
     where
-        T: Into<DynSpawnFn>,
+        T: Into<DynSpawner>,
     {
         ChildSpec {
             id: self.id,
@@ -67,7 +67,7 @@ impl<T> ChildSpec<T> {
     }
 }
 
-impl<T: ActorBlueprint + Send + 'static> From<ChildSpec<T>> for ChildSpec<DynSpawnFn> {
+impl<T: ActorBlueprint + Send + 'static> From<ChildSpec<T>> for ChildSpec<DynSpawner> {
     fn from(value: ChildSpec<T>) -> Self {
         ChildSpec {
             id: value.id,

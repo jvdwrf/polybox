@@ -1,15 +1,15 @@
 use super::*;
 
-pub trait ActorSpawner {
+pub trait SpawnMut: Debug {
     fn spawn_mut(&mut self) -> Child;
 }
 
-pub struct SpawnFn<R: ActorBlueprint> {
-    data: ProcessData<<R::Runner as ActorRunner>::Interface>,
+pub struct Spawner<R: ActorBlueprint> {
     blueprint: R,
+    data: ProcessData<<R::Runner as ActorRunner>::Interface>,
 }
 
-impl<R: ActorBlueprint> ActorSpawner for SpawnFn<R> {
+impl<R: ActorBlueprint> SpawnMut for Spawner<R> {
     fn spawn_mut(&mut self) -> Child {
         let runner = self
             .blueprint
@@ -23,7 +23,7 @@ impl<R: ActorBlueprint> ActorSpawner for SpawnFn<R> {
     }
 }
 
-impl<R: ActorBlueprint> SpawnFn<R> {
+impl<R: ActorBlueprint> Spawner<R> {
     pub fn new(blueprint: R) -> Self {
         Self {
             data: ProcessData::new(),
@@ -31,47 +31,48 @@ impl<R: ActorBlueprint> SpawnFn<R> {
         }
     }
 
-    pub fn into_dyn(self) -> DynSpawnFn
+    pub fn into_dyn(self) -> DynSpawner
     where
         R: Send + 'static,
     {
-        DynSpawnFn(Box::new(self))
+        DynSpawner(Box::new(self))
     }
 }
 
-impl<R> From<R> for SpawnFn<R>
-where
-    R: ActorBlueprint,
-{
+impl<R: ActorBlueprint> From<R> for Spawner<R> {
     fn from(value: R) -> Self {
         Self::new(value)
     }
 }
 
-pub struct DynSpawnFn(Box<dyn ActorSpawner + Send>);
-
-impl Debug for DynSpawnFn {
+impl<R: ActorBlueprint> Debug for Spawner<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("DynSpawnFn").finish()
+        f.debug_struct("Spawner")
+            .field("data", &self.data)
+            .field("blueprint", &self.blueprint)
+            .finish()
     }
 }
 
-impl ActorSpawner for DynSpawnFn {
+#[derive(Debug)]
+pub struct DynSpawner(Box<dyn SpawnMut + Send>);
+
+impl SpawnMut for DynSpawner {
     fn spawn_mut(&mut self) -> Child {
         self.0.spawn_mut()
     }
 }
 
-impl DynSpawnFn {
+impl DynSpawner {
     pub fn new<R>(blueprint: R) -> Self
     where
         R: ActorBlueprint + Send + 'static,
     {
-        DynSpawnFn(Box::new(SpawnFn::new(blueprint)))
+        DynSpawner(Box::new(Spawner::new(blueprint)))
     }
 }
 
-impl<R> From<R> for DynSpawnFn
+impl<R> From<R> for DynSpawner
 where
     R: ActorBlueprint + Send + 'static,
 {

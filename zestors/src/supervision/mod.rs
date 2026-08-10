@@ -70,6 +70,7 @@ mod test {
         }
     }
 
+    #[derive(Debug)]
     pub struct TestActorStarter(u32);
 
     impl ActorBlueprint for TestActorStarter {

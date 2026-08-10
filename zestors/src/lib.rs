@@ -19,14 +19,7 @@ where
 }
 
 pub(crate) fn spawn_with<T, R, F>(
-    ProcessData {
-        inbox,
-        receiver,
-        signal_sender,
-        signal_receiver,
-        exit_watcher,
-        mut exit_alerter,
-    }: ProcessData<T>,
+    data: ProcessData<T>,
     f: impl FnOnce(EventStream<T>, Address<T>) -> F,
 ) -> Child<R, T>
 where
@@ -35,6 +28,15 @@ where
     F: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
     F::Output: Send + 'static,
 {
+    let ProcessData {
+        inbox,
+        receiver,
+        signal_sender,
+        signal_receiver,
+        exit_watcher,
+        mut exit_alerter,
+    } = data;
+
     let address = Address::new(inbox, signal_sender, exit_watcher);
     let stream = EventStream::new(receiver, signal_receiver);
     let spawned_future = AssertUnwindSafe(f(stream, address.clone())).catch_unwind();
@@ -75,6 +77,19 @@ pub(crate) struct ProcessData<T> {
     signal_receiver: SignalReceiver,
     exit_watcher: ProcessWatcher,
     exit_alerter: ProcessAlerter,
+}
+
+impl<T> std::fmt::Debug for ProcessData<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProcessData")
+            .field("inbox", &self.inbox)
+            .field("receiver", &self.receiver)
+            .field("signal_sender", &self.signal_sender)
+            .field("signal_receiver", &self.signal_receiver)
+            .field("exit_watcher", &self.exit_watcher)
+            .field("exit_alerter", &self.exit_alerter)
+            .finish()
+    }
 }
 
 impl<T> Clone for ProcessData<T> {
