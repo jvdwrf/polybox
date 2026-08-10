@@ -61,7 +61,10 @@ impl Supervisor {
         }
     }
 
-    pub fn add_child<T>(&mut self, blueprint: ChildSpec<T>) -> SupervisionAddress<T::Inbox>
+    pub fn add_child<T>(
+        &mut self,
+        blueprint: ChildSpec<T>,
+    ) -> SupervisionAddress<<T::Runner as ActorRunner>::Interface>
     where
         T: ActorBlueprint + Send + 'static,
     {
@@ -71,7 +74,7 @@ impl Supervisor {
     pub fn add_children<T>(
         &mut self,
         blueprints: impl IntoIterator<Item = ChildSpec<T>>,
-    ) -> Vec<SupervisionAddress<T::Inbox>>
+    ) -> Vec<SupervisionAddress<<T::Runner as ActorRunner>::Interface>>
     where
         T: ActorBlueprint + Send + 'static,
     {

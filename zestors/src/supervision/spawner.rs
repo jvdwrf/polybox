@@ -1,29 +1,90 @@
 use super::*;
-use polybox::type_sets::Set;
 
-pub struct DynSpawnFn(Box<dyn FnMut() -> Child + Send>);
+pub trait ActorSpawner {
+    fn spawn_mut(&mut self) -> Child;
+}
+
+pub struct SpawnFn<R: ActorBlueprint> {
+    inbox: Inbox<<R::Runner as ActorRunner>::Interface>,
+    receiver: Receiver<<R::Runner as ActorRunner>::Interface>,
+    signal_sender: SignalSender,
+    signal_receiver: SignalReceiver,
+    exit_watcher: ExitWatcher,
+    exit_alerter: ExitAlerter,
+    blueprint: R,
+}
+
+impl<R: ActorBlueprint> ActorSpawner for SpawnFn<R> {
+    fn spawn_mut(&mut self) -> Child {
+        let runner = self
+            .blueprint
+            .instantiate()
+            .map(|res| res.map(std::mem::forget));
+
+        crate::spawn_with(
+            (self.inbox.clone(), self.receiver.clone()),
+            (self.signal_sender.clone(), self.signal_receiver.clone()),
+            (self.exit_watcher.clone(), self.exit_alerter.clone()),
+            |stream, address| runner.run(stream, address),
+        )
+        .into_dyn()
+    }
+}
+
+impl<R: ActorBlueprint> SpawnFn<R> {
+    pub fn new(blueprint: R) -> Self {
+        let (inbox, receiver) = Inbox::new();
+        let (signal_sender, signal_receiver) = SignalSender::new();
+        let (exit_watcher, exit_alerter) = ExitWatcher::new();
+
+        Self {
+            inbox,
+            receiver,
+            signal_sender,
+            signal_receiver,
+            exit_watcher,
+            exit_alerter,
+            blueprint,
+        }
+    }
+
+    pub fn into_dyn(self) -> DynSpawnFn
+    where
+        R: Send + 'static,
+    {
+        DynSpawnFn(Box::new(self))
+    }
+}
+
+impl<R> From<R> for SpawnFn<R>
+where
+    R: ActorBlueprint,
+{
+    fn from(value: R) -> Self {
+        Self::new(value)
+    }
+}
+
+pub struct DynSpawnFn(Box<dyn ActorSpawner + Send>);
+
+impl Debug for DynSpawnFn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("DynSpawnFn").finish()
+    }
+}
+
+impl ActorSpawner for DynSpawnFn {
+    fn spawn_mut(&mut self) -> Child<()> {
+        self.0.spawn_mut()
+    }
+}
 
 impl DynSpawnFn {
-    pub fn new<R>(mut value: R) -> Self
+    pub fn new<R>(blueprint: R) -> Self
     where
         R: ActorBlueprint + Send + 'static,
     {
-        // Construct the inboxes once, to re-use them when the actor is spawned multiple times.
-        let (inbox, receiver) = Inbox::new(1_000_000);
-        let (signal_inbox, signal_receiver) = SignalSender::new();
-
-        Self(Box::new(move || {
-            let runner = value.build().map(|e| e.map(|_| ()));
-
-            let address = Address::new(inbox.clone(), signal_inbox.clone());
-            let stream = EventStream::new(receiver.clone(), signal_receiver.clone());
-            let handle = tokio::spawn(runner.run(stream, address.clone()));
-            Child::new(handle, address).into_dyn()
-        }))
-    }
-
-    pub fn call(&mut self) -> Child {
-        (self.0)()
+        DynSpawnFn(Box::new(SpawnFn::new(blueprint)))
     }
 }
 
@@ -35,74 +96,3 @@ where
         Self::new(value)
     }
 }
-
-impl Debug for DynSpawnFn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("DynSpawnFn").finish()
-    }
-}
-
-pub trait ActorSpawner {
-    type Exit: Send + 'static;
-    type Inbox: InboxKind;
-
-    fn spawn_mut(&mut self) -> Child<Self::Exit, Self::Inbox>;
-}
-
-impl ActorSpawner for DynSpawnFn {
-    type Exit = ();
-    type Inbox = Dyn<Set![]>;
-
-    fn spawn_mut(&mut self) -> Child {
-        self.call()
-    }
-}
-
-impl<T: ActorBlueprint> ActorSpawner for T {
-    type Exit = <T::Runner as ActorRunner>::Exit;
-    type Inbox = <T::Runner as ActorRunner>::Interface;
-
-    fn spawn_mut(&mut self) -> Child<Self::Exit, Self::Inbox> {
-        self.build().spawn()
-    }
-}
-
-// pub trait ActorSpawnerExt: ActorSpawner + Sized {
-// fn extract_address(
-//     self,
-// ) -> (
-//     ExtractAddress<Self>,
-//     mpsc::UnboundedReceiver<Address<Self::Inbox>>,
-// ) {
-//     let (tx, rx) = mpsc::unbounded_channel();
-//     (ExtractAddress { inner: self, tx }, rx)
-// }
-// }
-// impl<T: ActorSpawner> ActorSpawnerExt for T {}
-
-// #[derive(Debug)]
-// pub struct ExtractAddress<T: ActorSpawner> {
-//     inner: T,
-//     tx: Tx<Address<T::Inbox>>,
-// }
-
-// impl<T: ActorSpawner> ActorSpawner for ExtractAddress<T> {
-//     type Inbox = T::Inbox;
-//     type Exit = T::Exit;
-
-//     fn spawn_mut(&mut self) -> Child<Self::Exit, Self::Inbox> {
-//         let Self { inner, tx } = self;
-//         let child = inner.spawn_mut();
-//         tx.send(child.address().clone()).ok();
-//         child
-//     }
-// }
-
-// impl<T: ActorSpawner + Clone> Clone for ExtractAddress<T> {
-//     fn clone(&self) -> Self {
-//         Self {
-//             inner: self.inner.clone(),
-//             tx: self.tx.clone(),
-//         }
-//     }
-// }

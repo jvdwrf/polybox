@@ -75,7 +75,7 @@ mod test {
     impl ActorBlueprint for TestActorStarter {
         type Runner = TestActor;
 
-        fn build(&mut self) -> Self::Runner {
+        fn instantiate(&mut self) -> Self::Runner {
             let actor = TestActor { number: self.0 };
             self.0 += 1;
             actor

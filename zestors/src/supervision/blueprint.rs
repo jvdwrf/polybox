@@ -2,21 +2,16 @@ use tokio::sync::watch;
 
 use super::*;
 
-pub trait ActorBlueprint:
-    ActorSpawner<
-        Exit = <Self::Runner as ActorRunner>::Exit,
-        Inbox = <Self::Runner as ActorRunner>::Interface,
-    >
-{
+pub trait ActorBlueprint {
     type Runner: ActorRunner;
 
-    fn build(&mut self) -> Self::Runner;
+    fn instantiate(&mut self) -> Self::Runner;
 }
 
 impl<T: ActorRunner + Clone> ActorBlueprint for T {
     type Runner = T;
 
-    fn build(&mut self) -> Self::Runner {
+    fn instantiate(&mut self) -> Self::Runner {
         self.clone()
     }
 }
@@ -49,9 +44,9 @@ pub struct ExtractAddressBlueprint<T: ActorBlueprint> {
 impl<T: ActorBlueprint> ActorBlueprint for ExtractAddressBlueprint<T> {
     type Runner = ExtractAddressRunnable<T::Runner>;
 
-    fn build(&mut self) -> Self::Runner {
+    fn instantiate(&mut self) -> Self::Runner {
         ExtractAddressRunnable {
-            inner: self.inner.build(),
+            inner: self.inner.instantiate(),
             tx: self.tx.clone(),
         }
     }

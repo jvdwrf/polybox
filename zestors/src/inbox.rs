@@ -13,8 +13,12 @@ pub struct Inbox<T> {
 }
 
 impl<T> Inbox<T> {
-    pub fn new(buffer: usize) -> (Self, Receiver<T>) {
-        let (sender, receiver) = async_channel::bounded(buffer);
+    pub fn new() -> (Self, Receiver<T>) {
+        Self::new_with_capacity(1_000_000)
+    }
+
+    pub fn new_with_capacity(capacity: usize) -> (Self, Receiver<T>) {
+        let (sender, receiver) = async_channel::bounded(capacity);
         (Self { sender }, Receiver { receiver })
     }
 

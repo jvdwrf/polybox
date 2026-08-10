@@ -1,5 +1,3 @@
-use tokio::sync::{mpsc, watch};
-
 use super::*;
 
 #[derive(Debug)]
@@ -10,7 +8,7 @@ pub struct ChildSpec<T = DynSpawnFn> {
     pub spawner: T,
 }
 
-impl<T: ActorSpawner> ChildSpec<T> {
+impl<T> ChildSpec<T> {
     pub fn new(id: impl Into<ChildId>, spawner: T) -> Self {
         Self {
             id: id.into(),
@@ -30,7 +28,10 @@ impl<T: ActorSpawner> ChildSpec<T> {
         self
     }
 
-    pub fn spawn(&mut self) -> Child<T::Exit, T::Inbox> {
+    pub fn spawn(&mut self) -> Child
+    where
+        T: ActorSpawner,
+    {
         self.spawner.spawn_mut()
     }
 
@@ -46,7 +47,10 @@ impl<T: ActorSpawner> ChildSpec<T> {
         }
     }
 
-    pub fn supervise(self, supervisor: &mut Supervisor) -> SupervisionAddress<T::Inbox>
+    pub fn supervise(
+        self,
+        supervisor: &mut Supervisor,
+    ) -> SupervisionAddress<<T::Runner as ActorRunner>::Interface>
     where
         T: ActorBlueprint + Send + 'static,
     {

@@ -1,15 +1,15 @@
-use super::*;
+use crate::_prelude::*;
 use crate::signals::{Observable, SignalSender};
 use polybox::{
     errors::SendError,
     type_sets::{Members, Set},
-    *,
 };
 use std::{any::Any, fmt::Debug, marker::PhantomData};
 
 pub struct Address<T: InboxKind> {
     inbox: T::Inbox,
     signal_inbox: SignalSender,
+    exit_watcher: ExitWatcher,
 }
 
 pub type DynAddress<T = Set![]> = Address<Dyn<T>>;
@@ -47,6 +47,7 @@ impl<T: InboxKind> PolyBox for Address<T> {
         Address {
             inbox: T::map_inbox_into_dyn_unchecked(self.inbox),
             signal_inbox: self.signal_inbox,
+            exit_watcher: self.exit_watcher,
         }
     }
 }
@@ -56,15 +57,21 @@ impl<T: InboxKind> Clone for Address<T> {
         Self {
             inbox: self.inbox.clone(),
             signal_inbox: self.signal_inbox.clone(),
+            exit_watcher: self.exit_watcher.clone(),
         }
     }
 }
 
 impl<T: InboxKind> Address<T> {
-    pub(super) fn new(inbox: T::Inbox, signal_inbox: SignalSender) -> Self {
+    pub(super) fn new(
+        inbox: T::Inbox,
+        signal_inbox: SignalSender,
+        exit_watcher: ExitWatcher,
+    ) -> Self {
         Self {
             inbox,
             signal_inbox,
+            exit_watcher,
         }
     }
 }
@@ -74,6 +81,7 @@ impl<T: InboxKind> Debug for Address<T> {
         f.debug_struct("Address")
             .field("inbox", &self.inbox)
             .field("signal_inbox", &self.signal_inbox)
+            .field("exit_watcher", &self.exit_watcher)
             .finish()
     }
 }
