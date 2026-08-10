@@ -9,7 +9,7 @@ use std::{any::Any, fmt::Debug, marker::PhantomData};
 pub struct Address<T: InboxKind> {
     inbox: T::Inbox,
     signal_inbox: SignalSender,
-    exit_watcher: ExitWatcher,
+    exit_watcher: ProcessWatcher,
 }
 
 pub type DynAddress<T = Set![]> = Address<Dyn<T>>;
@@ -66,7 +66,7 @@ impl<T: InboxKind> Address<T> {
     pub(super) fn new(
         inbox: T::Inbox,
         signal_inbox: SignalSender,
-        exit_watcher: ExitWatcher,
+        exit_watcher: ProcessWatcher,
     ) -> Self {
         Self {
             inbox,
@@ -75,8 +75,12 @@ impl<T: InboxKind> Address<T> {
         }
     }
 
-    pub fn watch_exit(&self) -> ExitWatcher {
-        self.exit_watcher.clone()
+    pub fn exit(&self) -> &ProcessWatcher {
+        &self.exit_watcher
+    }
+
+    pub fn exit_mut(&mut self) -> &mut ProcessWatcher {
+        &mut self.exit_watcher
     }
 }
 

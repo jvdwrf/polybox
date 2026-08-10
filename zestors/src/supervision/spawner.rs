@@ -9,8 +9,8 @@ pub struct SpawnFn<R: ActorBlueprint> {
     receiver: Receiver<<R::Runner as ActorRunner>::Interface>,
     signal_sender: SignalSender,
     signal_receiver: SignalReceiver,
-    exit_watcher: ExitWatcher,
-    exit_alerter: ExitAlerter,
+    exit_watcher: ProcessWatcher,
+    exit_alerter: ProcessAlerter,
     blueprint: R,
 }
 
@@ -35,7 +35,7 @@ impl<R: ActorBlueprint> SpawnFn<R> {
     pub fn new(blueprint: R) -> Self {
         let (inbox, receiver) = Inbox::new();
         let (signal_sender, signal_receiver) = SignalSender::new();
-        let (exit_watcher, exit_alerter) = ExitWatcher::new();
+        let (exit_watcher, exit_alerter) = ProcessWatcher::new();
 
         Self {
             inbox,

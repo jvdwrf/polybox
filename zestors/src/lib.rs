@@ -17,7 +17,7 @@ where
 {
     let (inbox, receiver) = Inbox::new();
     let (signal_inbox, signal_receiver) = SignalSender::new();
-    let (exit_watcher, exit_alerter) = ExitWatcher::new();
+    let (exit_watcher, exit_alerter) = ProcessWatcher::new();
     spawn_with(
         (inbox, receiver),
         (signal_inbox, signal_receiver),
@@ -26,10 +26,10 @@ where
     )
 }
 
-pub fn spawn_with<T, R, F>(
+pub(crate) fn spawn_with<T, R, F>(
     (inbox, receiver): (Inbox<T>, Receiver<T>),
     (signal_inbox, signal_receiver): (SignalSender, SignalReceiver),
-    (exit_watcher, mut exit_alerter): (ExitWatcher, ExitAlerter),
+    (exit_watcher, mut exit_alerter): (ProcessWatcher, ProcessAlerter),
     f: impl FnOnce(EventStream<T>, Address<T>) -> F,
 ) -> Child<R, T>
 where
@@ -54,16 +54,16 @@ where
             Ok(val) => {
                 match &val {
                     Ok(_) => {
-                        exit_alerter.alert(ProcessExitStatus::Normal.into());
+                        exit_alerter.alert(ExitStatus::Normal.into());
                     }
                     Err(_) => {
-                        exit_alerter.alert(ProcessExitStatus::Error.into());
+                        exit_alerter.alert(ExitStatus::Error.into());
                     }
                 };
                 val
             }
             Err(boxed) => {
-                exit_alerter.alert(ProcessExitStatus::Panic.into());
+                exit_alerter.alert(ExitStatus::Panic.into());
                 std::panic::resume_unwind(boxed);
             }
         }

@@ -39,6 +39,14 @@ impl<T, R: InboxKind> Child<T, R> {
         self.handle().is_finished()
     }
 
+    pub fn exit_watcher(&self) -> &ProcessWatcher {
+        self.address.exit()
+    }
+
+    pub fn exit_watcher_mut(&mut self) -> &mut ProcessWatcher {
+        self.address.exit_mut()
+    }
+
     pub fn into_handle(mut self) -> tokio::task::JoinHandle<Result<T, anyhow::Error>> {
         self.handle.take().unwrap()
     }
