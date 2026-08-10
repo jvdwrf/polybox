@@ -74,6 +74,10 @@ impl<T: InboxKind> Address<T> {
             exit_watcher,
         }
     }
+
+    pub fn watch_exit(&self) -> ExitWatcher {
+        self.exit_watcher.clone()
+    }
 }
 
 impl<T: InboxKind> Debug for Address<T> {

@@ -74,7 +74,7 @@ impl Debug for DynSpawnFn {
 }
 
 impl ActorSpawner for DynSpawnFn {
-    fn spawn_mut(&mut self) -> Child<()> {
+    fn spawn_mut(&mut self) -> Child {
         self.0.spawn_mut()
     }
 }

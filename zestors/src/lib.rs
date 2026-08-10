@@ -1,3 +1,5 @@
+use std::panic::AssertUnwindSafe;
+
 use crate::{
     _prelude::*,
     address::Address,
@@ -27,7 +29,7 @@ where
 pub fn spawn_with<T, R, F>(
     (inbox, receiver): (Inbox<T>, Receiver<T>),
     (signal_inbox, signal_receiver): (SignalSender, SignalReceiver),
-    (exit_watcher, exit_alerter): (ExitWatcher, ExitAlerter),
+    (exit_watcher, mut exit_alerter): (ExitWatcher, ExitAlerter),
     f: impl FnOnce(EventStream<T>, Address<T>) -> F,
 ) -> Child<R, T>
 where
@@ -38,7 +40,34 @@ where
 {
     let address = Address::new(inbox, signal_inbox, exit_watcher);
     let stream = EventStream::new(receiver, signal_receiver);
-    let handle = tokio::spawn(f(stream, address.clone()));
+    let spawned_future = AssertUnwindSafe(f(stream, address.clone())).catch_unwind();
+
+    let handle = tokio::spawn(async move {
+        // Notify that the process is alive
+        exit_alerter.alert(ProcessStatus::Alive);
+
+        // Run the future and catch any panics that occur
+        let exit_value = spawned_future.await;
+
+        // Depending on the exit_value, set the correct ExitSignal
+        match exit_value {
+            Ok(val) => {
+                match &val {
+                    Ok(_) => {
+                        exit_alerter.alert(ProcessExitStatus::Normal.into());
+                    }
+                    Err(_) => {
+                        exit_alerter.alert(ProcessExitStatus::Error.into());
+                    }
+                };
+                val
+            }
+            Err(boxed) => {
+                exit_alerter.alert(ProcessExitStatus::Panic.into());
+                std::panic::resume_unwind(boxed);
+            }
+        }
+    });
     Child::new(handle, address)
 }
 
@@ -52,6 +81,7 @@ pub mod signals;
 pub mod state;
 pub mod supervision;
 pub use ::type_sets;
+use futures::FutureExt;
 pub(crate) use polybox::*;
 
 pub mod polybox;
