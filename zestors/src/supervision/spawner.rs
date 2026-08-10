@@ -5,7 +5,7 @@ pub trait ActorSpawner {
 }
 
 pub struct SpawnFn<R: ActorBlueprint> {
-    data: SpawnData<<R::Runner as ActorRunner>::Interface>,
+    data: ProcessData<<R::Runner as ActorRunner>::Interface>,
     blueprint: R,
 }
 
@@ -26,7 +26,7 @@ impl<R: ActorBlueprint> ActorSpawner for SpawnFn<R> {
 impl<R: ActorBlueprint> SpawnFn<R> {
     pub fn new(blueprint: R) -> Self {
         Self {
-            data: SpawnData::new(),
+            data: ProcessData::new(),
             blueprint,
         }
     }

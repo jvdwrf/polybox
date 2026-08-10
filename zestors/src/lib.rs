@@ -15,18 +15,18 @@ where
     F: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
     F::Output: Send + 'static,
 {
-    SpawnData::new().spawn(f)
+    ProcessData::new().spawn(f)
 }
 
 pub(crate) fn spawn_with<T, R, F>(
-    SpawnData {
+    ProcessData {
         inbox,
         receiver,
         signal_sender,
         signal_receiver,
         exit_watcher,
         mut exit_alerter,
-    }: SpawnData<T>,
+    }: ProcessData<T>,
     f: impl FnOnce(EventStream<T>, Address<T>) -> F,
 ) -> Child<R, T>
 where
@@ -68,7 +68,7 @@ where
     Child::new(handle, address)
 }
 
-pub(crate) struct SpawnData<T> {
+pub(crate) struct ProcessData<T> {
     inbox: Inbox<T>,
     receiver: Receiver<T>,
     signal_sender: SignalSender,
@@ -77,7 +77,7 @@ pub(crate) struct SpawnData<T> {
     exit_alerter: ProcessAlerter,
 }
 
-impl<T> Clone for SpawnData<T> {
+impl<T> Clone for ProcessData<T> {
     fn clone(&self) -> Self {
         Self {
             inbox: self.inbox.clone(),
@@ -90,7 +90,7 @@ impl<T> Clone for SpawnData<T> {
     }
 }
 
-impl<T> SpawnData<T> {
+impl<T> ProcessData<T> {
     pub fn new() -> Self {
         let (inbox, receiver) = Inbox::new();
         let (signal_sender, signal_receiver) = SignalSender::new();
