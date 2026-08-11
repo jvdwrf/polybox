@@ -27,7 +27,7 @@ impl<T, R: InboxKind> Child<T, R> {
         }
     }
 
-    pub fn pid(&self) -> Pid {
+    pub fn pid(&self) -> &Pid {
         self.address.pid()
     }
 

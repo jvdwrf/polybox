@@ -5,7 +5,7 @@ use zestors::{
     polybox::Payload,
     registry::Pid,
     state::{ActorState, ExitReason},
-    supervision::{ActorBlueprintExt, ActorRunnerExt, ChildSpec, Supervisor},
+    supervision::{ActorBlueprintExt, ChildSpec, Supervisor},
 };
 
 #[derive(Interface, ActorInterface)]
@@ -71,5 +71,5 @@ async fn main() {
         .with_child(ChildSpec::new("SupervisorA", supervisor_a))
         .with_child(ChildSpec::new("SupervisorB", supervisor_b));
 
-    supervisor.spawn_ref(None);
+    supervisor.spawn_ref(Pid::rand_uuid());
 }

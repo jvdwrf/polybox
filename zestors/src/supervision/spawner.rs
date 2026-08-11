@@ -1,34 +1,31 @@
 use super::*;
 
 pub trait Spawn: Debug {
-    fn spawn(&self, pid: Option<Pid>) -> Child;
-    fn get_data(&self) -> ProcessData;
+    fn spawn(&self, pid: ProcessData) -> Child;
+    // fn get_data(&self) -> ProcessData;
 }
 
-pub struct Spawner<R: ActorBlueprint> {
+pub struct Spawner<R: Blueprint> {
     blueprint: R,
     data: ProcessData<<R::Runner as ActorRunner>::Interface>,
 }
 
-impl<R: ActorBlueprint> Spawn for Spawner<R> {
-    fn spawn(&self, override_pid: Option<Pid>) -> Child {
+impl<R: Blueprint> Spawn for Spawner<R> {
+    fn spawn(&self, data: ProcessData) -> Child {
         let runner = self
             .blueprint
             .instantiate()
             .map(|res| res.map(std::mem::forget));
 
-        self.data
-            .clone()
-            .spawn(override_pid, |stream, address| runner.run(stream, address))
+        data.clone()
+            .downcast::<<R::Runner as ActorRunner>::Interface>()
+            .expect("ProcessData should be of correct type")
+            .spawn(|stream, address| runner.run(stream, address))
             .into_dyn()
-    }
-
-    fn get_data(&self) -> ProcessData {
-        self.data.clone().into_any()
     }
 }
 
-impl<R: ActorBlueprint> Spawner<R> {
+impl<R: Blueprint> Spawner<R> {
     pub fn new(blueprint: R) -> Self {
         Self {
             data: ProcessData::new(Pid::rand_uuid()),
@@ -44,13 +41,13 @@ impl<R: ActorBlueprint> Spawner<R> {
     }
 }
 
-impl<R: ActorBlueprint> From<R> for Spawner<R> {
+impl<R: Blueprint> From<R> for Spawner<R> {
     fn from(value: R) -> Self {
         Self::new(value)
     }
 }
 
-impl<R: ActorBlueprint> Debug for Spawner<R> {
+impl<R: Blueprint> Debug for Spawner<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Spawner")
             .field("data", &self.data)
@@ -63,19 +60,15 @@ impl<R: ActorBlueprint> Debug for Spawner<R> {
 pub struct DynSpawner(Arc<dyn Spawn + Send + Sync + 'static>);
 
 impl Spawn for DynSpawner {
-    fn spawn(&self, pid: Option<Pid>) -> Child {
-        self.0.spawn(pid)
-    }
-
-    fn get_data(&self) -> ProcessData {
-        self.0.get_data()
+    fn spawn(&self, data: ProcessData) -> Child {
+        self.0.spawn(data)
     }
 }
 
 impl DynSpawner {
     pub fn new<R>(blueprint: R) -> Self
     where
-        R: ActorBlueprint + Send + Sync + 'static,
+        R: Blueprint + Send + Sync + 'static,
     {
         DynSpawner(Arc::new(Spawner::new(blueprint)))
     }
@@ -83,7 +76,7 @@ impl DynSpawner {
 
 impl<R> From<R> for DynSpawner
 where
-    R: ActorBlueprint + Send + Sync + 'static,
+    R: Blueprint + Send + Sync + 'static,
 {
     fn from(value: R) -> Self {
         Self::new(value)

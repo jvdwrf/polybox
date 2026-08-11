@@ -37,7 +37,7 @@ impl Registry {
         let pid = entry.pid();
 
         // If the pid is already present and the address is different, return an error.
-        if let Some(val) = self.processes.get(&pid)
+        if let Some(val) = self.processes.get(pid)
             && let Some(val) = val.as_ref()
             && !val.address().is_same_process(entry.address())
         {
@@ -47,7 +47,7 @@ impl Registry {
             });
         }
 
-        self.processes.insert(pid, Some(entry.into_dyn()));
+        self.processes.insert(pid.clone(), Some(entry.into_dyn()));
 
         Ok(())
     }
@@ -143,7 +143,7 @@ impl<T: InboxKind> RegistryEntry<T> {
         }
     }
 
-    pub fn pid(&self) -> Pid {
+    pub fn pid(&self) -> &Pid {
         self.address().pid()
     }
 }

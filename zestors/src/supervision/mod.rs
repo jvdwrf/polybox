@@ -70,7 +70,7 @@ mod test {
     #[derive(Debug)]
     pub struct TestActorStarter(AtomicU32);
 
-    impl ActorBlueprint for TestActorStarter {
+    impl Blueprint for TestActorStarter {
         type Runner = TestActor;
 
         fn instantiate(&self) -> Self::Runner {
@@ -101,7 +101,7 @@ mod test {
                     .timeout(Duration::from_secs(10)),
             )
             .with_child(ChildSpec::new("ChildD", TestActorStarter(0.into())))
-            .spawn_ref(None);
+            .spawn_ref(Pid::rand_uuid());
 
         {
             let mut supervisor = Supervisor::blueprint();
@@ -114,7 +114,7 @@ mod test {
                 ChildSpec::new("ChildB", TestActor { number: 42 }).mode(RestartMode::Always),
             );
 
-            supervisor.spawn_ref(None);
+            supervisor.spawn_ref(Pid::rand_uuid());
 
             let addr_a = addr_a.await.unwrap();
             let addr_b = addr_b.await.unwrap();

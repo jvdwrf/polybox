@@ -11,7 +11,7 @@ pub struct Address<T: InboxKind = Dyn<Set![]>> {
     inbox: T::Inbox,
     signal_inbox: SignalSender,
     process_watcher: ProcessWatcher,
-    pid: Arc<ArcSwap<Pid>>,
+    pid: Pid,
 }
 
 pub type DynAddress<T = Set![]> = Address<Dyn<T>>;
@@ -89,7 +89,7 @@ impl<T: InboxKind> Address<T> {
             inbox,
             signal_inbox,
             process_watcher,
-            pid: Arc::new(ArcSwap::from_pointee(pid)),
+            pid,
         }
     }
 
@@ -106,17 +106,11 @@ impl<T: InboxKind> Address<T> {
     }
 
     pub fn is_same_process<R: InboxKind>(&self, other: &Address<R>) -> bool {
-        *self.pid.load() == *other.pid.load()
+        self.pid == other.pid
     }
 
-    pub fn pid(&self) -> Pid {
-        self.pid.load().deref().deref().clone()
-    }
-
-    pub fn override_pid(&self, pid: Pid) {
-        if **self.pid.load() != pid {
-            self.pid.store(Arc::new(pid));
-        }
+    pub fn pid(&self) -> &Pid {
+        &self.pid
     }
 }
 

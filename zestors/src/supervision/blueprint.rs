@@ -2,13 +2,13 @@ use tokio::sync::watch;
 
 use super::*;
 
-pub trait ActorBlueprint: Debug {
+pub trait Blueprint: Debug {
     type Runner: ActorRunner;
 
     fn instantiate(&self) -> Self::Runner;
 }
 
-impl<T: ActorRunner + Clone + Debug> ActorBlueprint for T {
+impl<T: ActorRunner + Clone + Debug> Blueprint for T {
     type Runner = T;
 
     fn instantiate(&self) -> Self::Runner {
@@ -16,7 +16,7 @@ impl<T: ActorRunner + Clone + Debug> ActorBlueprint for T {
     }
 }
 
-pub trait ActorBlueprintExt: ActorBlueprint + Sized {
+pub trait ActorBlueprintExt: Blueprint + Sized {
     fn into_spawn_fn(self) -> DynSpawner
     where
         Self: Send + Sync + 'static,
@@ -36,7 +36,7 @@ pub trait ActorBlueprintExt: ActorBlueprint + Sized {
 
     fn spawn_ref(
         &self,
-        pid: Option<Pid>,
+        pid: Pid,
     ) -> Child<<Self::Runner as ActorRunner>::Exit, <Self::Runner as ActorRunner>::Interface>
     where
         Self: Send + Sync + 'static,
@@ -44,14 +44,14 @@ pub trait ActorBlueprintExt: ActorBlueprint + Sized {
         self.instantiate().spawn(pid)
     }
 }
-impl<T: ActorBlueprint> ActorBlueprintExt for T {}
+impl<T: Blueprint> ActorBlueprintExt for T {}
 
-pub struct ExtractAddressBlueprint<T: ActorBlueprint> {
+pub struct ExtractAddressBlueprint<T: Blueprint> {
     pub(super) inner: T,
     pub(super) tx: watch::Sender<Option<Address<<T::Runner as ActorRunner>::Interface>>>,
 }
 
-impl<T: ActorBlueprint> ActorBlueprint for ExtractAddressBlueprint<T> {
+impl<T: Blueprint> Blueprint for ExtractAddressBlueprint<T> {
     type Runner = ExtractAddressRunnable<T::Runner>;
 
     fn instantiate(&self) -> Self::Runner {
@@ -62,7 +62,7 @@ impl<T: ActorBlueprint> ActorBlueprint for ExtractAddressBlueprint<T> {
     }
 }
 
-impl<T: ActorBlueprint> Debug for ExtractAddressBlueprint<T> {
+impl<T: Blueprint> Debug for ExtractAddressBlueprint<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ExtractAddressBlueprint")
             .field("inner", &self.inner)

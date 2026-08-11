@@ -2,28 +2,39 @@ use super::*;
 
 #[derive(Debug)]
 pub struct ChildSpec<T = DynSpawner> {
-    pub id: Pid,
-    pub restart_mode: RestartMode,
-    pub abort_timeout: Duration,
-    pub spawner: T,
+    pub(crate) restart_mode: RestartMode,
+    pub(crate) abort_timeout: Duration,
+    pub(crate) spawner: T,
+    pub(crate) data: ProcessData,
 }
 
 impl<T> ChildSpec<T> {
-    pub fn new(id: impl Into<Pid>, spawner: T) -> Self {
+    pub fn new(id: impl Into<Pid>, blueprint: T) -> Self
+    where
+        T: Blueprint,
+    {
         Self {
-            id: id.into(),
             restart_mode: RestartMode::OnError,
             abort_timeout: Duration::from_millis(5_000),
-            spawner: spawner.into(),
+            spawner: blueprint.into(),
+            data: ProcessData::<<T::Runner as ActorRunner>::Interface>::new(id.into()).into_any(),
         }
     }
 
-    pub fn new_uuid(spawner: T) -> Self {
+    pub fn pid(&self) -> &Pid {
+        self.data.pid()
+    }
+
+    pub fn new_uuid(spawner: T) -> Self
+    where
+        T: Blueprint,
+    {
         Self {
-            id: Pid::rand_uuid(),
             restart_mode: RestartMode::OnError,
             abort_timeout: Duration::from_millis(5_000),
             spawner: spawner.into(),
+            data: ProcessData::<<T::Runner as ActorRunner>::Interface>::new(Pid::rand_uuid())
+                .into_any(),
         }
     }
 
@@ -41,14 +52,7 @@ impl<T> ChildSpec<T> {
     where
         T: Spawn,
     {
-        self.spawner.spawn(Some(self.id.clone()))
-    }
-
-    pub fn get_data(&self) -> ProcessData
-    where
-        T: Spawn,
-    {
-        self.spawner.get_data()
+        self.spawner.spawn(self.data.clone())
     }
 
     pub fn into_dyn(self) -> ChildSpec
@@ -56,10 +60,10 @@ impl<T> ChildSpec<T> {
         T: Into<DynSpawner>,
     {
         ChildSpec {
-            id: self.id,
             restart_mode: self.restart_mode,
             abort_timeout: self.abort_timeout,
             spawner: self.spawner.into(),
+            data: self.data,
         }
     }
 
@@ -68,7 +72,7 @@ impl<T> ChildSpec<T> {
         supervisor: &mut Supervisor,
     ) -> AddressFuture<<T::Runner as ActorRunner>::Interface>
     where
-        T: ActorBlueprint + Send + Sync + 'static,
+        T: Blueprint + Send + Sync + 'static,
     {
         supervisor.add_child(self)
     }
@@ -80,18 +84,18 @@ impl<T> ChildSpec<T> {
         AddressFuture<<T::Runner as ActorRunner>::Interface>,
     )
     where
-        T: ActorBlueprint + Send + Sync + 'static,
+        T: Blueprint + Send + Sync + 'static,
     {
         let (rx, tx) = AddressFuture::new();
 
         let spec = ChildSpec {
-            id: self.id,
             restart_mode: self.restart_mode,
             abort_timeout: self.abort_timeout,
             spawner: ExtractAddressBlueprint {
                 inner: self.spawner,
                 tx,
             },
+            data: self.data,
         };
 
         (spec, rx)
@@ -101,21 +105,21 @@ impl<T> ChildSpec<T> {
 impl<T: Clone> Clone for ChildSpec<T> {
     fn clone(&self) -> Self {
         Self {
-            id: self.id.clone(),
             restart_mode: self.restart_mode,
             abort_timeout: self.abort_timeout,
             spawner: self.spawner.clone(),
+            data: self.data.clone(),
         }
     }
 }
 
-impl<T: ActorBlueprint + Send + Sync + 'static> From<ChildSpec<T>> for ChildSpec<DynSpawner> {
+impl<T: Blueprint + Send + Sync + 'static> From<ChildSpec<T>> for ChildSpec<DynSpawner> {
     fn from(value: ChildSpec<T>) -> Self {
         ChildSpec {
-            id: value.id,
             restart_mode: value.restart_mode,
             abort_timeout: value.abort_timeout,
             spawner: DynSpawner::new(value.spawner),
+            data: value.data,
         }
     }
 }

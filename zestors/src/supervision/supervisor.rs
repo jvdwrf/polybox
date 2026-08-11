@@ -31,7 +31,7 @@ impl SupervisorBlueprint {
         ChildSpec<T>: Into<ChildSpec>,
     {
         let spec = spec.into();
-        self.supervisees.insert(spec.id.clone(), spec);
+        self.supervisees.insert(spec.pid().clone(), spec);
         self
     }
 
@@ -41,13 +41,13 @@ impl SupervisorBlueprint {
     {
         for spec in specs {
             let spec = spec.into();
-            self.supervisees.insert(spec.id.clone(), spec);
+            self.supervisees.insert(spec.pid().clone(), spec);
         }
         self
     }
 
     pub fn add_dyn_child(&mut self, spec: ChildSpec) {
-        self.supervisees.insert(spec.id.clone(), spec);
+        self.supervisees.insert(spec.pid().clone(), spec);
     }
 
     pub fn add_dyn_children(&mut self, specs: impl IntoIterator<Item = ChildSpec>) {
@@ -61,15 +61,15 @@ impl SupervisorBlueprint {
         spec: ChildSpec<T>,
     ) -> AddressFuture<<T::Runner as ActorRunner>::Interface>
     where
-        T: ActorBlueprint + Send + Sync + 'static,
+        T: Blueprint + Send + Sync + 'static,
     {
         let (spec, address) = spec.split_address();
 
         self.add_dyn_child(ChildSpec {
-            id: spec.id.clone(),
             restart_mode: spec.restart_mode,
             abort_timeout: spec.abort_timeout,
             spawner: DynSpawner::new(spec.spawner),
+            data: spec.data,
         });
 
         address
@@ -80,7 +80,7 @@ impl SupervisorBlueprint {
         specs: impl IntoIterator<Item = ChildSpec<T>>,
     ) -> Vec<AddressFuture<<T::Runner as ActorRunner>::Interface>>
     where
-        T: ActorBlueprint + Send + Sync + 'static,
+        T: Blueprint + Send + Sync + 'static,
     {
         specs
             .into_iter()
@@ -89,7 +89,7 @@ impl SupervisorBlueprint {
     }
 }
 
-impl ActorBlueprint for SupervisorBlueprint {
+impl Blueprint for SupervisorBlueprint {
     type Runner = Supervisor;
 
     fn instantiate(&self) -> Self::Runner {
@@ -155,7 +155,7 @@ impl Supervisor {
     pub fn add_dyn_child(&mut self, spec: ChildSpec) {
         let supervisee = Supervisee::new(spec);
         self.supervisees
-            .insert(supervisee.spec.id.clone(), supervisee);
+            .insert(supervisee.spec.pid().clone(), supervisee);
     }
 
     pub fn add_dyn_children(&mut self, specs: impl IntoIterator<Item = ChildSpec>) {
@@ -169,15 +169,15 @@ impl Supervisor {
         spec: ChildSpec<T>,
     ) -> AddressFuture<<T::Runner as ActorRunner>::Interface>
     where
-        T: ActorBlueprint + Send + Sync + 'static,
+        T: Blueprint + Send + Sync + 'static,
     {
         let (spawner, address) = spec.spawner.split_address();
 
         self.add_dyn_child(ChildSpec {
-            id: spec.id,
             restart_mode: spec.restart_mode,
             abort_timeout: spec.abort_timeout,
             spawner: DynSpawner::new(spawner),
+            data: spec.data,
         });
 
         address
@@ -188,7 +188,7 @@ impl Supervisor {
         specs: impl IntoIterator<Item = ChildSpec<T>>,
     ) -> Vec<AddressFuture<<T::Runner as ActorRunner>::Interface>>
     where
-        T: ActorBlueprint + Send + Sync + 'static,
+        T: Blueprint + Send + Sync + 'static,
     {
         specs
             .into_iter()
@@ -222,7 +222,7 @@ impl Supervisor {
         // since it will persist across restarts.
         let child = supervisee.spec.spawn();
         supervisee.child = Some(child);
-        registry.register(supervisee.spec.get_data())
+        registry.register(supervisee.spec.data.clone())
     }
 
     async fn shutdown(&mut self) {
@@ -352,6 +352,8 @@ impl Stream for Supervisor {
     }
 }
 
+impl Unpin for Supervisor {}
+
 impl ActorRunner for Supervisor {
     type Interface = SupervisorInterface;
     type Exit = ();
@@ -422,7 +424,7 @@ impl ActorRunner for Supervisor {
                 },
                 Event::Message(message) => match message {
                     SupervisorInterface::RegisterChild(RegisterChild(spec)) => {
-                        tracing::trace!("Registering child: {:?}", spec.id);
+                        tracing::trace!("Registering child: {:?}", spec.pid());
                         self.add_dyn_child(spec);
                     }
 

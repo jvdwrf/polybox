@@ -3,6 +3,7 @@ use zestors::{
     actor::{Actor, HandleMessage},
     event_stream::EventStream,
     polybox::{Payload, Sends as _},
+    registry::Pid,
     signals::{Event, SendSignal, Shutdown, Signal},
     state::ActorState,
     supervision::ActorRunnerExt as _,
@@ -12,7 +13,7 @@ use zestors::{
 #[tokio::main]
 async fn main() {
     let child = spawn(
-        None,
+        Pid::rand_uuid(),
         async move |mut stream: EventStream<MyInterface>, _address| {
             while let Some(msg) = stream.recv().await {
                 match msg {
@@ -109,7 +110,9 @@ impl HandleMessage<String> for MyActor {
 }
 
 async fn test() {
-    let child = MyActor { nr: 0 }.map(|x| x.map(|x| x * 2)).spawn(None);
+    let child = MyActor { nr: 0 }
+        .map(|x| x.map(|x| x * 2))
+        .spawn(Pid::rand_uuid());
     let address = child.address().clone();
 
     address.send(5u32).await.unwrap();
