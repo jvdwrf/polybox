@@ -71,5 +71,5 @@ async fn main() {
         .with_child(ChildSpec::new("SupervisorA", supervisor_a))
         .with_child(ChildSpec::new("SupervisorB", supervisor_b));
 
-    supervisor.spawn_ref();
+    supervisor.spawn_ref(None);
 }

@@ -57,8 +57,8 @@ pub trait ActorRunnerExt: ActorRunner {
         (ExtractAddressRunnable { inner: self, tx }, rx)
     }
 
-    fn spawn(self) -> Child<Self::Exit, Self::Interface> {
-        crate::spawn(|stream, address| self.run(stream, address))
+    fn spawn(self, pid: Option<Pid>) -> Child<Self::Exit, Self::Interface> {
+        crate::spawn(pid, |stream, address| self.run(stream, address))
     }
 }
 impl<T: ActorRunner> ActorRunnerExt for T {}

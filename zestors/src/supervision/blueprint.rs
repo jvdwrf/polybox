@@ -36,11 +36,12 @@ pub trait ActorBlueprintExt: ActorBlueprint + Sized {
 
     fn spawn_ref(
         &self,
+        pid: Option<Pid>,
     ) -> Child<<Self::Runner as ActorRunner>::Exit, <Self::Runner as ActorRunner>::Interface>
     where
         Self: Send + Sync + 'static,
     {
-        self.instantiate().spawn()
+        self.instantiate().spawn(pid)
     }
 }
 impl<T: ActorBlueprint> ActorBlueprintExt for T {}

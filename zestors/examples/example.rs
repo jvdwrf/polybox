@@ -12,6 +12,7 @@ use zestors::{
 #[tokio::main]
 async fn main() {
     let child = spawn(
+        None,
         async move |mut stream: EventStream<MyInterface>, _address| {
             while let Some(msg) = stream.recv().await {
                 match msg {
@@ -108,7 +109,7 @@ impl HandleMessage<String> for MyActor {
 }
 
 async fn test() {
-    let child = MyActor { nr: 0 }.map(|x| x.map(|x| x * 2)).spawn();
+    let child = MyActor { nr: 0 }.map(|x| x.map(|x| x * 2)).spawn(None);
     let address = child.address().clone();
 
     address.send(5u32).await.unwrap();

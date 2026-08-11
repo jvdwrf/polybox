@@ -18,6 +18,7 @@ type-sets.workspace = true
 serde.workspace = true
 dashmap.workspace = true
 uuid.workspace = true
+arc-swap.workspace = true
 
 [features]
 _ra = []

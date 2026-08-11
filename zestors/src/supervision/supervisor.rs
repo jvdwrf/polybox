@@ -102,7 +102,7 @@ impl ActorBlueprint for SupervisorBlueprint {
             strategy: self.strategy,
             restart_intensity: self.restart_intensity.clone(),
             restarts: VecDeque::new(),
-            registry: Registry::node().clone(),
+            registry: Registry::current(),
         }
     }
 }
@@ -144,7 +144,7 @@ impl Supervisor {
             strategy: SupervisionStrategy::default(),
             restart_intensity: RestartIntensity::default(),
             restarts: VecDeque::new(),
-            registry: Registry::node().clone(),
+            registry: Registry::current(),
         }
     }
 
@@ -222,7 +222,7 @@ impl Supervisor {
         // since it will persist across restarts.
         let child = supervisee.spec.spawn();
         supervisee.child = Some(child);
-        registry.register(supervisee.spec.id.clone(), supervisee.spec.get_data())
+        registry.register(supervisee.spec.get_data())
     }
 
     async fn shutdown(&mut self) {

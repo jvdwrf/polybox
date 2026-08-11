@@ -7,18 +7,22 @@ use crate::{
 };
 use std::{ops::Deref, panic::AssertUnwindSafe, sync::Arc};
 
-pub fn spawn<T, R, F>(f: impl FnOnce(EventStream<T>, Address<T>) -> F) -> Child<R, T>
+pub fn spawn<T, R, F>(
+    pid: Option<Pid>,
+    f: impl FnOnce(EventStream<T>, Address<T>) -> F,
+) -> Child<R, T>
 where
     T: Interface,
     R: Send + 'static,
     F: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
     F::Output: Send + 'static,
 {
-    ProcessData::new().spawn(f)
+    ProcessData::new().spawn(pid, f)
 }
 
 pub(crate) fn spawn_with_data<I, O, F>(
     data: ProcessData<I>,
+    pid: Option<Pid>,
     f: impl FnOnce(EventStream<I>, Address<I>) -> F,
 ) -> Child<O, I>
 where
@@ -32,6 +36,10 @@ where
         signal_receiver,
         mut exit_alerter,
     } = data;
+
+    if let Some(pid) = pid {
+        address.override_pid(pid);
+    }
 
     let stream = EventStream::new(receiver, signal_receiver);
     let spawned_future = AssertUnwindSafe(f(stream, address.clone())).catch_unwind();
@@ -90,21 +98,29 @@ impl<T: Interface> ProcessData<T> {
         let (exit_watcher, exit_alerter) = ProcessWatcher::new();
 
         Self {
-            address: Address::new(inbox, signal_sender, exit_watcher),
+            address: Address::new(inbox, signal_sender, exit_watcher, None),
             receiver,
             signal_receiver,
             exit_alerter,
         }
     }
 
-    pub fn spawn<R, F>(self, f: impl FnOnce(EventStream<T>, Address<T>) -> F) -> Child<R, T>
+    pub fn spawn<R, F>(
+        self,
+        pid: Option<Pid>,
+        f: impl FnOnce(EventStream<T>, Address<T>) -> F,
+    ) -> Child<R, T>
     where
         T: Interface,
         R: Send + 'static,
         F: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
         F::Output: Send + 'static,
     {
-        spawn_with_data(self, f)
+        spawn_with_data(self, pid, f)
+    }
+
+    pub fn pid(&self) -> Pid {
+        self.address.pid()
     }
 }
 

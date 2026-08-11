@@ -16,7 +16,7 @@ impl Registry {
         }
     }
 
-    pub fn node() -> &'static Self {
+    pub fn current() -> &'static Self {
         REGISTRY.get_or_init(Self::new)
     }
 
@@ -31,10 +31,10 @@ impl Registry {
     /// Add a process to the registry if not already present.
     pub fn register<T: InboxKind>(
         &self,
-        pid: Pid,
         entry: impl Into<RegistryEntry<T>>,
     ) -> Result<(), RegistryAddError<T>> {
         let entry = entry.into();
+        let pid = entry.pid();
 
         // If the pid is already present and the address is different, return an error.
         if let Some(val) = self.processes.get(&pid)
@@ -42,7 +42,7 @@ impl Registry {
             && !val.address().is_same_process(entry.address())
         {
             return Err(RegistryAddError {
-                pid,
+                pid: pid.clone(),
                 entry: entry.into(),
             });
         }
@@ -50,6 +50,17 @@ impl Registry {
         self.processes.insert(pid, Some(entry.into_dyn()));
 
         Ok(())
+    }
+
+    pub fn update_pid(&self, old_pid: Pid, new_pid: Pid) {
+        if let Some(entry) = self
+            .processes
+            .remove(&old_pid)
+            .map(|(_, entry)| entry)
+            .flatten()
+        {
+            self.processes.insert(new_pid, Some(entry));
+        }
     }
 
     pub fn get(&self, pid: &Pid) -> Option<RegistryEntry> {
@@ -130,6 +141,10 @@ impl<T: InboxKind> RegistryEntry<T> {
                 inner: _RegistryEntry::Address(address.into_dyn()),
             },
         }
+    }
+
+    pub fn pid(&self) -> Pid {
+        self.address().pid()
     }
 }
 

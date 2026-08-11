@@ -101,7 +101,7 @@ mod test {
                     .timeout(Duration::from_secs(10)),
             )
             .with_child(ChildSpec::new("ChildD", TestActorStarter(0.into())))
-            .spawn_ref();
+            .spawn_ref(None);
 
         {
             let mut supervisor = Supervisor::blueprint();
@@ -114,7 +114,7 @@ mod test {
                 ChildSpec::new("ChildB", TestActor { number: 42 }).mode(RestartMode::Always),
             );
 
-            supervisor.spawn_ref();
+            supervisor.spawn_ref(None);
 
             let addr_a = addr_a.await.unwrap();
             let addr_b = addr_b.await.unwrap();

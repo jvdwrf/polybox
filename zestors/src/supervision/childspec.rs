@@ -41,7 +41,7 @@ impl<T> ChildSpec<T> {
     where
         T: Spawn,
     {
-        self.spawner.spawn()
+        self.spawner.spawn(Some(self.id.clone()))
     }
 
     pub fn get_data(&self) -> ProcessData

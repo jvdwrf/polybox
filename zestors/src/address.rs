@@ -1,17 +1,17 @@
 use crate::_prelude::*;
 use crate::signals::{Observable, SignalSender};
+use arc_swap::ArcSwap;
 use polybox::{
     errors::SendError,
     type_sets::{Members, Set},
 };
 use std::{any::Any, fmt::Debug, marker::PhantomData, sync::Arc};
-use uuid::Uuid;
 
 pub struct Address<T: InboxKind = Dyn<Set![]>> {
     inbox: T::Inbox,
     signal_inbox: SignalSender,
     process_watcher: ProcessWatcher,
-    uuid: Uuid,
+    pid: Arc<ArcSwap<Pid>>,
 }
 
 pub type DynAddress<T = Set![]> = Address<Dyn<T>>;
@@ -62,7 +62,7 @@ impl<T: InboxKind> PolyBox for Address<T> {
             inbox: T::map_inbox_into_dyn_unchecked(self.inbox),
             signal_inbox: self.signal_inbox,
             process_watcher: self.process_watcher,
-            uuid: self.uuid,
+            pid: self.pid,
         }
     }
 }
@@ -73,7 +73,7 @@ impl<T: InboxKind> Clone for Address<T> {
             inbox: self.inbox.clone(),
             signal_inbox: self.signal_inbox.clone(),
             process_watcher: self.process_watcher.clone(),
-            uuid: self.uuid,
+            pid: self.pid.clone(),
         }
     }
 }
@@ -83,12 +83,15 @@ impl<T: InboxKind> Address<T> {
         inbox: T::Inbox,
         signal_inbox: SignalSender,
         process_watcher: ProcessWatcher,
+        pid: Option<Pid>,
     ) -> Self {
+        let pid = pid.unwrap_or_else(Pid::rand_uuid);
+
         Self {
             inbox,
             signal_inbox,
             process_watcher,
-            uuid: Uuid::new_v4(),
+            pid: Arc::new(ArcSwap::from_pointee(pid)),
         }
     }
 
@@ -105,7 +108,17 @@ impl<T: InboxKind> Address<T> {
     }
 
     pub fn is_same_process<R: InboxKind>(&self, other: &Address<R>) -> bool {
-        self.uuid == other.uuid
+        *self.pid.load() == *other.pid.load()
+    }
+
+    pub fn pid(&self) -> Pid {
+        self.pid.load().deref().deref().clone()
+    }
+
+    pub fn override_pid(&self, pid: Pid) {
+        if **self.pid.load() != pid {
+            self.pid.store(Arc::new(pid));
+        }
     }
 }
 
@@ -117,7 +130,7 @@ impl<T: Members + 'static> Address<Dyn<T>> {
             inbox,
             signal_inbox: self.signal_inbox.clone(),
             process_watcher: self.process_watcher.clone(),
-            uuid: self.uuid,
+            pid: self.pid.clone(),
         })
     }
 }
