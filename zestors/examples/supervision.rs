@@ -1,9 +1,10 @@
+use futures::join;
 use uuid::Uuid;
 use zestors::{
     ActorInterface, Interface,
     actor::{Actor, HandleMessage},
     polybox::Payload,
-    registry::Pid,
+    registry::{Pid, Registry},
     state::{ActorState, ExitReason},
     supervision::{ActorBlueprintExt, ChildSpec, Supervisor},
 };
@@ -58,18 +59,52 @@ impl HandleMessage<String> for MyActor {
 }
 
 #[tokio::main]
-async fn main() {
-    let supervisor_a = Supervisor::blueprint()
-        .with_child(ChildSpec::new("HelloActor", MyActor::new()))
-        .with_child(ChildSpec::new("HelloActor2", MyActor::new()));
-
-    let supervisor_b = Supervisor::blueprint()
-        .with_child(ChildSpec::new_uuid(MyActor::new()))
-        .with_child(ChildSpec::new_uuid(MyActor::new()));
+async fn main() -> Result<(), anyhow::Error> {
+    let registry = Registry::local();
 
     let supervisor = Supervisor::blueprint()
-        .with_child(ChildSpec::new("SupervisorA", supervisor_a))
-        .with_child(ChildSpec::new("SupervisorB", supervisor_b));
+        .with_child(ChildSpec::new(
+            "SupervisorA",
+            Supervisor::blueprint()
+                .with_child(ChildSpec::new("HelloActor", MyActor::new()))
+                .with_child(ChildSpec::new("HelloActor2", MyActor::new())),
+        ))
+        .with_child(ChildSpec::new(
+            "SupervisorB",
+            Supervisor::blueprint()
+                .with_child(ChildSpec::new(Pid::rand_uuid(), MyActor::new()))
+                .with_child(ChildSpec::new(Pid::rand_uuid(), MyActor::new())),
+        ));
 
-    supervisor.spawn_ref(Pid::rand_uuid());
+    supervisor.spawn(Pid::rand_uuid());
+    supervisor.spawn(Pid::rand_uuid());
+
+    let actor_a = registry.get_typed::<MyInterface>(&Pid::from("HelloActor"))?;
+    let actor_b = registry.get_typed::<MyInterface>(&Pid::from("HelloActor2"))?;
+
+    Ok(())
+}
+
+async fn test2() {
+    let mut supervisor_a = Supervisor::blueprint();
+
+    let mut actor_a = supervisor_a.add_child(ChildSpec::new("HelloActor", MyActor::new()));
+    let mut actor_b = supervisor_a.add_child(ChildSpec::new("HelloActor2", MyActor::new()));
+
+    let mut supervisor_b = Supervisor::blueprint();
+
+    let mut actor_c = supervisor_b.add_child(ChildSpec::new(Pid::rand_uuid(), MyActor::new()));
+    let mut actor_d = supervisor_b.add_child(ChildSpec::new(Pid::rand_uuid(), MyActor::new()));
+
+    let root_supervisor = Supervisor::blueprint()
+        .with_child(ChildSpec::new("SupervisorA", supervisor_a))
+        .with_child(ChildSpec::new("SupervisorB", supervisor_b))
+        .spawn(Pid::from("RootSupervisor"));
+
+    join!(
+        actor_a.watch_start(),
+        actor_b.watch_start(),
+        actor_c.watch_start(),
+        actor_d.watch_start()
+    );
 }

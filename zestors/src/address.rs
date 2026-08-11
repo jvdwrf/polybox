@@ -112,6 +112,14 @@ impl<T: InboxKind> Address<T> {
     pub fn pid(&self) -> &Pid {
         &self.pid
     }
+
+    pub async fn watch_exit(&mut self) {
+        self.process_watcher.watch_exit().await
+    }
+
+    pub async fn watch_start(&mut self) {
+        self.process_watcher.watch_start().await
+    }
 }
 
 impl<T: Members + 'static> Address<Dyn<T>> {

@@ -52,11 +52,6 @@ pub trait ActorRunnerExt: ActorRunner {
         WrapRun::new(self, mapper)
     }
 
-    fn extract_address(self) -> (ExtractAddressRunnable<Self>, AddressFuture<Self::Interface>) {
-        let (rx, tx) = AddressFuture::new();
-        (ExtractAddressRunnable { inner: self, tx }, rx)
-    }
-
     fn spawn(self, pid: Pid) -> Child<Self::Exit, Self::Interface> {
         crate::spawn(pid, |stream, address| self.run(stream, address))
     }
@@ -161,29 +156,4 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ExtractAddressRunnable<T: ActorRunner> {
-    pub(super) inner: T,
-    pub(super) tx: FutureAddressSender<T::Interface>,
-}
-
-impl<T> ActorRunner for ExtractAddressRunnable<T>
-where
-    T: ActorRunner + Send + 'static,
-{
-    type Interface = T::Interface;
-    type Exit = T::Exit;
-
-    fn run(
-        self,
-        stream: EventStream<Self::Interface>,
-        address: Address<Self::Interface>,
-    ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static {
-        let Self { inner, tx } = self;
-
-        async move {
-            tx.send(Some(address.clone())).ok();
-            inner.run(stream, address).await
-        }
-    }
-}
+//

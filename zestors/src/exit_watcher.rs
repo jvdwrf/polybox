@@ -39,9 +39,18 @@ impl ProcessWatcher {
         *self.watcher.borrow_and_update()
     }
 
-    pub async fn watch_for_exit(&mut self) {
+    pub async fn watch_exit(&mut self) {
         self.watcher
             .wait_for(|status| matches!(status, ProcessStatus::Dead(_)))
+            .await
+            .ok();
+
+        self.watcher.borrow_and_update();
+    }
+
+    pub async fn watch_start(&mut self) {
+        self.watcher
+            .wait_for(|status| matches!(status, ProcessStatus::Alive))
             .await
             .ok();
 

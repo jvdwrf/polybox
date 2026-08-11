@@ -101,7 +101,7 @@ mod test {
                     .timeout(Duration::from_secs(10)),
             )
             .with_child(ChildSpec::new("ChildD", TestActorStarter(0.into())))
-            .spawn_ref(Pid::rand_uuid());
+            .spawn(Pid::rand_uuid());
 
         {
             let mut supervisor = Supervisor::blueprint();
@@ -114,10 +114,10 @@ mod test {
                 ChildSpec::new("ChildB", TestActor { number: 42 }).mode(RestartMode::Always),
             );
 
-            supervisor.spawn_ref(Pid::rand_uuid());
+            supervisor.spawn(Pid::rand_uuid());
 
-            let addr_a = addr_a.await.unwrap();
-            let addr_b = addr_b.await.unwrap();
+            let addr_a = addr_a;
+            let addr_b = addr_b;
         }
 
         tokio::time::sleep(Duration::from_secs(1)).await;

@@ -3,11 +3,11 @@ use crate::_prelude::*;
 use futures::{FutureExt as _, prelude::future::BoxFuture};
 use polybox::{
     errors::SendError,
-    type_sets::{Members, Set, sets::Zero},
+    type_sets::{Members, Set},
 };
 use std::{fmt::Debug, task::Poll, time::Duration};
 
-pub struct Child<T = (), R: InboxKind = Dyn<Set<dyn Zero + 'static>>> {
+pub struct Child<T = (), R: InboxKind = Dyn<Set![]>> {
     handle: Option<tokio::task::JoinHandle<Result<T, anyhow::Error>>>,
     attached: bool,
     address: Address<R>,

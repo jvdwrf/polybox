@@ -16,7 +16,7 @@ impl Registry {
         }
     }
 
-    pub fn current() -> &'static Self {
+    pub fn local() -> &'static Self {
         REGISTRY.get_or_init(Self::new)
     }
 
@@ -63,18 +63,25 @@ impl Registry {
         }
     }
 
-    pub fn get(&self, pid: &Pid) -> Option<RegistryEntry> {
+    pub fn get_entry(&self, pid: &Pid) -> Option<RegistryEntry> {
         self.processes
             .get(pid)
             .map(|entry| entry.value().clone())
             .flatten()
     }
 
-    pub fn get_address(&self, pid: &Pid) -> Option<Address> {
+    pub fn get(&self, pid: &Pid) -> Option<Address> {
         self.processes
             .get(pid)
             .map(|entry| entry.value().as_ref().map(|e| e.address().clone()))
             .flatten()
+    }
+
+    pub fn get_typed<T: Interface>(&self, pid: &Pid) -> Result<Address<T>, anyhow::Error> {
+        self.get(pid)
+            .ok_or_else(|| anyhow::anyhow!("Address not found for pid: {}", pid))?
+            .downcast_ref::<T>()
+            .ok_or_else(|| anyhow::anyhow!("Address found for pid: {} but type mismatch", pid))
     }
 
     pub fn remove(&self, pid: &Pid) -> Option<RegistryEntry> {

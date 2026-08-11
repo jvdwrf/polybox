@@ -50,7 +50,7 @@ impl<T> ChildSpec<T> {
 
     pub fn spawn(&mut self) -> Child
     where
-        T: Spawn,
+        T: SpawnRef,
     {
         self.spawner.spawn(self.data.clone())
     }
@@ -70,35 +70,18 @@ impl<T> ChildSpec<T> {
     pub fn supervise(
         self,
         supervisor: &mut Supervisor,
-    ) -> AddressFuture<<T::Runner as ActorRunner>::Interface>
+    ) -> Address<<T::Runner as ActorRunner>::Interface>
     where
         T: Blueprint + Send + Sync + 'static,
     {
         supervisor.add_child(self)
     }
 
-    pub fn split_address(
-        self,
-    ) -> (
-        ChildSpec<ExtractAddressBlueprint<T>>,
-        AddressFuture<<T::Runner as ActorRunner>::Interface>,
-    )
+    pub fn address(&self) -> Address<<T::Runner as ActorRunner>::Interface>
     where
-        T: Blueprint + Send + Sync + 'static,
+        T: Blueprint,
     {
-        let (rx, tx) = AddressFuture::new();
-
-        let spec = ChildSpec {
-            restart_mode: self.restart_mode,
-            abort_timeout: self.abort_timeout,
-            spawner: ExtractAddressBlueprint {
-                inner: self.spawner,
-                tx,
-            },
-            data: self.data,
-        };
-
-        (spec, rx)
+        self.data.address.downcast_ref().unwrap()
     }
 }
 

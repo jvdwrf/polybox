@@ -38,10 +38,10 @@ impl Display for Pid {
     }
 }
 
-impl From<&str> for Pid {
+impl From<&'static str> for Pid {
     #[inline]
-    fn from(s: &str) -> Self {
-        Pid::Named(SmolStr::from(s))
+    fn from(s: &'static str) -> Self {
+        Pid::Named(SmolStr::new_static(s))
     }
 }
 

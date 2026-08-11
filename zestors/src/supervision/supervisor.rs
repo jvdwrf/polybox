@@ -59,11 +59,11 @@ impl SupervisorBlueprint {
     pub fn add_child<T>(
         &mut self,
         spec: ChildSpec<T>,
-    ) -> AddressFuture<<T::Runner as ActorRunner>::Interface>
+    ) -> Address<<T::Runner as ActorRunner>::Interface>
     where
         T: Blueprint + Send + Sync + 'static,
     {
-        let (spec, address) = spec.split_address();
+        let address = spec.address();
 
         self.add_dyn_child(ChildSpec {
             restart_mode: spec.restart_mode,
@@ -78,7 +78,7 @@ impl SupervisorBlueprint {
     pub fn add_children<T>(
         &mut self,
         specs: impl IntoIterator<Item = ChildSpec<T>>,
-    ) -> Vec<AddressFuture<<T::Runner as ActorRunner>::Interface>>
+    ) -> Vec<Address<<T::Runner as ActorRunner>::Interface>>
     where
         T: Blueprint + Send + Sync + 'static,
     {
@@ -102,7 +102,7 @@ impl Blueprint for SupervisorBlueprint {
             strategy: self.strategy,
             restart_intensity: self.restart_intensity.clone(),
             restarts: VecDeque::new(),
-            registry: Registry::current(),
+            registry: Registry::local(),
         }
     }
 }
@@ -144,7 +144,7 @@ impl Supervisor {
             strategy: SupervisionStrategy::default(),
             restart_intensity: RestartIntensity::default(),
             restarts: VecDeque::new(),
-            registry: Registry::current(),
+            registry: Registry::local(),
         }
     }
 
@@ -167,16 +167,16 @@ impl Supervisor {
     pub fn add_child<T>(
         &mut self,
         spec: ChildSpec<T>,
-    ) -> AddressFuture<<T::Runner as ActorRunner>::Interface>
+    ) -> Address<<T::Runner as ActorRunner>::Interface>
     where
         T: Blueprint + Send + Sync + 'static,
     {
-        let (spawner, address) = spec.spawner.split_address();
+        let address = spec.address();
 
         self.add_dyn_child(ChildSpec {
             restart_mode: spec.restart_mode,
             abort_timeout: spec.abort_timeout,
-            spawner: DynSpawner::new(spawner),
+            spawner: DynSpawner::new(spec.spawner),
             data: spec.data,
         });
 
@@ -186,7 +186,7 @@ impl Supervisor {
     pub fn add_children<T>(
         &mut self,
         specs: impl IntoIterator<Item = ChildSpec<T>>,
-    ) -> Vec<AddressFuture<<T::Runner as ActorRunner>::Interface>>
+    ) -> Vec<Address<<T::Runner as ActorRunner>::Interface>>
     where
         T: Blueprint + Send + Sync + 'static,
     {

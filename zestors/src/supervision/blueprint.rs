@@ -24,17 +24,7 @@ pub trait ActorBlueprintExt: Blueprint + Sized {
         DynSpawner::new(self)
     }
 
-    fn split_address(
-        self,
-    ) -> (
-        ExtractAddressBlueprint<Self>,
-        AddressFuture<<Self::Runner as ActorRunner>::Interface>,
-    ) {
-        let (rx, tx) = AddressFuture::new();
-        (ExtractAddressBlueprint { inner: self, tx }, rx)
-    }
-
-    fn spawn_ref(
+    fn spawn(
         &self,
         pid: Pid,
     ) -> Child<<Self::Runner as ActorRunner>::Exit, <Self::Runner as ActorRunner>::Interface>
@@ -46,26 +36,24 @@ pub trait ActorBlueprintExt: Blueprint + Sized {
 }
 impl<T: Blueprint> ActorBlueprintExt for T {}
 
-pub struct ExtractAddressBlueprint<T: Blueprint> {
-    pub(super) inner: T,
-    pub(super) tx: watch::Sender<Option<Address<<T::Runner as ActorRunner>::Interface>>>,
-}
+// pub struct ExtractAddressBlueprint<T: Blueprint> {
+//     pub(super) inner: T,
+// }
 
-impl<T: Blueprint> Blueprint for ExtractAddressBlueprint<T> {
-    type Runner = ExtractAddressRunnable<T::Runner>;
+// impl<T: Blueprint> Blueprint for ExtractAddressBlueprint<T> {
+//     type Runner = ExtractAddressRunnable<T::Runner>;
 
-    fn instantiate(&self) -> Self::Runner {
-        ExtractAddressRunnable {
-            inner: self.inner.instantiate(),
-            tx: self.tx.clone(),
-        }
-    }
-}
+//     fn instantiate(&self) -> Self::Runner {
+//         ExtractAddressRunnable {
+//             inner: self.inner.instantiate(),
+//         }
+//     }
+// }
 
-impl<T: Blueprint> Debug for ExtractAddressBlueprint<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ExtractAddressBlueprint")
-            .field("inner", &self.inner)
-            .finish()
-    }
-}
+// impl<T: Blueprint> Debug for ExtractAddressBlueprint<T> {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.debug_struct("ExtractAddressBlueprint")
+//             .field("inner", &self.inner)
+//             .finish()
+//     }
+// }
