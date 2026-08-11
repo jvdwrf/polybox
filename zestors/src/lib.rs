@@ -14,65 +14,17 @@ where
     F: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
     F::Output: Send + 'static,
 {
-    ProcessData::new(pid).spawn(f)
+    SpawnData::new(pid).spawn(f)
 }
 
-pub(crate) fn spawn_with_data<I, O, F>(
-    data: ProcessData<I>,
-    f: impl FnOnce(EventStream<I>, Address<I>) -> F,
-) -> Child<O, I>
-where
-    I: Interface,
-    O: Send + 'static,
-    F: Future<Output = Result<O, anyhow::Error>> + Send + 'static,
-{
-    let ProcessData {
-        address,
-        receiver,
-        signal_receiver,
-        mut exit_alerter,
-    } = data;
-
-    let stream = EventStream::new(receiver, signal_receiver);
-    let spawned_future = AssertUnwindSafe(f(stream, address.clone())).catch_unwind();
-
-    let handle = tokio::spawn(async move {
-        // Notify that the process is alive
-        exit_alerter.alert(ProcessStatus::Alive);
-
-        // Run the future and catch any panics that occur
-        let exit_value = spawned_future.await;
-
-        // Depending on the exit_value, set the correct ExitSignal
-        match exit_value {
-            Ok(val) => {
-                match &val {
-                    Ok(_) => {
-                        exit_alerter.alert(ExitStatus::Normal.into());
-                    }
-                    Err(_) => {
-                        exit_alerter.alert(ExitStatus::Error.into());
-                    }
-                };
-                val
-            }
-            Err(boxed) => {
-                exit_alerter.alert(ExitStatus::Panic.into());
-                std::panic::resume_unwind(boxed);
-            }
-        }
-    });
-    Child::new(handle, address)
-}
-
-pub struct ProcessData<T: InboxKind = Dyn<Set![]>> {
+pub struct SpawnData<T: InboxKind = Dyn<Set![]>> {
     address: Address<T>,
     receiver: T::Receiver,
     signal_receiver: SignalReceiver,
     exit_alerter: ProcessAlerter,
 }
 
-impl<T: InboxKind> std::fmt::Debug for ProcessData<T> {
+impl<T: InboxKind> std::fmt::Debug for SpawnData<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ProcessData")
             .field("address", &self.address)
@@ -83,7 +35,7 @@ impl<T: InboxKind> std::fmt::Debug for ProcessData<T> {
     }
 }
 
-impl<T: Interface> ProcessData<T> {
+impl<T: Interface> SpawnData<T> {
     pub fn new(pid: Pid) -> Self {
         let (inbox, receiver) = Inbox::new();
         let (signal_sender, signal_receiver) = SignalSender::new();
@@ -104,26 +56,63 @@ impl<T: Interface> ProcessData<T> {
         F: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
         F::Output: Send + 'static,
     {
-        spawn_with_data(self, f)
+        let SpawnData {
+            address,
+            receiver,
+            signal_receiver,
+            mut exit_alerter,
+        } = self;
+
+        let stream = EventStream::new(receiver, signal_receiver);
+        let spawned_future = AssertUnwindSafe(f(stream, address.clone())).catch_unwind();
+
+        let handle = tokio::spawn(async move {
+            // Notify that the process is alive
+            exit_alerter.alert(ProcessStatus::Alive);
+
+            // Run the future and catch any panics that occur
+            let exit_value = spawned_future.await;
+
+            // Depending on the exit_value, set the correct ExitSignal
+            match exit_value {
+                Ok(val) => {
+                    match &val {
+                        Ok(_) => {
+                            exit_alerter.alert(ExitStatus::Normal.into());
+                        }
+                        Err(_) => {
+                            exit_alerter.alert(ExitStatus::Error.into());
+                        }
+                    };
+                    val
+                }
+                Err(boxed) => {
+                    exit_alerter.alert(ExitStatus::Panic.into());
+                    std::panic::resume_unwind(boxed);
+                }
+            }
+        });
+
+        Child::new(handle, address)
     }
 }
 
-impl<T: InboxKind> ProcessData<T> {
+impl<T: InboxKind> SpawnData<T> {
     pub fn pid(&self) -> &Pid {
         self.address.pid()
     }
 }
 
-impl<T: InboxKind> ProcessData<T> {
-    pub fn into_any(self) -> ProcessData {
-        let ProcessData {
+impl<T: InboxKind> SpawnData<T> {
+    pub fn into_any(self) -> SpawnData {
+        let SpawnData {
             address,
             receiver,
             signal_receiver,
             exit_alerter,
         } = self;
 
-        ProcessData {
+        SpawnData {
             address: address.into_dyn(),
             receiver: T::map_receiver_into_any(receiver),
             signal_receiver,
@@ -132,8 +121,8 @@ impl<T: InboxKind> ProcessData<T> {
     }
 }
 
-impl ProcessData {
-    pub fn downcast<T: Interface>(self) -> Result<ProcessData<T>, Self> {
+impl SpawnData {
+    pub fn downcast<T: Interface>(self) -> Result<SpawnData<T>, Self> {
         let address = match self.address.downcast_ref::<T>() {
             Some(addr) => addr,
             None => return Err(self),
@@ -146,7 +135,7 @@ impl ProcessData {
             .deref()
             .clone();
 
-        Ok(ProcessData {
+        Ok(SpawnData {
             address,
             receiver,
             signal_receiver: self.signal_receiver,
@@ -155,7 +144,7 @@ impl ProcessData {
     }
 }
 
-impl<T: InboxKind> Clone for ProcessData<T> {
+impl<T: InboxKind> Clone for SpawnData<T> {
     fn clone(&self) -> Self {
         Self {
             address: self.address.clone(),

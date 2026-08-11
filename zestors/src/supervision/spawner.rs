@@ -1,16 +1,16 @@
 use super::*;
 
 pub trait SpawnRef: Debug {
-    fn spawn(&self, data: ProcessData) -> Child;
+    fn spawn(&self, data: SpawnData) -> Child;
 }
 
 pub struct Spawner<R: Blueprint> {
     blueprint: R,
-    data: ProcessData<<R::Runner as ActorRunner>::Interface>,
+    data: SpawnData<<R::Runner as ActorRunner>::Interface>,
 }
 
 impl<R: Blueprint> SpawnRef for Spawner<R> {
-    fn spawn(&self, data: ProcessData) -> Child {
+    fn spawn(&self, data: SpawnData) -> Child {
         let runner = self
             .blueprint
             .instantiate()
@@ -27,7 +27,7 @@ impl<R: Blueprint> SpawnRef for Spawner<R> {
 impl<R: Blueprint> Spawner<R> {
     pub fn new(blueprint: R) -> Self {
         Self {
-            data: ProcessData::new(Pid::rand_uuid()),
+            data: SpawnData::new(Pid::rand_uuid()),
             blueprint,
         }
     }
@@ -59,7 +59,7 @@ impl<R: Blueprint> Debug for Spawner<R> {
 pub struct DynSpawner(Arc<dyn SpawnRef + Send + Sync + 'static>);
 
 impl SpawnRef for DynSpawner {
-    fn spawn(&self, data: ProcessData) -> Child {
+    fn spawn(&self, data: SpawnData) -> Child {
         self.0.spawn(data)
     }
 }

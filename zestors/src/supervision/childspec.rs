@@ -5,7 +5,7 @@ pub struct ChildSpec<T = DynSpawner> {
     pub(crate) restart_mode: RestartMode,
     pub(crate) abort_timeout: Duration,
     pub(crate) spawner: T,
-    pub(crate) data: ProcessData,
+    pub(crate) data: SpawnData,
 }
 
 impl<T> ChildSpec<T> {
@@ -17,7 +17,7 @@ impl<T> ChildSpec<T> {
             restart_mode: RestartMode::OnError,
             abort_timeout: Duration::from_millis(5_000),
             spawner: blueprint.into(),
-            data: ProcessData::<<T::Runner as ActorRunner>::Interface>::new(id.into()).into_any(),
+            data: SpawnData::<<T::Runner as ActorRunner>::Interface>::new(id.into()).into_any(),
         }
     }
 
@@ -33,7 +33,7 @@ impl<T> ChildSpec<T> {
             restart_mode: RestartMode::OnError,
             abort_timeout: Duration::from_millis(5_000),
             spawner: spawner.into(),
-            data: ProcessData::<<T::Runner as ActorRunner>::Interface>::new(Pid::rand_uuid())
+            data: SpawnData::<<T::Runner as ActorRunner>::Interface>::new(Pid::rand_uuid())
                 .into_any(),
         }
     }

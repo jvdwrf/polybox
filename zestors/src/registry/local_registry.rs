@@ -102,7 +102,7 @@ pub struct RegistryEntry<T: InboxKind = Dyn<Set![]>> {
 }
 
 enum _RegistryEntry<T: InboxKind> {
-    Data(ProcessData<T>),
+    Data(SpawnData<T>),
     Address(Address<T>),
 }
 
@@ -125,14 +125,14 @@ impl<T: InboxKind> RegistryEntry<T> {
         }
     }
 
-    pub fn data(&self) -> Option<&ProcessData<T>> {
+    pub fn data(&self) -> Option<&SpawnData<T>> {
         match &self.inner {
             _RegistryEntry::Data(data) => Some(data),
             _RegistryEntry::Address(_) => None,
         }
     }
 
-    pub fn into_data(self) -> Option<ProcessData<T>> {
+    pub fn into_data(self) -> Option<SpawnData<T>> {
         match self.inner {
             _RegistryEntry::Data(data) => Some(data),
             _RegistryEntry::Address(_) => None,
@@ -155,8 +155,8 @@ impl<T: InboxKind> RegistryEntry<T> {
     }
 }
 
-impl<T: InboxKind> From<ProcessData<T>> for RegistryEntry<T> {
-    fn from(data: ProcessData<T>) -> Self {
+impl<T: InboxKind> From<SpawnData<T>> for RegistryEntry<T> {
+    fn from(data: SpawnData<T>) -> Self {
         RegistryEntry {
             inner: _RegistryEntry::Data(data),
         }
