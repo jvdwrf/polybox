@@ -11,7 +11,7 @@ pub struct Spawner<R: ActorBlueprint> {
 }
 
 impl<R: ActorBlueprint> Spawn for Spawner<R> {
-    fn spawn(&self, pid: Option<Pid>) -> Child {
+    fn spawn(&self, override_pid: Option<Pid>) -> Child {
         let runner = self
             .blueprint
             .instantiate()
@@ -19,7 +19,7 @@ impl<R: ActorBlueprint> Spawn for Spawner<R> {
 
         self.data
             .clone()
-            .spawn(pid, |stream, address| runner.run(stream, address))
+            .spawn(override_pid, |stream, address| runner.run(stream, address))
             .into_dyn()
     }
 
@@ -31,7 +31,7 @@ impl<R: ActorBlueprint> Spawn for Spawner<R> {
 impl<R: ActorBlueprint> Spawner<R> {
     pub fn new(blueprint: R) -> Self {
         Self {
-            data: ProcessData::new(),
+            data: ProcessData::new(Pid::rand_uuid()),
             blueprint,
         }
     }

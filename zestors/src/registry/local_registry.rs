@@ -20,7 +20,7 @@ impl Registry {
         REGISTRY.get_or_init(Self::new)
     }
 
-    pub fn add_or_replace(
+    pub fn register_or_replace(
         &self,
         pid: Pid,
         address: impl Into<RegistryEntry>,

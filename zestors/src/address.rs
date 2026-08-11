@@ -83,10 +83,8 @@ impl<T: InboxKind> Address<T> {
         inbox: T::Inbox,
         signal_inbox: SignalSender,
         process_watcher: ProcessWatcher,
-        pid: Option<Pid>,
+        pid: Pid,
     ) -> Self {
-        let pid = pid.unwrap_or_else(Pid::rand_uuid);
-
         Self {
             inbox,
             signal_inbox,

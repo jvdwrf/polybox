@@ -17,12 +17,12 @@ where
     F: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
     F::Output: Send + 'static,
 {
-    ProcessData::new().spawn(pid, f)
+    ProcessData::new(pid.unwrap_or_else(Pid::rand_uuid)).spawn(None, f)
 }
 
 pub(crate) fn spawn_with_data<I, O, F>(
     data: ProcessData<I>,
-    pid: Option<Pid>,
+    override_pid: Option<Pid>,
     f: impl FnOnce(EventStream<I>, Address<I>) -> F,
 ) -> Child<O, I>
 where
@@ -37,7 +37,7 @@ where
         mut exit_alerter,
     } = data;
 
-    if let Some(pid) = pid {
+    if let Some(pid) = override_pid {
         address.override_pid(pid);
     }
 
@@ -92,13 +92,13 @@ impl<T: InboxKind> std::fmt::Debug for ProcessData<T> {
 }
 
 impl<T: Interface> ProcessData<T> {
-    pub fn new() -> Self {
+    pub fn new(pid: Pid) -> Self {
         let (inbox, receiver) = Inbox::new();
         let (signal_sender, signal_receiver) = SignalSender::new();
         let (exit_watcher, exit_alerter) = ProcessWatcher::new();
 
         Self {
-            address: Address::new(inbox, signal_sender, exit_watcher, None),
+            address: Address::new(inbox, signal_sender, exit_watcher, pid),
             receiver,
             signal_receiver,
             exit_alerter,
@@ -107,7 +107,7 @@ impl<T: Interface> ProcessData<T> {
 
     pub fn spawn<R, F>(
         self,
-        pid: Option<Pid>,
+        override_pid: Option<Pid>,
         f: impl FnOnce(EventStream<T>, Address<T>) -> F,
     ) -> Child<R, T>
     where
@@ -116,7 +116,7 @@ impl<T: Interface> ProcessData<T> {
         F: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
         F::Output: Send + 'static,
     {
-        spawn_with_data(self, pid, f)
+        spawn_with_data(self, override_pid, f)
     }
 
     pub fn pid(&self) -> Pid {
