@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-# polybox.workspace = true
 polybox-codegen.workspace = true
 tokio.workspace = true
 futures.workspace = true
@@ -17,8 +16,9 @@ smol_str.workspace = true
 type-sets.workspace = true
 serde.workspace = true
 dashmap.workspace = true
-uuid.workspace = true
 arc-swap.workspace = true
+rand.workspace = true
+bs58.workspace = true
 
 [features]
 _ra = []

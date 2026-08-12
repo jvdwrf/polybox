@@ -33,7 +33,7 @@ impl<T> ChildSpec<T> {
             restart_mode: RestartMode::OnError,
             abort_timeout: Duration::from_millis(5_000),
             spawner: spawner.into(),
-            data: SpawnData::<<T::Runner as Actor>::Interface>::new(Pid::rand_uuid()).into_any(),
+            data: SpawnData::<<T::Runner as Actor>::Interface>::new(Pid::rand()).into_any(),
         }
     }
 

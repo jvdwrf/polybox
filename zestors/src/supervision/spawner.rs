@@ -27,7 +27,7 @@ impl<R: Blueprint> SpawnRef for Spawner<R> {
 impl<R: Blueprint> Spawner<R> {
     pub fn new(blueprint: R) -> Self {
         Self {
-            data: SpawnData::new(Pid::rand_uuid()),
+            data: SpawnData::new(Pid::rand()),
             blueprint,
         }
     }

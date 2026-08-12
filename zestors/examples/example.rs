@@ -14,7 +14,7 @@ use zestors::{
 #[tokio::main]
 async fn main() {
     let child = spawn(
-        Pid::rand_uuid(),
+        Pid::rand(),
         async move |mut stream: EventStream<MyInterface>, _address| {
             while let Some(msg) = stream.recv().await {
                 match msg {
@@ -140,9 +140,7 @@ impl Handle<IntervalTick> for MyActor {
 }
 
 async fn test() {
-    let child = MyActor::new()
-        .map(|x| x.map(|x| x * 2))
-        .spawn(Pid::rand_uuid());
+    let child = MyActor::new().map(|x| x.map(|x| x * 2)).spawn(Pid::rand());
     let address = child.address().clone();
 
     address.send(5u32).await.unwrap();

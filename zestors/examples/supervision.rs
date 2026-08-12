@@ -1,5 +1,4 @@
 use futures::join;
-use uuid::Uuid;
 use zestors::{
     HandlerInterface, Interface,
     handler::{Handle, Handler},
@@ -17,12 +16,12 @@ enum MyInterface {
 
 #[derive(Debug, Clone)]
 struct MyActor {
-    id: Uuid,
+    id: String,
 }
 
 impl MyActor {
     fn new() -> Self {
-        Self { id: Uuid::new_v4() }
+        Self { id: "Hello".into() }
     }
 }
 
@@ -72,12 +71,12 @@ async fn main() -> Result<(), anyhow::Error> {
         .with_child(ChildSpec::new(
             "SupervisorB",
             Supervisor::blueprint()
-                .with_child(ChildSpec::new(Pid::rand_uuid(), MyActor::new()))
-                .with_child(ChildSpec::new(Pid::rand_uuid(), MyActor::new())),
+                .with_child(ChildSpec::new(Pid::rand(), MyActor::new()))
+                .with_child(ChildSpec::new(Pid::rand(), MyActor::new())),
         ));
 
-    supervisor.spawn(Pid::rand_uuid());
-    supervisor.spawn(Pid::rand_uuid());
+    supervisor.spawn(Pid::rand());
+    supervisor.spawn(Pid::rand());
 
     let actor_a = registry.get_typed::<MyInterface>(&Pid::from("HelloActor"))?;
     let actor_b = registry.get_typed::<MyInterface>(&Pid::from("HelloActor2"))?;
@@ -93,8 +92,8 @@ async fn test2() {
 
     let mut supervisor_b = Supervisor::blueprint();
 
-    let mut actor_c = supervisor_b.add_child(ChildSpec::new(Pid::rand_uuid(), MyActor::new()));
-    let mut actor_d = supervisor_b.add_child(ChildSpec::new(Pid::rand_uuid(), MyActor::new()));
+    let mut actor_c = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new()));
+    let mut actor_d = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new()));
 
     let root_supervisor = Supervisor::blueprint()
         .with_child(ChildSpec::new("SupervisorA", supervisor_a))
