@@ -127,7 +127,9 @@ fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
 
 
         impl #polybox_path::Message for #enum_name {
-            type Kind = #polybox_path::FireAndForget;
+            type Output = ();
+            type Reply = ();
+            type Payload = Self;
         }
 
         impl #polybox_path::type_sets::AsSet for #enum_name {
@@ -245,10 +247,10 @@ fn _derive_message(input: TokenStream, base: &str) -> TokenStream {
     let name = &input.ident;
 
     let base_path: syn::Path = attrs.path.unwrap_or_else(|| syn::parse_str(base).unwrap());
-    let kind_type = if let Some(reply_type) = attrs.reply {
-        quote!( #base_path::Request<#reply_type> )
+    let output_type = if let Some(reply_type) = attrs.reply {
+        quote!( #base_path::Rx<#reply_type> )
     } else {
-        quote!( #base_path::FireAndForget )
+        quote!(())
     };
 
     // Handle generics if the struct/enum is generic
@@ -256,7 +258,9 @@ fn _derive_message(input: TokenStream, base: &str) -> TokenStream {
 
     let expanded = quote! {
         impl #impl_generics #base_path::Message for #name #ty_generics #where_clause {
-            type Kind = #kind_type;
+            type Output = #output_type;
+            type Reply = <Self::Output as #base_path::MessageOutput<Self>>::Reply;
+            type Payload = <Self::Output as #base_path::MessageOutput<Self>>::Payload;
         }
     };
 

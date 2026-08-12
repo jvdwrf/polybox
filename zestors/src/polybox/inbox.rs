@@ -208,7 +208,7 @@ impl<T: Members + 'static> PolyBox for DynInbox<T> {
 
 impl<T, R> Sends<T> for DynInbox<R>
 where
-    T: Message<Kind: MessageSpecifier<T, Output: Send, Payload: Send>>,
+    T: Message<Output: Send, Payload: Send>,
     R: Members + 'static + Contains<T>,
 {
     async fn send(&self, msg: T) -> Result<Output<T>, SendError<T>> {

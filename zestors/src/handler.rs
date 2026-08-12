@@ -68,9 +68,9 @@ pub trait Handler: Debug + Sized + Send + Sync + 'static {
     }
 }
 
-impl<T: Handler> Actor for T {
-    type Interface = T::Interface;
-    type Exit = T::Exit;
+impl<H: Handler> Actor for H {
+    type Interface = H::Interface;
+    type Exit = H::Exit;
 
     fn run(
         mut self,
@@ -86,23 +86,23 @@ impl<T: Handler> Actor for T {
     }
 }
 
-pub trait HandlerInterface<T: Handler>: Interface {
+pub trait HandlerInterface<H: Handler>: Interface {
     fn handle_with(
         self,
-        state: &mut HandlerState<T>,
-        actor: &mut T,
-    ) -> impl Future<Output = Result<(), T::Error>> + Send;
+        state: &mut HandlerState<H>,
+        actor: &mut H,
+    ) -> impl Future<Output = Result<(), H::Error>> + Send;
 }
 
-pub trait Handle<T: Message>: Handler {
+pub trait Handle<M: Message>: Handler {
     fn handle(
         &mut self,
         state: &mut HandlerState<Self>,
-        msg: Payload<T>,
+        msg: Payload<M>,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
 
-impl<T: Handler> Handle<Infallible> for T {
+impl<H: Handler> Handle<Infallible> for H {
     fn handle(
         &mut self,
         _state: &mut HandlerState<Self>,
@@ -112,18 +112,18 @@ impl<T: Handler> Handle<Infallible> for T {
     }
 }
 
-pub trait HandledBy<T: Handler>: Message<Kind: MessageSpecifier<Self, Payload = Self>> {
+pub trait HandledBy<H: Handler>: Message<Payload = Self> {
     fn handle(
         self,
-        state: &mut HandlerState<T>,
-        actor: &mut T,
-    ) -> impl Future<Output = Result<(), T::Error>> + Send;
+        state: &mut HandlerState<H>,
+        actor: &mut H,
+    ) -> impl Future<Output = Result<(), H::Error>> + Send;
 }
 
-impl<H, T> HandledBy<H> for T
+impl<H, M> HandledBy<H> for M
 where
-    H: Handle<T>,
-    T: Message<Kind: MessageSpecifier<Self, Payload = Self>>,
+    H: Handle<M>,
+    M: Message<Payload = Self>,
 {
     fn handle(
         self,

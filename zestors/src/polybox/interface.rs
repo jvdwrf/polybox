@@ -7,27 +7,21 @@ use type_sets::Members;
 ///
 /// It defines conversion methods to and from a boxed payload, which is used for dynamic dispatch of messages.
 pub trait Interface:
-    Message<Kind = FireAndForget>
-    + TryIntoPayload<Self>
-    + FromPayload<Self>
-    + AsSet
-    + Sized
-    + Send
-    + 'static
+    Message<Output = ()> + TryIntoPayload<Self> + FromPayload<Self> + AsSet + Sized + Send + 'static
 {
     fn try_from_boxed_payload(payload: BoxedPayload) -> Result<Self, BoxedPayload>;
     fn into_boxed_payload(self) -> BoxedPayload;
 
-    fn try_from_any_payload<I: Message>(payload: Payload<I>) -> Result<Self, Payload<I>>
+    fn try_from_any_payload<I: Message>(payload: I::Payload) -> Result<Self, I::Payload>
     where
-        Payload<I>: Send,
+        I::Payload: Send,
     {
         // This can be implemented faster using unsafe transmute
         Self::try_from_boxed_payload(BoxedPayload::new::<I>(payload))
             .map_err(|payload| payload.downcast::<I>().expect("Conversion back"))
     }
 
-    fn try_into_any_payload<I: Message>(self) -> Result<Payload<I>, Self> {
+    fn try_into_any_payload<I: Message>(self) -> Result<I::Payload, Self> {
         // This can be implemented faster using unsafe transmute
         self.into_boxed_payload()
             .downcast::<I>()
@@ -39,10 +33,10 @@ pub trait Interface:
     }
 }
 
-pub trait FromPayload<T: Message> {
-    fn from_payload(payload: Payload<T>) -> Self;
+pub trait FromPayload<M: Message> {
+    fn from_payload(payload: M::Payload) -> Self;
 }
 
-pub trait TryIntoPayload<T: Message>: Sized {
-    fn try_into_payload(self) -> Result<Payload<T>, Self>;
+pub trait TryIntoPayload<M: Message>: Sized {
+    fn try_into_payload(self) -> Result<M::Payload, Self>;
 }

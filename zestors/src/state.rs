@@ -7,14 +7,14 @@ use polybox::errors::SendError;
 use std::fmt::Debug;
 use tokio::select;
 
-pub struct HandlerState<T: Handler> {
+pub struct HandlerState<H: Handler> {
     status: signals::Status,
     start_time: tokio::time::Instant,
-    address: Address<T::Interface>,
+    address: Address<H::Interface>,
 }
 
-impl<T: Handler> HandlerState<T> {
-    pub fn new(address: Address<T::Interface>) -> Self {
+impl<H: Handler> HandlerState<H> {
+    pub fn new(address: Address<H::Interface>) -> Self {
         Self {
             status: signals::Status::Running,
             start_time: tokio::time::Instant::now(),
@@ -22,7 +22,7 @@ impl<T: Handler> HandlerState<T> {
         }
     }
 
-    pub fn address(&self) -> &Address<T::Interface> {
+    pub fn address(&self) -> &Address<H::Interface> {
         &self.address
     }
 
@@ -32,11 +32,11 @@ impl<T: Handler> HandlerState<T> {
 
     pub async fn run(
         &mut self,
-        handler: &mut T,
-        stream: &mut EventStream<T::Interface>,
-    ) -> Result<T::Exit, T::Error>
+        handler: &mut H,
+        stream: &mut EventStream<H::Interface>,
+    ) -> Result<H::Exit, H::Error>
     where
-        T: Handler + Debug,
+        H: Handler + Debug,
     {
         loop {
             match self._run_once(handler, stream).await {
@@ -66,9 +66,9 @@ impl<T: Handler> HandlerState<T> {
 
     async fn _run_once(
         &mut self,
-        handler: &mut T,
-        stream: &mut EventStream<T::Interface>,
-    ) -> Result<Option<T::Exit>, T::Error> {
+        handler: &mut H,
+        stream: &mut EventStream<H::Interface>,
+    ) -> Result<Option<H::Exit>, H::Error> {
         let enable_messages = match self.status {
             signals::Status::Running | signals::Status::Exiting => true,
             signals::Status::Suspended => false,
@@ -152,15 +152,15 @@ impl<T: Handler> HandlerState<T> {
     }
 }
 
-impl<T: Handler> Observable for HandlerState<T> {
+impl<H: Handler> Observable for HandlerState<H> {
     async fn send_signal_payload(this: &Self, signal: Signal) -> Result<(), SendError<Signal>> {
-        <Address<T::Interface> as Observable>::send_signal_payload(&this.address, signal).await
+        <Address<H::Interface> as Observable>::send_signal_payload(&this.address, signal).await
     }
 }
 
-impl<T: Handler, M: Message> Sends<M> for HandlerState<T>
+impl<H: Handler, M: Message> Sends<M> for HandlerState<H>
 where
-    Address<T::Interface>: Sends<M>,
+    Address<H::Interface>: Sends<M>,
 {
     async fn send(&self, msg: M) -> Result<Output<M>, SendError<M>> {
         self.address.send(msg).await
