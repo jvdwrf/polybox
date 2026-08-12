@@ -5,16 +5,8 @@ use std::convert::Infallible;
 ///
 /// It defines the kind of the message, which can be either [`Request<T>`] or [`FireAndForget`].
 pub trait Message: Send + 'static + Sized {
-    /// The actual payload of the message.
-    ///
-    /// This is `T` for fire-and-forget messages, and `(T, Tx<R>)` for requests.
     type Output: MessageOutput<Self, Payload = Self::Payload, Reply = Self::Reply> + Send;
-
     type Reply: Send + 'static;
-
-    /// The actual payload of the message.
-    ///
-    /// This is `T` for fire-and-forget messages, and `(T, Tx<R>)` for requests.
     type Payload: Send + 'static;
 }
 
@@ -83,25 +75,19 @@ where
     }
 }
 
-/// A helper type for the output of a [`Message`].
-pub type Output<T> = <T as Message>::Output;
-
-/// A helper type for the reply of a [`Message`].
-pub type Reply<T> = <T as Message>::Reply;
-
 /// A helper type for the payload of a [`Message`].
 pub type Payload<T> = <T as Message>::Payload;
 
 /// A trait that extends [`Message`] with some helper methods.
 pub trait MessageExt: Message {
-    fn build_payload(self) -> (Payload<Self>, Output<Self>)
+    fn build_payload(self) -> (Self::Payload, Self::Output)
     where
         Self: Sized,
     {
         <Self::Output as MessageOutput<Self>>::into_payload(self)
     }
 
-    fn destroy_payload(payload: Payload<Self>) -> Self
+    fn destroy_payload(payload: Self::Payload) -> Self
     where
         Self: Sized,
     {

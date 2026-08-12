@@ -162,7 +162,7 @@ impl<H: Handler, M: Message> Sends<M> for HandlerState<H>
 where
     Address<H::Interface>: Sends<M>,
 {
-    async fn send(&self, msg: M) -> Result<Output<M>, SendError<M>> {
+    async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
         self.address.send(msg).await
     }
 }

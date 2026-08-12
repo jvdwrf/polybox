@@ -65,27 +65,27 @@ pub trait PolyboxExt: PolyBox + Sized {
     }
 
     /// Send any message, checking at runtime if the message is accepted or not.
-    fn send_checked<T: Message>(
+    fn send_checked<M: Message>(
         &self,
-        msg: T,
-    ) -> impl Future<Output = Result<Output<T>, SendCheckedError<T>>> + Send {
+        msg: M,
+    ) -> impl Future<Output = Result<M::Output, SendCheckedError<M>>> + Send {
         async {
-            let (payload, output) = T::build_payload(msg);
-            let payload = BoxedPayload::new::<T>(payload);
+            let (payload, output) = M::build_payload(msg);
+            let payload = BoxedPayload::new::<M>(payload);
 
             match self._send_boxed_payload_checked(payload).await {
                 Ok(()) => Ok(output),
                 Err(SendCheckedError::Closed(payload)) => {
                     let payload = payload
-                        .downcast::<T>()
+                        .downcast::<M>()
                         .expect("Failed to convert payload back");
 
-                    Err(SendCheckedError::Closed(T::destroy_payload(payload)))
+                    Err(SendCheckedError::Closed(M::destroy_payload(payload)))
                 }
                 Err(SendCheckedError::NotAccepted(payload)) => {
-                    Err(SendCheckedError::NotAccepted(T::destroy_payload(
+                    Err(SendCheckedError::NotAccepted(M::destroy_payload(
                         payload
-                            .downcast::<T>()
+                            .downcast::<M>()
                             .expect("Failed to convert payload back"),
                     )))
                 }
@@ -94,23 +94,23 @@ pub trait PolyboxExt: PolyBox + Sized {
     }
 
     /// Same as [`Self::send_checked`], but blocks the current thread until the message is sent.
-    fn send_checked_blocking<T: Message>(&self, msg: T) -> Result<Output<T>, SendCheckedError<T>> {
-        let (payload, output) = T::build_payload(msg);
-        let payload = BoxedPayload::new::<T>(payload);
+    fn send_checked_blocking<M: Message>(&self, msg: M) -> Result<M::Output, SendCheckedError<M>> {
+        let (payload, output) = M::build_payload(msg);
+        let payload = BoxedPayload::new::<M>(payload);
 
         match self._send_boxed_payload_checked_blocking(payload) {
             Ok(()) => Ok(output),
             Err(SendCheckedError::Closed(payload)) => {
                 let payload = payload
-                    .downcast::<T>()
+                    .downcast::<M>()
                     .expect("Failed to convert payload back");
 
-                Err(SendCheckedError::Closed(T::destroy_payload(payload)))
+                Err(SendCheckedError::Closed(M::destroy_payload(payload)))
             }
             Err(SendCheckedError::NotAccepted(payload)) => {
-                Err(SendCheckedError::NotAccepted(T::destroy_payload(
+                Err(SendCheckedError::NotAccepted(M::destroy_payload(
                     payload
-                        .downcast::<T>()
+                        .downcast::<M>()
                         .expect("Failed to convert payload back"),
                 )))
             }
@@ -206,12 +206,12 @@ impl<T: Members + 'static> PolyBox for DynInbox<T> {
     }
 }
 
-impl<T, R> Sends<T> for DynInbox<R>
+impl<M, R> Sends<M> for DynInbox<R>
 where
-    T: Message<Output: Send, Payload: Send>,
-    R: Members + 'static + Contains<T>,
+    M: Message<Output: Send, Payload: Send>,
+    R: Members + 'static + Contains<M>,
 {
-    async fn send(&self, msg: T) -> Result<Output<T>, SendError<T>> {
+    async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
         self.send_checked(msg).await.map_err(|e| match e {
             SendCheckedError::Closed(msg) => SendError(msg),
             SendCheckedError::NotAccepted(_msg) => {

@@ -90,33 +90,29 @@ pub trait Observable {
         signal: Signal,
     ) -> impl Future<Output = Result<(), SendError<Signal>>> + Send;
 
-    fn signal_shutdown(
-        &self,
-    ) -> impl Future<Output = Result<Output<Shutdown>, SendError<()>>> + Send {
+    fn signal_shutdown(&self) -> impl Future<Output = Result<(), SendError<()>>> + Send {
         let fut = Self::send_signal_payload(&self, Signal::Shutdown(Shutdown));
         async { fut.await.map_err(|_| SendError(())) }
     }
 
-    fn signal_exit(&self) -> impl Future<Output = Result<Output<Exit>, SendError<()>>> + Send {
+    fn signal_exit(&self) -> impl Future<Output = Result<(), SendError<()>>> + Send {
         let fut = Self::send_signal_payload(&self, Signal::Exit(Exit));
         async { fut.await.map_err(|_| SendError(())) }
     }
 
-    fn signal_suspend(
-        &self,
-    ) -> impl Future<Output = Result<Output<Suspend>, SendError<()>>> + Send {
+    fn signal_suspend(&self) -> impl Future<Output = Result<(), SendError<()>>> + Send {
         let fut = Self::send_signal_payload(&self, Signal::Suspend(Suspend));
         async { fut.await.map_err(|_| SendError(())) }
     }
 
-    fn signal_resume(&self) -> impl Future<Output = Result<Output<Resume>, SendError<()>>> + Send {
+    fn signal_resume(&self) -> impl Future<Output = Result<(), SendError<()>>> + Send {
         let fut = Self::send_signal_payload(&self, Signal::Resume(Resume));
         async { fut.await.map_err(|_| SendError(())) }
     }
 
     fn signal_get_status(
         &self,
-    ) -> impl Future<Output = Result<Output<GetStatus>, SendError<()>>> + Send {
+    ) -> impl Future<Output = Result<<GetStatus as Message>::Output, SendError<()>>> + Send {
         let (tx, rx) = new_request();
         let fut = Self::send_signal_payload(&self, Signal::GetStatus((GetStatus, tx)));
         async { fut.await.map_err(|_| SendError(())).map(|_| rx) }
@@ -124,13 +120,15 @@ pub trait Observable {
 
     fn signal_get_state(
         &self,
-    ) -> impl Future<Output = Result<Output<GetState>, SendError<()>>> + Send {
+    ) -> impl Future<Output = Result<<GetState as Message>::Output, SendError<()>>> + Send {
         let (tx, rx) = new_request();
         let fut = Self::send_signal_payload(&self, Signal::GetState((GetState, tx)));
         async { fut.await.map_err(|_| SendError(())).map(|_| rx) }
     }
 
-    fn signal_ping(&self) -> impl Future<Output = Result<Output<Ping>, SendError<()>>> + Send {
+    fn signal_ping(
+        &self,
+    ) -> impl Future<Output = Result<<Ping as Message>::Output, SendError<()>>> + Send {
         let (tx, rx) = new_request();
         let fut = Self::send_signal_payload(&self, Signal::Ping((Ping, tx)));
         async { fut.await.map_err(|_| SendError(())).map(|_| rx) }
@@ -138,14 +136,17 @@ pub trait Observable {
 }
 
 pub trait SendSignal<T: Message> {
-    fn signal(&self, signal: T) -> impl Future<Output = Result<Output<T>, SendError<()>>> + Send;
+    fn signal(
+        &self,
+        signal: T,
+    ) -> impl Future<Output = Result<<T as Message>::Output, SendError<()>>> + Send;
 }
 
 impl<T: Observable> SendSignal<Shutdown> for T {
     fn signal(
         &self,
         _signal: Shutdown,
-    ) -> impl Future<Output = Result<Output<Shutdown>, SendError<()>>> + Send {
+    ) -> impl Future<Output = Result<<Shutdown as Message>::Output, SendError<()>>> + Send {
         self.signal_shutdown()
     }
 }
@@ -154,7 +155,7 @@ impl<T: Observable> SendSignal<Exit> for T {
     fn signal(
         &self,
         _signal: Exit,
-    ) -> impl Future<Output = Result<Output<Exit>, SendError<()>>> + Send {
+    ) -> impl Future<Output = Result<<Exit as Message>::Output, SendError<()>>> + Send {
         self.signal_exit()
     }
 }
@@ -163,7 +164,7 @@ impl<T: Observable> SendSignal<Suspend> for T {
     fn signal(
         &self,
         _signal: Suspend,
-    ) -> impl Future<Output = Result<Output<Suspend>, SendError<()>>> + Send {
+    ) -> impl Future<Output = Result<<Suspend as Message>::Output, SendError<()>>> + Send {
         self.signal_suspend()
     }
 }
@@ -172,7 +173,7 @@ impl<T: Observable> SendSignal<Resume> for T {
     fn signal(
         &self,
         _signal: Resume,
-    ) -> impl Future<Output = Result<Output<Resume>, SendError<()>>> + Send {
+    ) -> impl Future<Output = Result<<Resume as Message>::Output, SendError<()>>> + Send {
         self.signal_resume()
     }
 }
@@ -181,7 +182,7 @@ impl<T: Observable> SendSignal<GetStatus> for T {
     fn signal(
         &self,
         _signal: GetStatus,
-    ) -> impl Future<Output = Result<Output<GetStatus>, SendError<()>>> + Send {
+    ) -> impl Future<Output = Result<<GetStatus as Message>::Output, SendError<()>>> + Send {
         self.signal_get_status()
     }
 }
@@ -190,7 +191,7 @@ impl<T: Observable> SendSignal<GetState> for T {
     fn signal(
         &self,
         _signal: GetState,
-    ) -> impl Future<Output = Result<Output<GetState>, SendError<()>>> + Send {
+    ) -> impl Future<Output = Result<<GetState as Message>::Output, SendError<()>>> + Send {
         self.signal_get_state()
     }
 }
@@ -199,7 +200,7 @@ impl<T: Observable> SendSignal<Ping> for T {
     fn signal(
         &self,
         _signal: Ping,
-    ) -> impl Future<Output = Result<Output<Ping>, SendError<()>>> + Send {
+    ) -> impl Future<Output = Result<<Ping as Message>::Output, SendError<()>>> + Send {
         self.signal_ping()
     }
 }

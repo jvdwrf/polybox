@@ -19,7 +19,7 @@ impl<T: InboxKind, M: Message> Sends<M> for Address<T>
 where
     T::Inbox: Sends<M>,
 {
-    async fn send(&self, msg: M) -> Result<Output<M>, SendError<M>> {
+    async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
         if !self.is_alive() {
             return Err(SendError(msg));
         }

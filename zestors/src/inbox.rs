@@ -61,18 +61,18 @@ impl<T: Interface> DynPolyBox for Inbox<T> {
     }
 }
 
-impl<T, R> Sends<T> for Inbox<R>
+impl<M, R> Sends<M> for Inbox<R>
 where
-    T: Message,
-    R: TryIntoPayload<T> + FromPayload<T> + Send,
+    M: Message,
+    R: TryIntoPayload<M> + FromPayload<M> + Send,
 {
-    async fn send(&self, msg: T) -> Result<Output<T>, SendError<T>> {
-        let (payload, output) = T::build_payload(msg);
+    async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
+        let (payload, output) = M::build_payload(msg);
         let interface = R::from_payload(payload);
 
         match self.sender.send(interface).await {
             Ok(()) => Ok(output),
-            Err(e) => Err(SendError(T::destroy_payload(
+            Err(e) => Err(SendError(M::destroy_payload(
                 e.0.try_into_payload()
                     .map_err(|_| ())
                     .expect("Failed to convert payload back"),

@@ -133,11 +133,11 @@ impl<T, R: InboxKind> Future for Child<T, R> {
     }
 }
 
-impl<T, R: InboxKind, S: Message> Sends<S> for Child<T, R>
+impl<T, R: InboxKind, M: Message> Sends<M> for Child<T, R>
 where
-    Address<R>: Sends<S>,
+    Address<R>: Sends<M>,
 {
-    fn send(&self, msg: S) -> impl Future<Output = Result<Output<S>, SendError<S>>> {
+    fn send(&self, msg: M) -> impl Future<Output = Result<M::Output, SendError<M>>> {
         self.address.send(msg)
     }
 }
