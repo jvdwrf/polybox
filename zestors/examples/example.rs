@@ -2,12 +2,11 @@ use std::time::Duration;
 use zestors::{
     HandlerInterface, Interface, Message,
     event_stream::EventStream,
-    handler::{Handle, HandledBy, Handler},
+    handler::{self, Handle, HandledBy, Handler, HandlerState},
     polybox::{Payload, Sends as _},
     registry::Pid,
     signals::{self, Event, SendSignal, Shutdown, Signal},
     spawn,
-    state::{self, HandlerState},
     supervision::ActorRunnerExt as _,
 };
 
@@ -88,7 +87,7 @@ impl Handler for MyActor {
     type Error = anyhow::Error;
     type Exit = u32;
 
-    async fn exit(&mut self, reason: state::ExitReason) -> Result<Self::Exit, Self::Error> {
+    async fn exit(&mut self, reason: handler::ExitReason) -> Result<Self::Exit, Self::Error> {
         println!("Exiting with reason: {:?}", reason);
         Ok(self.nr)
     }

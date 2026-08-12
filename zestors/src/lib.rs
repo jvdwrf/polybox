@@ -155,16 +155,15 @@ impl<T: InboxKind> Clone for SpawnData<T> {
     }
 }
 
-pub mod handler;
 pub mod address;
 pub mod child;
 pub mod event_stream;
 pub mod exit_watcher;
+pub mod handler;
 pub mod inbox;
 pub mod polybox;
 pub mod registry;
 pub mod signals;
-pub mod state;
 pub mod supervision;
 pub use ::type_sets;
 pub use polybox_codegen::{
@@ -174,8 +173,8 @@ pub use polybox_codegen::{
 pub(crate) mod _prelude {
     #![allow(unused_imports)]
     pub(crate) use crate::{
-        handler::*, address::*, child::*, event_stream::*, exit_watcher::*, inbox::*, polybox::*,
-        registry::*, signals::*, state::*, supervision::*, *,
+        address::*, child::*, event_stream::*, exit_watcher::*, handler::*, inbox::*, polybox::*,
+        registry::*, signals::*, supervision::*, *,
     };
 
     pub(crate) use serde::{Deserialize, Serialize};

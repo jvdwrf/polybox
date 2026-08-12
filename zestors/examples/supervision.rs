@@ -1,10 +1,10 @@
 use futures::join;
 use zestors::{
     HandlerInterface, Interface,
+    handler::{ExitReason, HandlerState},
     handler::{Handle, Handler},
     polybox::Payload,
     registry::{Pid, Registry},
-    state::{ExitReason, HandlerState},
     supervision::{BlueprintExt, ChildSpec, Supervisor},
 };
 
