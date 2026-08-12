@@ -1,8 +1,8 @@
 use futures::join;
 use zestors::{
     HandlerInterface, Interface,
-    handler::{ExitReason, HandlerState},
-    handler::{Handle, Handler},
+    handler::{ExitReason, Handle, Handler, HandlerState},
+    node::Node,
     polybox::Payload,
     registry::{Pid, Registry},
     supervision::{BlueprintExt, ChildSpec, Supervisor},
@@ -95,10 +95,14 @@ async fn test2() {
     let mut actor_c = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new()));
     let mut actor_d = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new()));
 
-    let root_supervisor = Supervisor::blueprint()
-        .with_child(ChildSpec::new("SupervisorA", supervisor_a))
-        .with_child(ChildSpec::new("SupervisorB", supervisor_b))
-        .spawn(Pid::from("RootSupervisor"));
+    Node::new(
+        "RootSupervisor",
+        Supervisor::blueprint()
+            .with_child(ChildSpec::new("SupervisorA", supervisor_a))
+            .with_child(ChildSpec::new("SupervisorB", supervisor_b)),
+    )
+    .start()
+    .unwrap();
 
     join!(
         actor_a.watch_start(),

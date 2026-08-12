@@ -56,7 +56,7 @@ impl SupervisorBlueprint {
         }
     }
 
-    pub fn add_child<T>(&mut self, spec: ChildSpec<T>) -> Address<<T::Runner as Actor>::Interface>
+    pub fn add_child<T>(&mut self, spec: ChildSpec<T>) -> Address<<T::Actor as Actor>::Interface>
     where
         T: Blueprint + Send + Sync + 'static,
     {
@@ -75,7 +75,7 @@ impl SupervisorBlueprint {
     pub fn add_children<T>(
         &mut self,
         specs: impl IntoIterator<Item = ChildSpec<T>>,
-    ) -> Vec<Address<<T::Runner as Actor>::Interface>>
+    ) -> Vec<Address<<T::Actor as Actor>::Interface>>
     where
         T: Blueprint + Send + Sync + 'static,
     {
@@ -87,9 +87,9 @@ impl SupervisorBlueprint {
 }
 
 impl Blueprint for SupervisorBlueprint {
-    type Runner = Supervisor;
+    type Actor = Supervisor;
 
-    fn instantiate(&self) -> Self::Runner {
+    fn instantiate(&self) -> Self::Actor {
         Supervisor {
             supervisees: self
                 .supervisees
@@ -97,8 +97,7 @@ impl Blueprint for SupervisorBlueprint {
                 .map(|(id, spec)| (id.clone(), Supervisee::new(spec.clone())))
                 .collect(),
             strategy: self.strategy,
-            restart_intensity: self.restart_intensity.clone(),
-            restarts: VecDeque::new(),
+            restart_limiter: RestartLimiter::new(self.restart_intensity.clone()),
             registry: Registry::local(),
         }
     }
@@ -108,8 +107,7 @@ impl Blueprint for SupervisorBlueprint {
 pub struct Supervisor {
     supervisees: IndexMap<Pid, Supervisee>,
     strategy: SupervisionStrategy,
-    restart_intensity: RestartIntensity,
-    restarts: VecDeque<Instant>,
+    restart_limiter: RestartLimiter,
     registry: &'static Registry,
 }
 
@@ -139,8 +137,7 @@ impl Supervisor {
         Self {
             supervisees: Default::default(),
             strategy: SupervisionStrategy::default(),
-            restart_intensity: RestartIntensity::default(),
-            restarts: VecDeque::new(),
+            restart_limiter: RestartLimiter::default(),
             registry: Registry::local(),
         }
     }
@@ -161,7 +158,7 @@ impl Supervisor {
         }
     }
 
-    pub fn add_child<T>(&mut self, spec: ChildSpec<T>) -> Address<<T::Runner as Actor>::Interface>
+    pub fn add_child<T>(&mut self, spec: ChildSpec<T>) -> Address<<T::Actor as Actor>::Interface>
     where
         T: Blueprint + Send + Sync + 'static,
     {
@@ -180,7 +177,7 @@ impl Supervisor {
     pub fn add_children<T>(
         &mut self,
         specs: impl IntoIterator<Item = ChildSpec<T>>,
-    ) -> Vec<Address<<T::Runner as Actor>::Interface>>
+    ) -> Vec<Address<<T::Actor as Actor>::Interface>>
     where
         T: Blueprint + Send + Sync + 'static,
     {
@@ -290,7 +287,7 @@ impl Supervisor {
     }
 
     fn allow_restart(&mut self) -> bool {
-        self.restart_intensity.allow_restart(&mut self.restarts)
+        self.restart_limiter.allow_restart()
     }
 
     fn affected_supervisees_mut<'a>(&'a mut self, id: &'a Pid) -> Vec<&'a mut Supervisee> {
@@ -512,5 +509,24 @@ impl<'a, 'b> Future for ShutdownSupervisees<'a, 'b> {
         } else {
             Poll::Pending
         }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct RestartLimiter {
+    intensity: RestartIntensity,
+    restarts: VecDeque<Instant>,
+}
+
+impl RestartLimiter {
+    pub fn new(intensity: RestartIntensity) -> Self {
+        Self {
+            intensity,
+            restarts: VecDeque::new(),
+        }
+    }
+
+    pub fn allow_restart(&mut self) -> bool {
+        self.intensity.allow_restart(&mut self.restarts)
     }
 }

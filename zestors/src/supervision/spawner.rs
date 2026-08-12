@@ -6,7 +6,7 @@ pub trait SpawnRef: Debug {
 
 pub struct Spawner<R: Blueprint> {
     blueprint: R,
-    data: SpawnData<<R::Runner as Actor>::Interface>,
+    data: SpawnData<<R::Actor as Actor>::Interface>,
 }
 
 impl<R: Blueprint> SpawnRef for Spawner<R> {
@@ -17,7 +17,7 @@ impl<R: Blueprint> SpawnRef for Spawner<R> {
             .map(|res| res.map(std::mem::forget));
 
         data.clone()
-            .downcast::<<R::Runner as Actor>::Interface>()
+            .downcast::<<R::Actor as Actor>::Interface>()
             .expect("ProcessData should be of correct type")
             .spawn(|stream, address| runner.run(stream, address))
             .into_dyn()

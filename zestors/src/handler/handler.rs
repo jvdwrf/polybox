@@ -1,6 +1,5 @@
 use crate::_prelude::*;
 use futures::future::pending;
-use polybox::{Interface, Message, Payload};
 use std::{
     convert::Infallible,
     fmt::{Debug, Display},

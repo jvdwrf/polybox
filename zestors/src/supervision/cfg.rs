@@ -43,4 +43,11 @@ impl RestartIntensity {
         restarts.push_back(now);
         true
     }
+
+    pub fn new(max_restarts: usize, within: Duration) -> Self {
+        Self {
+            max_restarts,
+            within,
+        }
+    }
 }

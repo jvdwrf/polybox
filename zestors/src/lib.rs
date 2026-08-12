@@ -161,6 +161,7 @@ pub mod event_stream;
 pub mod exit_watcher;
 pub mod handler;
 pub mod inbox;
+pub mod node;
 pub mod polybox;
 pub mod registry;
 pub mod signals;
@@ -173,8 +174,8 @@ pub use polybox_codegen::{
 pub(crate) mod _prelude {
     #![allow(unused_imports)]
     pub(crate) use crate::{
-        address::*, child::*, event_stream::*, exit_watcher::*, handler::*, inbox::*, polybox::*,
-        registry::*, signals::*, supervision::*, *,
+        address::*, child::*, event_stream::*, exit_watcher::*, handler::*, inbox::*, node::*,
+        polybox::*, registry::*, signals::*, supervision::*, *,
     };
 
     pub(crate) use serde::{Deserialize, Serialize};

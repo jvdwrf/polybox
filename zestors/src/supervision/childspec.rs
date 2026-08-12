@@ -17,7 +17,7 @@ impl<T> ChildSpec<T> {
             restart_mode: RestartMode::OnError,
             abort_timeout: Duration::from_millis(5_000),
             spawner: blueprint.into(),
-            data: SpawnData::<<T::Runner as Actor>::Interface>::new(id.into()).into_any(),
+            data: SpawnData::<<T::Actor as Actor>::Interface>::new(id.into()).into_any(),
         }
     }
 
@@ -33,7 +33,7 @@ impl<T> ChildSpec<T> {
             restart_mode: RestartMode::OnError,
             abort_timeout: Duration::from_millis(5_000),
             spawner: spawner.into(),
-            data: SpawnData::<<T::Runner as Actor>::Interface>::new(Pid::rand()).into_any(),
+            data: SpawnData::<<T::Actor as Actor>::Interface>::new(Pid::rand()).into_any(),
         }
     }
 
@@ -66,14 +66,14 @@ impl<T> ChildSpec<T> {
         }
     }
 
-    pub fn supervise(self, supervisor: &mut Supervisor) -> Address<<T::Runner as Actor>::Interface>
+    pub fn supervise(self, supervisor: &mut Supervisor) -> Address<<T::Actor as Actor>::Interface>
     where
         T: Blueprint + Send + Sync + 'static,
     {
         supervisor.add_child(self)
     }
 
-    pub fn address(&self) -> Address<<T::Runner as Actor>::Interface>
+    pub fn address(&self) -> Address<<T::Actor as Actor>::Interface>
     where
         T: Blueprint,
     {
