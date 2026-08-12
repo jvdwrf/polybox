@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use futures::join;
 use zestors::{
     HandlerInterface, Interface,
@@ -5,7 +7,7 @@ use zestors::{
     node::Node,
     polybox::Payload,
     registry::{Pid, Registry},
-    supervision::{BlueprintExt, ChildSpec, Supervisor},
+    supervision::{BlueprintExt, ChildSpec, RestartIntensity, RestartMode, Supervisor},
 };
 
 #[derive(Interface, HandlerInterface)]
@@ -87,7 +89,8 @@ async fn main() -> Result<(), anyhow::Error> {
 async fn test2() {
     let mut supervisor_a = Supervisor::blueprint();
 
-    let mut actor_a = supervisor_a.add_child(ChildSpec::new("HelloActor", MyActor::new()));
+    let mut actor_a = supervisor_a
+        .add_child(ChildSpec::new("HelloActor", MyActor::new()).mode(RestartMode::Never));
     let mut actor_b = supervisor_a.add_child(ChildSpec::new("HelloActor2", MyActor::new()));
 
     let mut supervisor_b = Supervisor::blueprint();
@@ -101,6 +104,8 @@ async fn test2() {
             .with_child(ChildSpec::new("SupervisorA", supervisor_a))
             .with_child(ChildSpec::new("SupervisorB", supervisor_b)),
     )
+    .with_shutdown_timeout(Duration::from_secs(60))
+    .with_restart_intensity(RestartIntensity::new(3, Duration::from_secs(60)))
     .start()
     .unwrap();
 
