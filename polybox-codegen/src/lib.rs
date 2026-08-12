@@ -257,10 +257,10 @@ fn _derive_message(input: TokenStream, base: &str) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
     let expanded = quote! {
-        impl #impl_generics #base_path::Message for #name #ty_generics #where_clause {
+        impl #impl_generics #base_path::polybox::Message for #name #ty_generics #where_clause {
             type Output = #output_type;
-            type Reply = <Self::Output as #base_path::MessageOutput<Self>>::Reply;
-            type Payload = <Self::Output as #base_path::MessageOutput<Self>>::Payload;
+            type Reply = <Self::Output as #base_path::polybox::MessageOutput<Self>>::Reply;
+            type Payload = <Self::Output as #base_path::polybox::MessageOutput<Self>>::Payload;
         }
     };
 

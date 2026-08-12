@@ -72,17 +72,15 @@ impl<H: Handler> Actor for H {
     type Interface = H::Interface;
     type Exit = H::Exit;
 
-    fn run(
+    async fn run(
         mut self,
         mut stream: EventStream<Self::Interface>,
         address: Address<Self::Interface>,
-    ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static {
-        async move {
-            HandlerState::new(address)
-                .run(&mut self, &mut stream)
-                .await
-                .map_err(Into::into)
-        }
+    ) -> Result<Self::Exit, anyhow::Error> {
+        HandlerState::new(address)
+            .run(&mut self, &mut stream)
+            .await
+            .map_err(Into::into)
     }
 }
 
@@ -108,7 +106,7 @@ impl<H: Handler> Handle<Infallible> for H {
         _state: &mut HandlerState<Self>,
         _msg: Payload<Infallible>,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send {
-        async { Ok(()) }
+        async { unreachable!("Infallible message should never be sent") }
     }
 }
 

@@ -1,13 +1,14 @@
 use std::time::Duration;
 use zestors::{
+    HandlerInterface, Interface, Message,
     event_stream::EventStream,
     handler::{Handle, HandledBy, Handler},
     polybox::{Payload, Sends as _},
     registry::Pid,
-    signals::{Event, SendSignal, Shutdown, Signal},
-    state::HandlerState,
+    signals::{self, Event, SendSignal, Shutdown, Signal},
+    spawn,
+    state::{self, HandlerState},
     supervision::ActorRunnerExt as _,
-    *,
 };
 
 #[tokio::main]
@@ -61,6 +62,16 @@ async fn main() {
 #[derive(Debug)]
 struct MyActor {
     nr: u32,
+    interval: tokio::time::Interval,
+}
+
+impl MyActor {
+    fn new() -> Self {
+        Self {
+            nr: 0,
+            interval: tokio::time::interval(Duration::from_secs(5)),
+        }
+    }
 }
 
 #[derive(Interface, HandlerInterface)]
@@ -68,6 +79,9 @@ enum MyInterface {
     Add(Payload<u32>),
     Print(Payload<String>),
 }
+
+#[derive(Message)]
+struct IntervalTick;
 
 impl Handler for MyActor {
     type Interface = MyInterface;
@@ -80,9 +94,8 @@ impl Handler for MyActor {
     }
 
     async fn schedule_next(&mut self) -> Result<impl HandledBy<Self>, Self::Error> {
-        tokio::time::sleep(Duration::from_secs(5)).await;
-
-        Ok(10u32)
+        self.interval.tick().await;
+        Ok(IntervalTick)
     }
 }
 
@@ -115,8 +128,19 @@ impl Handle<String> for MyActor {
     }
 }
 
+impl Handle<IntervalTick> for MyActor {
+    async fn handle(
+        &mut self,
+        _: &mut HandlerState<Self>,
+        _: Payload<IntervalTick>,
+    ) -> Result<(), Self::Error> {
+        println!("Interval tick: {}", self.nr);
+        Ok(())
+    }
+}
+
 async fn test() {
-    let child = MyActor { nr: 0 }
+    let child = MyActor::new()
         .map(|x| x.map(|x| x * 2))
         .spawn(Pid::rand_uuid());
     let address = child.address().clone();
