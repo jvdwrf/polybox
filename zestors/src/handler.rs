@@ -1,9 +1,13 @@
 use crate::_prelude::*;
+use futures::future::pending;
 use polybox::{Interface, Message, Payload};
-use std::fmt::{Debug, Display};
+use std::{
+    convert::Infallible,
+    fmt::{Debug, Display},
+};
 
-pub trait Actor: Debug + Sized + Send + Sync + 'static {
-    type Interface: Interface + ActorInterface<Self>;
+pub trait Handler: Debug + Sized + Send + Sync + 'static {
+    type Interface: Interface + HandlerInterface<Self>;
     type Error: Debug + Display + Send + 'static + Into<anyhow::Error>;
     type Exit: Send + 'static;
 
@@ -53,9 +57,18 @@ pub trait Actor: Debug + Sized + Send + Sync + 'static {
     fn debug_state(&self) -> String {
         format!("{self:?}")
     }
+
+    /// Called whenever the actor is waiting for a new event to process.
+    ///
+    /// When this returns a value, the actor will then call [`Handle::handle`]
+    fn schedule_next(
+        &mut self,
+    ) -> impl Future<Output = Result<impl HandledBy<Self>, Self::Error>> + Send + '_ {
+        pending::<Result<Infallible, _>>()
+    }
 }
 
-impl<T: Actor> ActorRunner for T {
+impl<T: Handler> Actor for T {
     type Interface = T::Interface;
     type Exit = T::Exit;
 
@@ -65,7 +78,7 @@ impl<T: Actor> ActorRunner for T {
         address: Address<Self::Interface>,
     ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static {
         async move {
-            ActorState::new(address)
+            HandlerState::new(address)
                 .run(&mut self, &mut stream)
                 .await
                 .map_err(Into::into)
@@ -73,18 +86,50 @@ impl<T: Actor> ActorRunner for T {
     }
 }
 
-pub trait ActorInterface<T: Actor>: Interface {
+pub trait HandlerInterface<T: Handler>: Interface {
     fn handle_with(
         self,
-        state: &mut ActorState<T>,
+        state: &mut HandlerState<T>,
         actor: &mut T,
     ) -> impl Future<Output = Result<(), T::Error>> + Send;
 }
 
-pub trait HandleMessage<T: Message>: Actor {
-    fn handle_message(
+pub trait Handle<T: Message>: Handler {
+    fn handle(
         &mut self,
-        state: &mut ActorState<Self>,
+        state: &mut HandlerState<Self>,
         msg: Payload<T>,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+}
+
+impl<T: Handler> Handle<Infallible> for T {
+    fn handle(
+        &mut self,
+        _state: &mut HandlerState<Self>,
+        _msg: Payload<Infallible>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
+        async { Ok(()) }
+    }
+}
+
+pub trait HandledBy<T: Handler>: Message<Kind: MessageSpecifier<Self, Payload = Self>> {
+    fn handle(
+        self,
+        state: &mut HandlerState<T>,
+        actor: &mut T,
+    ) -> impl Future<Output = Result<(), T::Error>> + Send;
+}
+
+impl<H, T> HandledBy<H> for T
+where
+    H: Handle<T>,
+    T: Message<Kind: MessageSpecifier<Self, Payload = Self>>,
+{
+    fn handle(
+        self,
+        state: &mut HandlerState<H>,
+        actor: &mut H,
+    ) -> impl Future<Output = Result<(), H::Error>> + Send {
+        actor.handle(state, self)
+    }
 }

@@ -132,14 +132,14 @@ fn impl_handled_by(item: &ItemEnum, variants: &Vec<ProtocolMsg>) -> Result<Token
             .into_iter()
             .map(|variant| {
                 let msg_ty = &variant.msg_ty;
-                let ty: Type = parse_quote! { ::polybox::handler::HandleMessage<#msg_ty> };
+                let ty: Type = parse_quote! { ::polybox::handler::Handle<#msg_ty> };
                 ty
             })
             .collect();
 
         let mut new_generics = item.generics.clone();
         if new_generics.where_clause.is_none() {
-            new_generics.where_clause = Some(parse_quote!{ where })
+            new_generics.where_clause = Some(parse_quote! { where })
         };
         new_generics.params.push(parse_quote! { H });
         new_generics
@@ -160,7 +160,7 @@ fn impl_handled_by(item: &ItemEnum, variants: &Vec<ProtocolMsg>) -> Result<Token
             let variant_ty = &variant.msg_ty;
             quote! {
                 Self::#variant_ident(payload) => {
-                    ::polybox::handler::HandleMessage::<#variant_ty>::handle_msg(
+                    ::polybox::handler::Handle::<#variant_ty>::handle_msg(
                         handler, state, payload
                     ).await
                 }

@@ -1,6 +1,6 @@
 use super::*;
 
-pub trait ActorRunner: Send + Sized + 'static {
+pub trait Actor: Send + Sized + 'static {
     type Interface: Interface;
     type Exit: Send + 'static;
 
@@ -11,7 +11,7 @@ pub trait ActorRunner: Send + Sized + 'static {
     ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static;
 }
 
-pub trait ActorRunnerExt: ActorRunner {
+pub trait ActorRunnerExt: Actor {
     fn map<F, R>(self, map_exit: F) -> MapRun<Self, F>
     where
         F: FnOnce(Result<Self::Exit, anyhow::Error>) -> Result<R, anyhow::Error> + Send + 'static,
@@ -56,7 +56,7 @@ pub trait ActorRunnerExt: ActorRunner {
         crate::spawn(pid, |stream, address| self.run(stream, address))
     }
 }
-impl<T: ActorRunner> ActorRunnerExt for T {}
+impl<T: Actor> ActorRunnerExt for T {}
 
 #[derive(Clone)]
 pub struct MapRun<T, F> {
@@ -78,7 +78,7 @@ where
 impl<T, F> MapRun<T, F> {
     pub fn new<R>(inner: T, map_exit: F) -> Self
     where
-        T: ActorRunner,
+        T: Actor,
         F: FnOnce(Result<T::Exit, anyhow::Error>) -> Result<R, anyhow::Error> + Send + 'static,
         R: Send + 'static,
     {
@@ -86,9 +86,9 @@ impl<T, F> MapRun<T, F> {
     }
 }
 
-impl<T, F, R> ActorRunner for MapRun<T, F>
+impl<T, F, R> Actor for MapRun<T, F>
 where
-    T: ActorRunner + Send + 'static,
+    T: Actor + Send + 'static,
     F: FnOnce(Result<T::Exit, anyhow::Error>) -> Result<R, anyhow::Error> + Send + 'static,
     R: Send + 'static,
 {
@@ -126,7 +126,7 @@ where
 impl<T, F> WrapRun<T, F> {
     pub fn new<R, Fut>(inner: T, mapper: F) -> Self
     where
-        T: ActorRunner,
+        T: Actor,
         F: FnOnce(T, EventStream<T::Interface>, Address<T::Interface>) -> Fut + Send + 'static,
         Fut: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
         R: Send + 'static,
@@ -135,9 +135,9 @@ impl<T, F> WrapRun<T, F> {
     }
 }
 
-impl<T, F, Fut, E> ActorRunner for WrapRun<T, F>
+impl<T, F, Fut, E> Actor for WrapRun<T, F>
 where
-    T: ActorRunner + Send + 'static,
+    T: Actor + Send + 'static,
     F: FnOnce(T, EventStream<T::Interface>, Address<T::Interface>) -> Fut + Send + 'static,
     Fut: Future<Output = Result<E, anyhow::Error>> + Send + 'static,
     E: Send + 'static,

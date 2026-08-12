@@ -1,5 +1,5 @@
 use crate::*;
-use std::marker::PhantomData;
+use std::{convert::Infallible, marker::PhantomData};
 
 /// A marker type for request messages.
 pub struct Request<T>(PhantomData<T>);
@@ -158,7 +158,7 @@ macro_rules! implement_message_for_base_types {
 implement_message_for_base_types! {
     u8, u16, u32, u64, u128,
     i8, i16, i32, i64, i128,
-    (),
+    (), Infallible,
     String, &'static str
 }
 

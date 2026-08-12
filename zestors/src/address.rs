@@ -1,6 +1,5 @@
 use crate::_prelude::*;
 use crate::signals::{Observable, SignalSender};
-use arc_swap::ArcSwap;
 use polybox::{
     errors::SendError,
     type_sets::{Members, Set},

@@ -1,15 +1,15 @@
 use futures::join;
 use uuid::Uuid;
 use zestors::{
-    ActorInterface, Interface,
-    actor::{Actor, HandleMessage},
+    HandlerInterface, Interface,
+    handler::{Handle, Handler},
     polybox::Payload,
     registry::{Pid, Registry},
-    state::{ActorState, ExitReason},
-    supervision::{ActorBlueprintExt, ChildSpec, Supervisor},
+    state::{ExitReason, HandlerState},
+    supervision::{BlueprintExt, ChildSpec, Supervisor},
 };
 
-#[derive(Interface, ActorInterface)]
+#[derive(Interface, HandlerInterface)]
 enum MyInterface {
     Add(Payload<u32>),
     Print(Payload<String>),
@@ -26,7 +26,7 @@ impl MyActor {
     }
 }
 
-impl Actor for MyActor {
+impl Handler for MyActor {
     type Interface = MyInterface;
     type Error = anyhow::Error;
     type Exit = ();
@@ -36,10 +36,10 @@ impl Actor for MyActor {
     }
 }
 
-impl HandleMessage<u32> for MyActor {
-    async fn handle_message(
+impl Handle<u32> for MyActor {
+    async fn handle(
         &mut self,
-        _state: &mut ActorState<Self>,
+        _state: &mut HandlerState<Self>,
         msg: Payload<u32>,
     ) -> Result<(), Self::Error> {
         println!("Received message: {:?}", msg);
@@ -47,10 +47,10 @@ impl HandleMessage<u32> for MyActor {
     }
 }
 
-impl HandleMessage<String> for MyActor {
-    async fn handle_message(
+impl Handle<String> for MyActor {
+    async fn handle(
         &mut self,
-        _state: &mut ActorState<Self>,
+        _state: &mut HandlerState<Self>,
         msg: Payload<String>,
     ) -> Result<(), Self::Error> {
         println!("Received message: {:?}", msg);

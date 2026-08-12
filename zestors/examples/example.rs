@@ -1,11 +1,11 @@
 use std::time::Duration;
 use zestors::{
-    actor::{Actor, HandleMessage},
     event_stream::EventStream,
+    handler::{Handle, HandledBy, Handler},
     polybox::{Payload, Sends as _},
     registry::Pid,
     signals::{Event, SendSignal, Shutdown, Signal},
-    state::ActorState,
+    state::HandlerState,
     supervision::ActorRunnerExt as _,
     *,
 };
@@ -63,13 +63,13 @@ struct MyActor {
     nr: u32,
 }
 
-#[derive(Interface, ActorInterface)]
+#[derive(Interface, HandlerInterface)]
 enum MyInterface {
     Add(Payload<u32>),
     Print(Payload<String>),
 }
 
-impl Actor for MyActor {
+impl Handler for MyActor {
     type Interface = MyInterface;
     type Error = anyhow::Error;
     type Exit = u32;
@@ -78,12 +78,18 @@ impl Actor for MyActor {
         println!("Exiting with reason: {:?}", reason);
         Ok(self.nr)
     }
+
+    async fn schedule_next(&mut self) -> Result<impl HandledBy<Self>, Self::Error> {
+        tokio::time::sleep(Duration::from_secs(5)).await;
+
+        Ok(10u32)
+    }
 }
 
-impl HandleMessage<u32> for MyActor {
-    async fn handle_message(
+impl Handle<u32> for MyActor {
+    async fn handle(
         &mut self,
-        state: &mut ActorState<Self>,
+        state: &mut HandlerState<Self>,
         msg: Payload<u32>,
     ) -> Result<(), Self::Error> {
         println!("Received message: {:?}", msg);
@@ -98,10 +104,10 @@ impl HandleMessage<u32> for MyActor {
     }
 }
 
-impl HandleMessage<String> for MyActor {
-    async fn handle_message(
+impl Handle<String> for MyActor {
+    async fn handle(
         &mut self,
-        _: &mut ActorState<Self>,
+        _: &mut HandlerState<Self>,
         msg: Payload<String>,
     ) -> Result<(), Self::Error> {
         println!("Received message: {:?}", msg);

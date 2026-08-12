@@ -5,6 +5,8 @@ use crate::{
     inbox::{Inbox, Receiver},
     signals::{Signal, SignalSender},
 };
+use futures::FutureExt;
+pub(crate) use polybox::*;
 use std::{ops::Deref, panic::AssertUnwindSafe, sync::Arc};
 
 pub fn spawn<T, R, F>(pid: Pid, f: impl FnOnce(EventStream<T>, Address<T>) -> F) -> Child<R, T>
@@ -22,17 +24,6 @@ pub struct SpawnData<T: InboxKind = Dyn<Set![]>> {
     receiver: T::Receiver,
     signal_receiver: SignalReceiver,
     exit_alerter: ProcessAlerter,
-}
-
-impl<T: InboxKind> std::fmt::Debug for SpawnData<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ProcessData")
-            .field("address", &self.address)
-            .field("receiver", &"Receiver")
-            .field("signal_receiver", &self.signal_receiver)
-            .field("exit_alerter", &self.exit_alerter)
-            .finish()
-    }
 }
 
 impl<T: Interface> SpawnData<T> {
@@ -97,13 +88,22 @@ impl<T: Interface> SpawnData<T> {
     }
 }
 
-impl<T: InboxKind> SpawnData<T> {
-    pub fn pid(&self) -> &Pid {
-        self.address.pid()
+impl<T: InboxKind> std::fmt::Debug for SpawnData<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProcessData")
+            .field("address", &self.address)
+            .field("receiver", &"Receiver")
+            .field("signal_receiver", &self.signal_receiver)
+            .field("exit_alerter", &self.exit_alerter)
+            .finish()
     }
 }
 
 impl<T: InboxKind> SpawnData<T> {
+    pub fn pid(&self) -> &Pid {
+        self.address.pid()
+    }
+
     pub fn into_any(self) -> SpawnData {
         let SpawnData {
             address,
@@ -155,32 +155,29 @@ impl<T: InboxKind> Clone for SpawnData<T> {
     }
 }
 
-pub mod actor;
+pub mod handler;
 pub mod address;
 pub mod child;
 pub mod event_stream;
 pub mod exit_watcher;
 pub mod inbox;
+pub mod polybox;
 pub mod registry;
 pub mod signals;
 pub mod state;
 pub mod supervision;
 pub use ::type_sets;
-use futures::FutureExt;
-pub(crate) use polybox::*;
-
-pub mod polybox;
+pub use polybox_codegen::{
+    HandlerInterface, InterfaceZestors as Interface, MessageZestors as Message,
+};
 
 pub(crate) mod _prelude {
     #![allow(unused_imports)]
     pub(crate) use crate::{
-        actor::*, address::*, child::*, event_stream::*, exit_watcher::*, inbox::*, polybox::*,
+        handler::*, address::*, child::*, event_stream::*, exit_watcher::*, inbox::*, polybox::*,
         registry::*, signals::*, state::*, supervision::*, *,
     };
 
     pub(crate) use serde::{Deserialize, Serialize};
+    pub(crate) use std::time::Duration;
 }
-
-pub use polybox_codegen::{
-    ActorInterface, InterfaceZestors as Interface, MessageZestors as Message,
-};

@@ -152,7 +152,7 @@ fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-#[proc_macro_derive(ActorInterface, attributes(interface))]
+#[proc_macro_derive(HandlerInterface, attributes(interface))]
 pub fn derive_actor_interface(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let enum_name = &input.ident;
@@ -160,7 +160,7 @@ pub fn derive_actor_interface(input: TokenStream) -> TokenStream {
     // Ensure we are working with an enum
     let variants = match &input.data {
         Data::Enum(data_enum) => &data_enum.variants,
-        _ => panic!("ActorInterface derive can only be used on enums"),
+        _ => panic!("HandlerInterface derive can only be used on enums"),
     };
 
     let base_path = extract_base_path(&input.attrs, "interface", "::zestors");
@@ -176,25 +176,25 @@ pub fn derive_actor_interface(input: TokenStream) -> TokenStream {
                 let field_type = &fields.unnamed[0].ty;
 
                 let inner_type = extract_inner_payload_type(field_type)
-                    .expect("ActorInterface variants must be of type Payload<T>");
+                    .expect("HandlerInterface variants must be of type Payload<T>");
 
                 handle_matches.push(quote! {
                     Self::#variant_name(payload) => {
-                        <T as #base_path::actor::HandleMessage<#inner_type>>::handle_message(actor, state, payload).await
+                        <T as #base_path::handler::Handle<#inner_type>>::handle(actor, state, payload).await
                     }
                 });
                 inner_types.push(inner_type);
             }
-            _ => panic!("ActorInterface derive only supports variants with a single unnamed field, e.g., A(Payload<T>)"),
+            _ => panic!("HandlerInterface derive only supports variants with a single unnamed field, e.g., A(Payload<T>)"),
         }
     }
 
     let expanded = quote! {
-        impl<T> #base_path::actor::ActorInterface<T> for #enum_name
+        impl<T> #base_path::handler::HandlerInterface<T> for #enum_name
         where
-            T: #base_path::actor::Actor + #( #base_path::actor::HandleMessage<#inner_types> + )*
+            T: #base_path::handler::Handler + #( #base_path::handler::Handle<#inner_types> + )*
         {
-            async fn handle_with(self, state: &mut #base_path::state::ActorState<T>, actor: &mut T) -> Result<(), T::Error> {
+            async fn handle_with(self, state: &mut #base_path::state::HandlerState<T>, actor: &mut T) -> Result<(), T::Error> {
                 match self {
                     #(#handle_matches)*
                 }

@@ -56,10 +56,7 @@ impl SupervisorBlueprint {
         }
     }
 
-    pub fn add_child<T>(
-        &mut self,
-        spec: ChildSpec<T>,
-    ) -> Address<<T::Runner as ActorRunner>::Interface>
+    pub fn add_child<T>(&mut self, spec: ChildSpec<T>) -> Address<<T::Runner as Actor>::Interface>
     where
         T: Blueprint + Send + Sync + 'static,
     {
@@ -78,7 +75,7 @@ impl SupervisorBlueprint {
     pub fn add_children<T>(
         &mut self,
         specs: impl IntoIterator<Item = ChildSpec<T>>,
-    ) -> Vec<Address<<T::Runner as ActorRunner>::Interface>>
+    ) -> Vec<Address<<T::Runner as Actor>::Interface>>
     where
         T: Blueprint + Send + Sync + 'static,
     {
@@ -164,10 +161,7 @@ impl Supervisor {
         }
     }
 
-    pub fn add_child<T>(
-        &mut self,
-        spec: ChildSpec<T>,
-    ) -> Address<<T::Runner as ActorRunner>::Interface>
+    pub fn add_child<T>(&mut self, spec: ChildSpec<T>) -> Address<<T::Runner as Actor>::Interface>
     where
         T: Blueprint + Send + Sync + 'static,
     {
@@ -186,7 +180,7 @@ impl Supervisor {
     pub fn add_children<T>(
         &mut self,
         specs: impl IntoIterator<Item = ChildSpec<T>>,
-    ) -> Vec<Address<<T::Runner as ActorRunner>::Interface>>
+    ) -> Vec<Address<<T::Runner as Actor>::Interface>>
     where
         T: Blueprint + Send + Sync + 'static,
     {
@@ -354,7 +348,7 @@ impl Stream for Supervisor {
 
 impl Unpin for Supervisor {}
 
-impl ActorRunner for Supervisor {
+impl Actor for Supervisor {
     type Interface = SupervisorInterface;
     type Exit = ();
 
