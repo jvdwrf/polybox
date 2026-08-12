@@ -18,11 +18,14 @@ impl Pid {
     pub fn rand() -> Self {
         let rand: [u8; 12] = rand::random();
 
-        Self::new(
-            bs58::encode(rand)
-                .with_alphabet(&Alphabet::BITCOIN)
-                .into_string(),
-        )
+        let mut val = String::with_capacity(17);
+        bs58::encode(rand)
+            .with_alphabet(&Alphabet::BITCOIN)
+            .onto(&mut val)
+            .expect("Capacity is sufficient");
+        val.truncate(16);
+
+        Self::new(val)
     }
 }
 
@@ -84,5 +87,22 @@ impl<'a> From<Cow<'a, str>> for Pid {
     #[inline]
     fn from(s: Cow<'a, str>) -> Pid {
         Pid(SmolStr::from(s))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_pid() {
+        for i in 0..100 {
+            let pid = Pid::rand();
+            println!("pid {}: {}", i, pid);
+        }
+
+        let pid1 = Pid::rand();
+        let pid2 = Pid::rand();
+        assert_ne!(pid1, pid2);
     }
 }
