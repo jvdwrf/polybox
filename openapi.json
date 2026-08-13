@@ -1,0 +1,155 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "",
+    "version": ""
+  },
+  "paths": {
+    "/tree": {
+      "get": {
+        "operationId": "get_tree",
+        "parameters": [
+          {
+            "name": "include_debug",
+            "in": "query",
+            "description": "Whether to include debug state in the supervision tree",
+            "required": false,
+            "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "pid",
+            "in": "query",
+            "description": "The PID from which to start the supervision tree. If not provided, the root supervisor will be used.",
+            "required": false,
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/components/schemas/String"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupervisionTree"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActorStatus": {
+        "type": "string",
+        "enum": [
+          "Running",
+          "Suspended",
+          "ShuttingDown"
+        ]
+      },
+      "DebugState": {
+        "type": "object",
+        "required": [
+          "status",
+          "uptime",
+          "description"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ActorStatus"
+          },
+          "uptime": {
+            "type": "string",
+            "example": "2024-06-01T12:00:00Z"
+          }
+        }
+      },
+      "RestartMode": {
+        "type": "string",
+        "enum": [
+          "Always",
+          "OnError",
+          "Never"
+        ]
+      },
+      "String": {
+        "type": "string"
+      },
+      "SupervisionTree": {
+        "type": "object",
+        "required": [
+          "pid",
+          "restart_mode",
+          "abort_timeout"
+        ],
+        "properties": {
+          "abort_timeout": {
+            "type": "string",
+            "example": "2024-06-01T12:00:00Z"
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupervisionTree"
+            }
+          },
+          "debug_state": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DebugState"
+              }
+            ]
+          },
+          "pid": {
+            "$ref": "#/components/schemas/String"
+          },
+          "restart_mode": {
+            "$ref": "#/components/schemas/RestartMode"
+          }
+        }
+      }
+    }
+  }
+}

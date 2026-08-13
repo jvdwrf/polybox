@@ -14,7 +14,7 @@ pub struct ApiConfig {
 }
 
 impl ApiConfig {
-    pub fn generate_openapi(&self) -> utoipa::openapi::OpenApi {
+    pub fn generate_openapi() -> utoipa::openapi::OpenApi {
         ApiServer::new(Self::default(), Pid::new(""))
             .create_router()
             .split_for_parts()

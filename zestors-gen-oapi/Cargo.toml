@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 zestors.workspace = true
+serde_json.workspace = true
