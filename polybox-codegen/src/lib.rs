@@ -11,7 +11,7 @@ use syn::{parse_macro_input, Data, DeriveInput, Expr, Fields, Lit, Type};
 /// Derives the `Interface` trait for an enum, allowing it to be used as a message
 /// interface in the Polybox framework.
 ///
-/// Under the hood, this macro generates implementations for the `Interface`, `Message`, and `AsSet` traits,
+/// Under the hood, this macro generates implementations for the `Interface`, `Message`, and `TypeSet` traits,
 /// as well as `FromPayload` and `TryIntoPayload` for each variant of the enum.
 ///
 /// The macro expects the enum variants to be of the form `Variant(Payload<T>)`,
@@ -134,7 +134,7 @@ fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
             type Payload = Self;
         }
 
-        // impl #polybox_path::type_sets::AsSet for #enum_name {
+        // impl #polybox_path::type_sets::TypeSet for #enum_name {
         //     type Set = #polybox_path::type_sets::Set![#(#inner_types),*];
         // }
 

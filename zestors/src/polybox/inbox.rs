@@ -12,8 +12,8 @@ use type_sets::SubsetOf;
 /// A trait that allows for conversions to [`DynInbox`].
 pub trait PolyBox: DynPolyBox {
     /// The set of message types that this inbox can accept.
-    type Set: AsSet + 'static;
-    type Dyn<T: AsSet + 'static>;
+    type Set: TypeSet + 'static;
+    type Dyn<T: TypeSet + 'static>;
 
     /// Converts into a dynamic inbox without checking if the types are compatible.
     ///
@@ -22,7 +22,7 @@ pub trait PolyBox: DynPolyBox {
     /// # Safety
     /// This method is not marked as unsafe, because violating the type system can
     /// only lead to runtime errors, not undefined behavior.
-    fn into_dyn_unchecked<T: AsSet>(self) -> Self::Dyn<T>;
+    fn into_dyn_unchecked<T: TypeSet>(self) -> Self::Dyn<T>;
 }
 
 /// A trait that extends [`PolyBox`] with some helper methods.
@@ -30,7 +30,7 @@ pub trait PolyboxExt: PolyBox + Sized {
     /// Converts into a dynamic inbox with a subset of the original types.
     ///
     /// This conversion is type-safe, and entirely at compile-time.
-    fn into_dyn<T: AsSet>(self) -> Self::Dyn<T>
+    fn into_dyn<T: TypeSet>(self) -> Self::Dyn<T>
     where
         T: SubsetOf<Self::Set>,
     {
@@ -43,7 +43,7 @@ pub trait PolyboxExt: PolyBox + Sized {
     }
 
     /// Converts into a dynamic inbox, checking at runtime if the types are compatible.
-    fn into_dyn_checked<T: AsSet>(self) -> Result<Self::Dyn<T>, Self> {
+    fn into_dyn_checked<T: TypeSet>(self) -> Result<Self::Dyn<T>, Self> {
         if self.accepts_msgs(&T::members()) {
             Ok(self.into_dyn_unchecked())
         } else {
@@ -54,14 +54,14 @@ pub trait PolyboxExt: PolyBox + Sized {
     /// Checks if the inbox accepts a message of the given type.
     #[must_use]
     fn accepts_msg(&self, id: TypeId) -> bool {
-        <Self::Set as AsSet>::members().contains(&id)
+        <Self::Set as TypeSet>::members().contains(&id)
     }
 
     /// Checks if the inbox accepts messages of the given types.
     #[must_use]
     fn accepts_msgs(&self, ids: &[TypeId]) -> bool {
         ids.iter()
-            .all(|id| <Self::Set as AsSet>::members().contains(id))
+            .all(|id| <Self::Set as TypeSet>::members().contains(id))
     }
 
     /// Send any message, checking at runtime if the message is accepted or not.
@@ -193,9 +193,9 @@ impl<T> DynInbox<T> {
     }
 }
 
-impl<T: AsSet + 'static> PolyBox for DynInbox<T> {
+impl<T: TypeSet + 'static> PolyBox for DynInbox<T> {
     type Set = T;
-    type Dyn<R: AsSet + 'static> = DynInbox<R>;
+    type Dyn<R: TypeSet + 'static> = DynInbox<R>;
 
     fn into_dyn_unchecked<R>(self) -> DynInbox<R> {
         DynInbox::new_unchecked(self.inbox)
@@ -205,7 +205,7 @@ impl<T: AsSet + 'static> PolyBox for DynInbox<T> {
 impl<M, R> Sends<M> for DynInbox<R>
 where
     M: Message<Output: Send, Payload: Send>,
-    R: AsSet + 'static + Contains<M>,
+    R: TypeSet + 'static + Contains<M>,
 {
     async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
         self.send_checked(msg).await.map_err(|e| match e {

@@ -3,7 +3,7 @@ use crate::_prelude::*;
 use futures::{FutureExt as _, prelude::future::BoxFuture};
 use polybox::{
     errors::SendError,
-    type_sets::{AsSet, Set},
+    type_sets::{TypeSet, Set},
 };
 use std::{fmt::Debug, task::Poll, time::Duration};
 
@@ -159,9 +159,9 @@ impl<T: Send, R: InboxKind> DynPolyBox for Child<T, R> {
 
 impl<T: Send, R: InboxKind> PolyBox for Child<T, R> {
     type Set = Set![];
-    type Dyn<S: AsSet + 'static> = Child<T, Dyn<S>>;
+    type Dyn<S: TypeSet + 'static> = Child<T, Dyn<S>>;
 
-    fn into_dyn_unchecked<S: AsSet + 'static>(self) -> Child<T, Dyn<S>> {
+    fn into_dyn_unchecked<S: TypeSet + 'static>(self) -> Child<T, Dyn<S>> {
         let (handle, address) = self.into_parts();
         Child::new(handle, address.into_dyn_unchecked())
     }

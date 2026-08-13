@@ -4,7 +4,7 @@ use polybox::{
     BoxedPayload, DynPolyBox, FromPayload, PolyBox, TryIntoPayload,
     errors::{SendCheckedError, SendError},
 };
-use polybox::{MessageExt, type_sets::AsSet};
+use polybox::{MessageExt, type_sets::TypeSet};
 use std::sync::Arc;
 
 /// A wrapper around a [`async_channel::Sender`] that acts as a [`PolyBox`].
@@ -37,7 +37,7 @@ impl<T> Inbox<T> {
 
 impl<T: Interface> PolyBox for Inbox<T> {
     type Set = T::Set;
-    type Dyn<R: AsSet + 'static> = DynInbox<R>;
+    type Dyn<R: TypeSet + 'static> = DynInbox<R>;
 
     fn into_dyn_unchecked<R>(self) -> DynInbox<R> {
         DynInbox::new_unchecked(Arc::new(self))

@@ -1,202 +1,45 @@
-// use std::any::TypeId;
+use std::any::TypeId;
 
-// mod set;
-// pub use set::*;
+/// Indicates that a type contains member `E` in its set.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` does not contain `{E}`",
+    label = "type does not contain this element",
+    note = "a type implements `Contains<E>` when `E` is one of its set members"
+)]
+pub trait Contains<E>: Contains0 {}
 
-// /// Sets from 0 to 10 elements.
-// pub mod sets;
+#[diagnostic::do_not_recommend]
+impl<E, T: ?Sized> Contains<E> for T where T: Contains1<E> {}
 
-// pub mod v2;
+/// Indicates that a type is a subset of set `S`.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a subset of `{S}`",
+    label = "this set is not a subset of the required set",
+    note = "every member of the left-hand set must also be present in the right-hand set"
+)]
+pub trait SubsetOf<S: ?Sized> {}
 
-// //-------------------------------------
-// // Contains
-// //-------------------------------------
+/// Indicates that a type is a superset of set `S`.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a superset of `{S}`",
+    label = "this set does not contain all required members",
+    note = "every member of the right-hand set must also be present in the left-hand set"
+)]
+pub trait SupersetOf<S: ?Sized> {}
 
-// /// Implemented if a set contains the element `E`.
-// ///
-// /// # Safety
-// /// Implementing this is unsafe, for custom set-types, implement [`AsSet`] instead.
-// pub unsafe trait Contains<E> {}
+#[diagnostic::do_not_recommend]
+impl<T: TypeSet, R: TypeSet> SubsetOf<R> for T where T::Set: SubsetOf<R::Set> {}
 
-// // Implement Contains for `Set<dyn ..>`
-// unsafe impl<T: ?Sized, E> Contains<E> for Set<T> where T: Contains<E> {}
+#[diagnostic::do_not_recommend]
+impl<S1: ?Sized, S2: ?Sized> SupersetOf<S2> for S1 where S2: SubsetOf<S1> {}
+pub trait TypeSet {
+    type Set: ?Sized;
+    fn members() -> &'static [TypeId]
+    where
+        Self: 'static;
+}
 
-// // Implement Contains for `impl AsSet`
-// // unsafe impl<T, E> Contains<E> for T where T: Contains<E> {}
+mod generate_sets;
+pub use generate_sets::*;
 
-// //-------------------------------------
-// // AsSet
-// //-------------------------------------
-
-// /// Trait to get the members (type-ids) of a set.
-// ///
-// /// # Safety
-// /// Implementing this is unsafe, for custom set-types, implement [`AsSet`] instead.
-// pub unsafe trait AsSet {
-//     /// Get the members (type-ids) of this set.
-//     fn members() -> &'static [TypeId];
-
-//     type Set: AsSet;
-// }
-
-// // unsafe impl<T: ?Sized> AsSet for Set<Set<T>>
-// // where
-// //     Set<T>: AsSet,
-// // {
-// //     fn members() -> &'static [TypeId] {
-// //         <Set<T> as AsSet>::members()
-// //     }
-
-// //     type Set = Set<T>;
-// // }
-
-// // // Implement AsSet for `impl AsSet`
-// // unsafe impl<T> AsSet for T
-// // where
-// //     T: AsSet,
-// // {
-// //     fn members() -> &'static [TypeId] {
-// //         <T::Set as AsSet>::members()
-// //     }
-// // }
-
-// //-------------------------------------
-// // SubsetOf
-// //-------------------------------------
-
-// /// Implemented a set is a subset of `S`.
-// ///
-// /// # Safety
-// /// Implementing this is unsafe, for custom set-types, implement [`AsSet`] instead.
-// pub unsafe trait SubsetOf<S> {}
-
-// // Implement SubsetOf for `impl AsSet`
-// // unsafe impl<T, S> SubsetOf<S> for T where T: SubsetOf<S> {}
-
-// //-------------------------------------
-// // SupersetOf
-// //-------------------------------------
-
-// /// Implemented if a set is a superset of `S`.
-// ///
-// /// # Safety
-// /// Implementing this is unsafe, for custom set-types, implement [`AsSet`] instead.
-// pub unsafe trait SupersetOf<S> {}
-
-// // Implement SupersetOf for `impl AsSet`
-// unsafe impl<T, S> SupersetOf<S> for T where S: SubsetOf<T> {}
-
-// //-------------------------------------
-// // AsSet
-// //-------------------------------------
-
-// // /// Trait that allows usage of custom types instead of [`Set`].
-// // pub trait AsSet {
-// //     /// The [`struct@Set`] type.
-// //     type Set: AsSet;
-// // }
-
-// #[cfg(test)]
-// mod tests {
-//     use crate::sets::Zero;
-
-//     use super::*;
-
-//     // struct MySet;
-
-//     // impl AsSet for MySet {
-//     //     type Set = Set![u32, u64];
-//     // }
-
-//     type MySet = Set![u32, u64];
-
-//     #[test]
-//     fn test() {
-//         contains_string::<Set![String]>();
-//         contains_string::<Set![String, u32]>();
-//         contains_string::<Set![String, u32, u64]>();
-//         contains_string::<Set![u32, u64, u128, String]>();
-//         // contains_string::<MySet>(); // does not compile
-//         // contains_string::<Set![u32]>(); // does not compile
-
-//         is_subset::<Set![u32, u64, u32, u32]>();
-//         is_subset::<Set![u32, u64]>();
-//         is_subset2::<Set![u32]>();
-//         is_subset::<Set![]>();
-//         is_subset::<MySet>();
-//         // is_subset::<Set![u32, u64, u128]>(); // does not compile
-//         // is_subset2::<MySet>(); // does not compile
-//         // is_subset::<Set![u32, u64, u128]>(); // does not compile
-
-//         is_superset1::<Set![u32, u64]>();
-//         is_superset2::<Set![u32, u64, u128]>();
-//         is_superset1::<MySet>();
-//         // is_superset1::<Set![u32]>(); // does not compile
-//         // is_superset2::<MySet>(); // does not compile
-
-//         let _: Set![];
-//         let _: Set![u32];
-//         let _: Set![u32, u64];
-//         let _: Set![u32, u64, u128];
-//         let _: Set![u32, u64, u128, u32];
-//         let _: Set![u32, u64, u128, u32, u64];
-//         let _: Set![u32, u64, u128, u32, u64, u128];
-//         let _: Set![u32, u64, u128, u32, u64, u128, u32];
-//         let _: Set![u32, u64, u128, u32, u64, u128, u32, u64];
-//         let _: Set![u32, u64, u128, u32, u64, u128, u32, u64, u128];
-//         let _: Set![u32, u64, u128, u32, u64, u128, u32, u64, u128, u32];
-//         let _: Set![u32, u64, u128, u32, u64, u128, u32, u64, u128, u32, u64];
-//         let _: Set![
-//             u32, u64, u128, u32, u64, u128, u32, u64, u128, u32, u64, u128
-//         ];
-//     }
-
-//     fn contains_string<T>()
-//     where
-//         T: Contains<String>,
-//     {
-//     }
-
-//     fn is_subset<T>()
-//     where
-//         T: SubsetOf<Set![u32, u64]>,
-//     {
-//     }
-
-//     fn is_subset2<T>()
-//     where
-//         T: SubsetOf<Set![u32]>,
-//     {
-//     }
-
-//     fn is_superset1<T>()
-//     where
-//         T: SupersetOf<Set![u32, u64]>,
-//     {
-//     }
-
-//     fn is_superset2<T>()
-//     where
-//         T: SupersetOf<Set![u32, u64, u128]>,
-//     {
-//     }
-
-//     #[allow(dead_code)]
-//     fn assert_members<T: AsSet>() {}
-
-//     // Passes: Single named lifetime 'a (early-bound)
-//     fn test_members<'a>() {
-//         assert_members::<Set<dyn Zero + 'a>>();
-//         test_members_hrtb();
-//     }
-
-//     // Fails: Higher-Ranked Trait Bound across ALL lifetimes (what async requires)
-//     fn test_members_hrtb()
-//     where
-//         for<'a> Set<dyn Zero + 'a>: AsSet,
-//     {
-//     }
-// }
-
-mod v2;
-pub use v2::*;
+mod set_macro;

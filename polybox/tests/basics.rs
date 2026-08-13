@@ -3,7 +3,7 @@ use std::any::TypeId;
 use polybox::{
     Interface, Message, Payload, PolyboxExt as _, Sends, SendsExt as _, inboxes::TokioInbox,
 };
-use type_sets::{AsSet, Set};
+use type_sets::{TypeSet, Set};
 
 #[derive(Message, Debug)]
 #[msg(reply = i32)]
@@ -47,7 +47,7 @@ async fn creating_address() {
     inbox.send_checked(30u32).await.unwrap();
 
     let address = inbox.clone().into_dyn_full();
-    let address = address.into_dyn::<<MyInterface as AsSet>::Set>();
+    let address = address.into_dyn::<<MyInterface as TypeSet>::Set>();
     let address = address.into_dyn::<Set![u64, u32]>();
     // let address = address.into_any::<Set![String]>();
 

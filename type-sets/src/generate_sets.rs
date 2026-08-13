@@ -33,10 +33,10 @@ macro_rules! generate_sets {
             {}
         )*
 
-        // AsSet implementations
+        // TypeSet implementations
         $(
             #[diagnostic::do_not_recommend]
-            impl<$($el),*> AsSet for $struct<$($el),*>
+            impl<$($el),*> TypeSet for $struct<$($el),*>
             {
                 type Set = dyn $trait<$($el),*>;
 
@@ -57,7 +57,7 @@ macro_rules! generate_sets {
             #[diagnostic::do_not_recommend]
             impl<S: ?Sized, $($el),*> $trait<$($el),*> for S
             where
-                S: AsSet,
+                S: TypeSet,
                 S::Set: $trait<$($el),*>
             {}
         )*
@@ -65,11 +65,7 @@ macro_rules! generate_sets {
 }
 
 generate_sets! {
-    // Set0 is implemented manually below, because it has no constraints
-    // for<> 0 = {
-    //     pub struct Set0;
-    //     trait Contains0: {}
-    // }
+    // Set0 / Contains0 is implemented manually below, because it has no constraints
 
     for<E1> 1 = {
         pub struct Set1;
@@ -205,7 +201,7 @@ impl<S: ?Sized> SubsetOf<S> for dyn Contains0 {}
 #[diagnostic::do_not_recommend]
 impl<S: ?Sized> Contains0 for S {}
 
-impl AsSet for Set0 {
+impl TypeSet for Set0 {
     type Set = dyn Contains0;
 
     fn members() -> &'static [TypeId] {
