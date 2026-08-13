@@ -412,6 +412,14 @@ impl Actor for Supervisor {
                     Signal::Ping((_, tx)) => {
                         tx.send(()).ok();
                     }
+                    Signal::GetChildren((_, tx)) => {
+                        let children = self
+                            .supervisees
+                            .iter()
+                            .map(|(pid, _)| pid.clone())
+                            .collect::<Vec<_>>();
+                        tx.send(children).ok();
+                    }
                 },
                 Event::Message(message) => match message {
                     SupervisorInterface::RegisterChild(RegisterChild(spec)) => {

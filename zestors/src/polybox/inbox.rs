@@ -188,13 +188,9 @@ impl<T> DynInbox<T> {
     }
 
     pub fn downcast_ref<R: Interface>(&self) -> Option<&Inbox<R>> {
-        let inbox = &self.inbox as &dyn Any;
+        let inbox = &*self.inbox as &dyn Any;
         inbox.downcast_ref::<Inbox<R>>()
     }
-
-    // pub fn downcast<R: Interface>(self) -> Result<Inbox<R>, Self> {
-    //     self.downcast_ref().cloned().ok_or(self)
-    // }
 }
 
 impl<T: Members + 'static> PolyBox for DynInbox<T> {

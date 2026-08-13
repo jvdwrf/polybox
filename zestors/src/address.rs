@@ -29,12 +29,12 @@ where
 }
 
 impl<T: InboxKind> Observable for Address<T> {
-    async fn send_signal_payload(this: &Self, signal: Signal) -> Result<(), SendError<Signal>> {
-        if !this.is_alive() {
+    async fn send_signal(&self, signal: Signal) -> Result<(), SendError<Signal>> {
+        if !self.is_alive() {
             return Err(SendError(signal));
         }
 
-        this.signal_inbox.send(signal).await
+        self.signal_inbox.send(signal).await
     }
 }
 
@@ -182,5 +182,28 @@ impl<T: Interface> InboxKind for T {
 
     fn map_receiver_into_any(receiver: Self::Receiver) -> Arc<dyn Any + Send + Sync> {
         Arc::new(receiver)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Interface, HandlerInterface)]
+    #[interface(crate = "crate")]
+    pub enum MyInterface {
+        A(Payload<u32>),
+    }
+
+    #[tokio::test]
+    async fn test_address_downcast_ref() {
+        let child = crate::spawn(Pid::rand(), |_: EventStream<MyInterface>, _| async move {
+            Ok(())
+        });
+        let address = child.address().clone().into_dyn::<Set![]>();
+
+        address
+            .downcast_ref::<MyInterface>()
+            .expect("Should downcast to MyInterface");
     }
 }

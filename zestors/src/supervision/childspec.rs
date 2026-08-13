@@ -29,11 +29,13 @@ impl<T> ChildSpec<T> {
     where
         T: Blueprint,
     {
+        let data = SpawnData::<<T::Actor as Actor>::Interface>::new(Pid::rand());
+
         Self {
             restart_mode: RestartMode::OnError,
             abort_timeout: Duration::from_millis(5_000),
             spawner: spawner.into(),
-            data: SpawnData::<<T::Actor as Actor>::Interface>::new(Pid::rand()).into_any(),
+            data: data.into_any(),
         }
     }
 
@@ -100,5 +102,46 @@ impl<T: Blueprint + Send + Sync + 'static> From<ChildSpec<T>> for ChildSpec<DynS
             spawner: DynSpawner::new(value.spawner),
             data: value.data,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Interface, HandlerInterface)]
+    #[interface(crate = "crate")]
+    pub enum MyInterface {
+        A(Payload<u32>),
+    }
+
+    #[derive(Debug, Clone)]
+    struct MyActor;
+
+    impl Handler for MyActor {
+        type Interface = MyInterface;
+        type Error = anyhow::Error;
+        type Exit = ();
+
+        async fn exit(&mut self, _reason: ExitReason) -> Result<Self::Exit, Self::Error> {
+            Ok(())
+        }
+    }
+
+    impl Handle<u32> for MyActor {
+        async fn handle(
+            &mut self,
+            _state: &mut HandlerState<Self>,
+            msg: Payload<u32>,
+        ) -> Result<(), Self::Error> {
+            println!("Received message: {:?}", msg);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_childspec_doesnt_panic_on_address_retrieval() {
+        let spec = ChildSpec::new("test", MyActor);
+        let _ = spec.address();
     }
 }

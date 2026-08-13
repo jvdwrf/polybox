@@ -7,7 +7,10 @@ use zestors::{
     node::Node,
     polybox::Payload,
     registry::{Pid, Registry},
-    supervision::{BlueprintExt, ChildSpec, RestartIntensity, RestartMode, Supervisor},
+    signals::Observable,
+    supervision::{
+        BlueprintExt, ChildSpec, RestartIntensity, RestartMode, SupervisionTree, Supervisor,
+    },
 };
 
 #[derive(Interface, HandlerInterface)]
@@ -59,34 +62,35 @@ impl Handle<String> for MyActor {
     }
 }
 
+// #[tokio::main]
+// async fn main() -> Result<(), anyhow::Error> {
+//     let registry = Registry::local();
+
+//     let supervisor = Supervisor::blueprint()
+//         .with_child(ChildSpec::new(
+//             "SupervisorA",
+//             Supervisor::blueprint()
+//                 .with_child(ChildSpec::new("HelloActor", MyActor::new()))
+//                 .with_child(ChildSpec::new("HelloActor2", MyActor::new())),
+//         ))
+//         .with_child(ChildSpec::new(
+//             "SupervisorB",
+//             Supervisor::blueprint()
+//                 .with_child(ChildSpec::new(Pid::rand(), MyActor::new()))
+//                 .with_child(ChildSpec::new(Pid::rand(), MyActor::new())),
+//         ));
+
+//     supervisor.spawn(Pid::rand());
+//     supervisor.spawn(Pid::rand());
+
+//     let actor_a = registry.get_typed::<MyInterface>(&Pid::from("HelloActor"))?;
+//     let actor_b = registry.get_typed::<MyInterface>(&Pid::from("HelloActor2"))?;
+
+//     Ok(())
+// }
+
 #[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
-    let registry = Registry::local();
-
-    let supervisor = Supervisor::blueprint()
-        .with_child(ChildSpec::new(
-            "SupervisorA",
-            Supervisor::blueprint()
-                .with_child(ChildSpec::new("HelloActor", MyActor::new()))
-                .with_child(ChildSpec::new("HelloActor2", MyActor::new())),
-        ))
-        .with_child(ChildSpec::new(
-            "SupervisorB",
-            Supervisor::blueprint()
-                .with_child(ChildSpec::new(Pid::rand(), MyActor::new()))
-                .with_child(ChildSpec::new(Pid::rand(), MyActor::new())),
-        ));
-
-    supervisor.spawn(Pid::rand());
-    supervisor.spawn(Pid::rand());
-
-    let actor_a = registry.get_typed::<MyInterface>(&Pid::from("HelloActor"))?;
-    let actor_b = registry.get_typed::<MyInterface>(&Pid::from("HelloActor2"))?;
-
-    Ok(())
-}
-
-async fn test2() {
+async fn main() {
     let mut supervisor_a = Supervisor::blueprint();
 
     let mut actor_a = supervisor_a
@@ -98,7 +102,7 @@ async fn test2() {
     let mut actor_c = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new()));
     let mut actor_d = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new()));
 
-    Node::new(
+    let root_supervisor = Node::new(
         "RootSupervisor",
         Supervisor::blueprint()
             .with_child(ChildSpec::new("SupervisorA", supervisor_a))
@@ -115,4 +119,10 @@ async fn test2() {
         actor_c.watch_start(),
         actor_d.watch_start()
     );
+
+    let tree = SupervisionTree::new_populated(root_supervisor.pid().clone())
+        .await
+        .unwrap();
+
+    println!("Supervision tree: {:#?}", tree);
 }

@@ -143,11 +143,8 @@ where
 }
 
 impl<T, R: InboxKind> Observable for Child<T, R> {
-    fn send_signal_payload(
-        this: &Self,
-        signal: Signal,
-    ) -> impl Future<Output = Result<(), SendError<Signal>>> {
-        <Address<R> as Observable>::send_signal_payload(&this.address, signal)
+    fn send_signal(&self, signal: Signal) -> impl Future<Output = Result<(), SendError<Signal>>> {
+        <Address<R> as Observable>::send_signal(&self.address, signal)
     }
 }
 
@@ -199,7 +196,7 @@ impl From<tokio::task::JoinError> for JoinError {
 
 impl<T, R: InboxKind> Drop for Child<T, R> {
     fn drop(&mut self) {
-        if self.attached {
+        if self.attached && self.handle.is_some() {
             self.abort();
         }
     }

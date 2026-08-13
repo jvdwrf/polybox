@@ -18,7 +18,10 @@ pub struct SendError<M>(pub M);
 /// This error combines failures in sending and receiving.
 #[derive(Debug, thiserror::Error, Clone, Copy, PartialEq, Eq)]
 pub enum RequestError<M> {
+    #[error("The channel has been closed, and no longer accepts new messages.")]
     NoReply,
+
+    #[error("The channel has been closed, and no longer accepts new messages.")]
     Closed(M),
 }
 

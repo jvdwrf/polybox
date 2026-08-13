@@ -37,8 +37,9 @@ impl Node {
         self
     }
 
-    pub fn start(self) -> Result<(), anyhow::Error> {
+    pub fn start(self) -> Result<Address<SupervisorInterface>, anyhow::Error> {
         let supervisor_child = self.supervisor.spawn(self.supervisor_pid.clone());
+        let supervisor_address = supervisor_child.address().clone();
         Registry::local()
             .register(supervisor_child.address().clone())
             .context("Root Supervisor failed to register")?;
@@ -53,7 +54,7 @@ impl Node {
 
         tokio::task::spawn(actor.run());
 
-        Ok(())
+        Ok(supervisor_address)
     }
 }
 

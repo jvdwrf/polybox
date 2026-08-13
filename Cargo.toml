@@ -25,3 +25,5 @@ dashmap = { version = "6", features = ["serde"] }
 arc-swap = { version = "1", features = ["serde"] }
 rand = { version = "0.10" }
 bs58 = { version = "0.5" }
+axum = "0.7"
+serde-json = "1"

@@ -127,7 +127,7 @@ impl<H: Handler> HandlerState<H> {
                 }
 
                 Signal::GetStatus((_, tx)) => {
-                    let _ = tx.send(self.status);
+                    tx.send(self.status).ok();
                 }
 
                 Signal::GetState((_, tx)) => {
@@ -139,7 +139,10 @@ impl<H: Handler> HandlerState<H> {
                 }
 
                 Signal::Ping((_, tx)) => {
-                    let _ = tx.send(());
+                    tx.send(()).ok();
+                }
+                Signal::GetChildren((_, tx)) => {
+                    tx.send(handler.children()).ok();
                 }
             },
 
@@ -153,8 +156,8 @@ impl<H: Handler> HandlerState<H> {
 }
 
 impl<H: Handler> Observable for HandlerState<H> {
-    async fn send_signal_payload(this: &Self, signal: Signal) -> Result<(), SendError<Signal>> {
-        <Address<H::Interface> as Observable>::send_signal_payload(&this.address, signal).await
+    async fn send_signal(&self, signal: Signal) -> Result<(), SendError<Signal>> {
+        <Address<H::Interface> as Observable>::send_signal(&self.address, signal).await
     }
 }
 

@@ -5,7 +5,7 @@ use zestors::{
     handler::{self, Handle, HandledBy, Handler, HandlerState},
     polybox::{Payload, Sends as _},
     registry::Pid,
-    signals::{self, Event, SendSignal, Shutdown, Signal},
+    signals::{self, Event, Observable, Shutdown, Signal},
     spawn,
     supervision::ActorRunnerExt as _,
 };
@@ -35,6 +35,9 @@ async fn main() {
                         Signal::Ping((_, tx)) => {
                             let _ = tx.send(());
                         }
+                        Signal::GetChildren((_, tx)) => {
+                            let _ = tx.send(vec![]);
+                        }
                     },
                     Event::Message(message) => match message {
                         MyInterface::Add(payload) => {
@@ -52,7 +55,7 @@ async fn main() {
     );
 
     child.address().send(10u32).await.unwrap();
-    child.address().signal(Shutdown).await.unwrap();
+    child.address().signal_shutdown().await.unwrap();
     child.await.unwrap();
 
     test().await;
@@ -109,7 +112,7 @@ impl Handle<u32> for MyActor {
         self.nr += msg;
 
         if msg == 301 {
-            state.signal(Shutdown).await.ok();
+            state.signal_shutdown().await.ok();
         }
 
         Ok(())
@@ -145,7 +148,7 @@ async fn test() {
     address.send(5u32).await.unwrap();
     child.send(15u32).await.unwrap();
     child.send("Hello, world!".to_string()).await.unwrap();
-    child.signal(Shutdown).await.unwrap();
+    child.signal_shutdown().await.unwrap();
     let exit_value = child.await.unwrap();
     assert_eq!(exit_value, 20 * 2);
 }

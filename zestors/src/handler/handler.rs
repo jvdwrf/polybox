@@ -65,6 +65,10 @@ pub trait Handler: Debug + Sized + Send + Sync + 'static {
     ) -> impl Future<Output = Result<impl HandledBy<Self>, Self::Error>> + Send + '_ {
         pending::<Result<Infallible, _>>()
     }
+
+    fn children(&self) -> Vec<Pid> {
+        vec![]
+    }
 }
 
 impl<H: Handler> Actor for H {
