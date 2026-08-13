@@ -7,8 +7,10 @@ use type_sets::Members;
 ///
 /// It defines conversion methods to and from a boxed payload, which is used for dynamic dispatch of messages.
 pub trait Interface:
-    Message<Output = ()> + TryIntoPayload<Self> + FromPayload<Self> + AsSet + Sized + Send + 'static
+    Message<Output = ()> + TryIntoPayload<Self> + FromPayload<Self> + Sized + Send + 'static
 {
+    type Set: Members;
+
     fn try_from_boxed_payload(payload: BoxedPayload) -> Result<Self, BoxedPayload>;
     fn into_boxed_payload(self) -> BoxedPayload;
 
@@ -29,7 +31,7 @@ pub trait Interface:
     }
 
     fn invocable_with(type_id: TypeId) -> bool {
-        Self::members().contains(&type_id)
+        <Self::Set as Members>::members().contains(&type_id)
     }
 }
 

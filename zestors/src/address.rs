@@ -148,10 +148,8 @@ pub trait InboxKind: 'static {
     type Inbox: PolyBox + Clone + Debug + Unpin;
     type Set: Members + 'static;
     type Receiver: Clone + Send + Sync + 'static;
-    // type Stream: Send + Sync + 'static;
 
     fn map_inbox_into_dyn_unchecked<R: Members + 'static>(address: Self::Inbox) -> DynInbox<R>;
-
     fn map_receiver_into_any(receiver: Self::Receiver) -> Arc<dyn Any + Send + Sync>;
 }
 
@@ -160,6 +158,23 @@ pub struct Dyn<T>(PhantomData<fn() -> T>);
 impl<T: Members + 'static> InboxKind for Dyn<T> {
     type Inbox = DynInbox<T>;
     type Set = T;
+    type Receiver = Arc<dyn Any + Send + Sync>;
+
+    fn map_inbox_into_dyn_unchecked<R: Members + 'static>(inbox: Self::Inbox) -> DynInbox<R> {
+        inbox.into_dyn_unchecked()
+    }
+
+    fn map_receiver_into_any(receiver: Self::Receiver) -> Arc<dyn Any + Send + Sync> {
+        receiver
+    }
+}
+
+impl<T: ?Sized + 'static> InboxKind for Set<T>
+where
+    Set<T>: Members,
+{
+    type Inbox = DynInbox<Set<T>>;
+    type Set = Set<T>;
     type Receiver = Arc<dyn Any + Send + Sync>;
 
     fn map_inbox_into_dyn_unchecked<R: Members + 'static>(inbox: Self::Inbox) -> DynInbox<R> {

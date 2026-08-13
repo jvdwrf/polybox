@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["polybox-codegen", "zestors"]
+members = ["polybox-codegen", "type-sets", "zestors"]
 
 [workspace.dependencies]
 polybox-codegen = { path = "polybox-codegen", version = "0.0.2" }
@@ -9,7 +9,7 @@ polybox-codegen = { path = "polybox-codegen", version = "0.0.2" }
 
 
 tokio = { version = "1", features = ["full"] }
-type-sets = "0.0.7"
+type-sets = { path = "type-sets" }
 async-trait = "0.1"
 futures = "0.3"
 thiserror = "2"

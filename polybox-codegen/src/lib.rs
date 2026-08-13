@@ -123,6 +123,8 @@ fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
                     #(#into_matches)*
                 }
             }
+
+            type Set = #polybox_path::type_sets::Set![#(#inner_types),*];
         }
 
 
@@ -132,9 +134,9 @@ fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
             type Payload = Self;
         }
 
-        impl #polybox_path::type_sets::AsSet for #enum_name {
-            type Set = #polybox_path::type_sets::Set![#(#inner_types),*];
-        }
+        // impl #polybox_path::type_sets::AsSet for #enum_name {
+        //     type Set = #polybox_path::type_sets::Set![#(#inner_types),*];
+        // }
 
         impl #polybox_path::TryIntoPayload<#enum_name> for #enum_name {
             fn try_into_payload(self) -> Result<#polybox_path::Payload<#enum_name>, Self> {
