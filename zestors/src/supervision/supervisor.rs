@@ -347,12 +347,8 @@ impl Actor for Supervisor {
 
     async fn run(
         mut self,
-        mut stream: EventStream<Self::Interface>,
-        _address: Address<Self::Interface>,
+        mut state: ActorState<Self::Interface>,
     ) -> Result<Self::Exit, anyhow::Error> {
-        let mut suspended = false;
-        let start_time = Instant::now();
-
         for supervisee in self.supervisees.values_mut() {
             Self::spawn_supervisee(supervisee, &self.registry)?;
         }
@@ -360,7 +356,7 @@ impl Actor for Supervisor {
         loop {
             let msg = tokio::select! {
                 biased;
-                Some(msg) = stream.recv_enabled(!suspended) => {
+                Some(msg) = state.next() => {
                     msg
                 }
                 Some(item) = self.next() => {
@@ -374,41 +370,16 @@ impl Actor for Supervisor {
             };
 
             match msg {
-                Event::Signal(signal) => match signal {
-                    Signal::Shutdown(_) | Signal::Exit(_) => {
-                        self.shutdown().await;
-                        break;
-                    }
-                    Signal::Suspend(_) => {
-                        suspended = true;
-                    }
-                    Signal::Resume(_) => {
-                        suspended = false;
-                    }
-                    Signal::GetStatus((_, tx)) => {
-                        let status = if suspended {
-                            signals::ActorStatus::Suspended
-                        } else {
-                            signals::ActorStatus::Running
-                        };
-                        tx.send(status).ok();
-                    }
-                    Signal::GetState((_, tx)) => {
+                ActorEvent::Signal(signal) => match signal {
+                    SignalEvent::GetState(tx) => {
                         tx.send(DebugState {
-                            status: if suspended {
-                                signals::ActorStatus::Suspended
-                            } else {
-                                signals::ActorStatus::Running
-                            },
-                            uptime: start_time.elapsed(),
+                            status: state.status(),
+                            uptime: state.uptime(),
                             description: "Supervisor".to_string(),
                         })
                         .ok();
                     }
-                    Signal::Ping((_, tx)) => {
-                        tx.send(()).ok();
-                    }
-                    Signal::GetChildren((_, tx)) => {
+                    SignalEvent::GetChildren(tx) => {
                         let children = self
                             .supervisees
                             .iter()
@@ -416,8 +387,18 @@ impl Actor for Supervisor {
                             .collect::<Vec<_>>();
                         tx.send(children).ok();
                     }
+                    SignalEvent::StatusUpdate(status) => match status {
+                        ActorStatus::ShuttingDown => {
+                            self.shutdown().await;
+
+                            break;
+                        }
+                        ActorStatus::Running => (),
+                        ActorStatus::Suspended => (),
+                        ActorStatus::Killed => (),
+                    },
                 },
-                Event::Message(message) => match message {
+                ActorEvent::Message(message) => match message {
                     SupervisorInterface::RegisterChild(RegisterChild(spec)) => {
                         tracing::trace!("Registering child: {:?}", spec.pid());
                         self.add_dyn_child(spec);

@@ -17,6 +17,10 @@ impl<I: Interface> ActorState<I> {
         }
     }
 
+    pub fn status(&self) -> ActorStatus {
+        self.status
+    }
+
     pub fn address(&self) -> &Address<I> {
         &self.address
     }
@@ -25,14 +29,62 @@ impl<I: Interface> ActorState<I> {
         self.start_time.elapsed()
     }
 
-    pub fn stream(&mut self) -> &mut EventStream<I> {
-        &mut self.stream
-    }
-
-    pub async fn recv(&mut self) -> Option<Event<I>> {
-        self.stream
-            .recv_enabled(self.status != ActorStatus::Suspended)
-            .await
+    pub async fn next(&mut self) -> Option<ActorEvent<I>> {
+        loop {
+            match self
+                .stream
+                .recv_enabled(self.status != ActorStatus::Suspended)
+                .await?
+            {
+                Event::Message(msg) => break Some(ActorEvent::Message(msg)),
+                Event::Signal(signal) => match signal {
+                    SignalInterface::Shutdown(_) => {
+                        self.status = ActorStatus::ShuttingDown;
+                        break Some(ActorEvent::Signal(SignalEvent::StatusUpdate(
+                            ActorStatus::ShuttingDown,
+                        )));
+                    }
+                    SignalInterface::Kill(_) => {
+                        self.status = ActorStatus::ShuttingDown;
+                        break Some(ActorEvent::Signal(SignalEvent::StatusUpdate(
+                            ActorStatus::ShuttingDown,
+                        )));
+                    }
+                    SignalInterface::Suspend(_) => {
+                        if self.status == ActorStatus::ShuttingDown {
+                            tracing::warn!("Actor is exiting, cannot suspend");
+                            break None;
+                        }
+                        self.status = ActorStatus::Suspended;
+                        break Some(ActorEvent::Signal(SignalEvent::StatusUpdate(
+                            ActorStatus::Suspended,
+                        )));
+                    }
+                    SignalInterface::Resume(_) => {
+                        if self.status != ActorStatus::Suspended {
+                            tracing::warn!("Actor is not suspended, cannot resume");
+                            break None;
+                        }
+                        self.status = ActorStatus::Running;
+                        break Some(ActorEvent::Signal(SignalEvent::StatusUpdate(
+                            ActorStatus::Running,
+                        )));
+                    }
+                    SignalInterface::GetState((_, tx)) => {
+                        break Some(ActorEvent::Signal(SignalEvent::GetState(tx)));
+                    }
+                    SignalInterface::GetChildren((_, tx)) => {
+                        break Some(ActorEvent::Signal(SignalEvent::GetChildren(tx)));
+                    }
+                    SignalInterface::GetStatus((_, tx)) => {
+                        let _ = tx.send(self.status);
+                    }
+                    SignalInterface::Ping((_, tx)) => {
+                        let _ = tx.send(());
+                    }
+                },
+            }
+        }
     }
 }
 
@@ -42,8 +94,7 @@ pub trait Actor: Send + Sized + 'static {
 
     fn run(
         self,
-        stream: EventStream<Self::Interface>,
-        address: Address<Self::Interface>,
+        state: ActorState<Self::Interface>,
     ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static;
 }
 
@@ -79,9 +130,7 @@ pub trait ActorRunnerExt: Actor {
 
     fn wrap<F, Fut, E>(self, mapper: F) -> WrapRun<Self, F>
     where
-        F: FnOnce(Self, EventStream<Self::Interface>, Address<Self::Interface>) -> Fut
-            + Send
-            + 'static,
+        F: FnOnce(Self, ActorState<Self::Interface>) -> Fut + Send + 'static,
         Fut: Future<Output = Result<E, anyhow::Error>> + Send + 'static,
         E: Send + 'static,
     {
@@ -89,7 +138,7 @@ pub trait ActorRunnerExt: Actor {
     }
 
     fn spawn(self, pid: Pid) -> Child<Self::Exit, Self::Interface> {
-        crate::spawn(pid, |stream, address| self.run(stream, address))
+        crate::spawn(pid, |state| self.run(state))
     }
 }
 impl<T: Actor> ActorRunnerExt for T {}
@@ -133,12 +182,11 @@ where
 
     fn run(
         self,
-        stream: EventStream<Self::Interface>,
-        address: Address<Self::Interface>,
+        state: ActorState<Self::Interface>,
     ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static {
         let Self { inner, map_exit } = self;
 
-        async move { map_exit(inner.run(stream, address).await) }
+        async move { map_exit(inner.run(state).await) }
     }
 }
 
@@ -163,7 +211,7 @@ impl<T, F> WrapRun<T, F> {
     pub fn new<R, Fut>(inner: T, mapper: F) -> Self
     where
         T: Actor,
-        F: FnOnce(T, EventStream<T::Interface>, Address<T::Interface>) -> Fut + Send + 'static,
+        F: FnOnce(T, ActorState<T::Interface>) -> Fut + Send + 'static,
         Fut: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
         R: Send + 'static,
     {
@@ -174,7 +222,7 @@ impl<T, F> WrapRun<T, F> {
 impl<T, F, Fut, E> Actor for WrapRun<T, F>
 where
     T: Actor + Send + 'static,
-    F: FnOnce(T, EventStream<T::Interface>, Address<T::Interface>) -> Fut + Send + 'static,
+    F: FnOnce(T, ActorState<T::Interface>) -> Fut + Send + 'static,
     Fut: Future<Output = Result<E, anyhow::Error>> + Send + 'static,
     E: Send + 'static,
 {
@@ -183,12 +231,11 @@ where
 
     fn run(
         self,
-        stream: EventStream<Self::Interface>,
-        address: Address<Self::Interface>,
+        state: ActorState<Self::Interface>,
     ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static {
         let Self { inner, mapper } = self;
 
-        async move { mapper(inner, stream, address).await }
+        async move { mapper(inner, state).await }
     }
 }
 

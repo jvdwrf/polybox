@@ -3,13 +3,13 @@ use crate::{
     address::Address,
     child::Child,
     inbox::{Inbox, Receiver},
-    signals::{Signal, SignalSender},
+    signals::{SignalInterface, SignalSender},
 };
 use futures::FutureExt;
 pub(crate) use polybox::*;
 use std::{ops::Deref, panic::AssertUnwindSafe, sync::Arc};
 
-pub fn spawn<T, R, F>(pid: Pid, f: impl FnOnce(EventStream<T>, Address<T>) -> F) -> Child<R, T>
+pub fn spawn<T, R, F>(pid: Pid, f: impl FnOnce(ActorState<T>) -> F) -> Child<R, T>
 where
     T: Interface,
     R: Send + 'static,
@@ -40,7 +40,7 @@ impl<T: Interface> SpawnData<T> {
         }
     }
 
-    pub fn spawn<R, F>(self, f: impl FnOnce(EventStream<T>, Address<T>) -> F) -> Child<R, T>
+    pub fn spawn<R, F>(self, f: impl FnOnce(ActorState<T>) -> F) -> Child<R, T>
     where
         T: Interface,
         R: Send + 'static,
@@ -54,8 +54,8 @@ impl<T: Interface> SpawnData<T> {
             mut exit_alerter,
         } = self;
 
-        let stream = EventStream::new(receiver, signal_receiver);
-        let spawned_future = AssertUnwindSafe(f(stream, address.clone())).catch_unwind();
+        let state = ActorState::new(EventStream::new(receiver, signal_receiver), address.clone());
+        let spawned_future = AssertUnwindSafe(f(state)).catch_unwind();
 
         let handle = tokio::spawn(async move {
             // Notify that the process is alive

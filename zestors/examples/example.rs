@@ -5,41 +5,20 @@ use zestors::{
     handler::{self, Handle, HandledBy, Handler, HandlerState},
     polybox::{Payload, Sends as _},
     registry::Pid,
-    signals::{self, Event, Observable, Shutdown, Signal},
+    signals::{self, ActorEvent, Event, Observable, Shutdown, SignalInterface},
     spawn,
-    supervision::ActorRunnerExt as _,
+    supervision::{ActorRunnerExt as _, ActorState},
 };
 
 #[tokio::main]
 async fn main() {
     let child = spawn(
         Pid::rand(),
-        async move |mut stream: EventStream<MyInterface>, _address| {
-            while let Some(msg) = stream.recv().await {
+        async move |mut stream: ActorState<MyInterface>| {
+            while let Some(msg) = stream.next().await {
                 match msg {
-                    Event::Signal(signal) => match signal {
-                        Signal::Shutdown(_) => break,
-                        Signal::Exit(_) => break,
-                        Signal::Suspend(_) => todo!(),
-                        Signal::Resume(_) => todo!(),
-                        Signal::GetStatus((_, tx)) => {
-                            let _ = tx.send(signals::ActorStatus::Running);
-                        }
-                        Signal::GetState((_, tx)) => {
-                            let _ = tx.send(signals::DebugState {
-                                status: signals::ActorStatus::Running,
-                                uptime: Duration::from_secs(0),
-                                description: "Test".to_string(),
-                            });
-                        }
-                        Signal::Ping((_, tx)) => {
-                            let _ = tx.send(());
-                        }
-                        Signal::GetChildren((_, tx)) => {
-                            let _ = tx.send(vec![]);
-                        }
-                    },
-                    Event::Message(message) => match message {
+                    ActorEvent::Signal(signal) => todo!(),
+                    ActorEvent::Message(message) => match message {
                         MyInterface::Add(payload) => {
                             println!("Received message: {:?}", payload);
                         }

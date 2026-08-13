@@ -36,15 +36,6 @@ pub trait Handler: Debug + Sized + Send + Sync + 'static {
         async { Ok(()) }
     }
 
-    /// Called when the actor is killed.
-    ///
-    /// No more messages will be processed after this method is called.
-    ///
-    /// The actor will exit using [`ExitReason::Kill`].
-    fn on_kill(&mut self) -> impl Future<Output = Result<(), Self::Error>> + Send + '_ {
-        async { Ok(()) }
-    }
-
     fn on_suspend(&mut self) -> impl Future<Output = Result<(), Self::Error>> + Send + '_ {
         async { Ok(()) }
     }
@@ -77,10 +68,9 @@ impl<H: Handler> Actor for H {
 
     async fn run(
         mut self,
-        stream: EventStream<Self::Interface>,
-        address: Address<Self::Interface>,
+        state: ActorState<Self::Interface>,
     ) -> Result<Self::Exit, anyhow::Error> {
-        HandlerState::new(stream, address)
+        HandlerState::new(state)
             .run(&mut self)
             .await
             .map_err(Into::into)

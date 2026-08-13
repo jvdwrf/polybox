@@ -1,7 +1,7 @@
 use crate::_prelude::*;
 use axum::extract::{Query, State};
 use axum_autoroute::{AutorouteApiRouter, autoroute, method_routers};
-use std::net::SocketAddr;
+use std::{net::SocketAddr, pin::pin};
 use tokio::net::TcpListener;
 use utoipa::IntoParams;
 use utoipa_swagger_ui::SwaggerUi;
@@ -35,18 +35,30 @@ impl Actor for ApiState {
 
     async fn run(
         self,
-        mut stream: EventStream<Self::Interface>,
-        _: Address<Self::Interface>,
+        mut state: ActorState<Self::Interface>,
     ) -> Result<Self::Exit, anyhow::Error> {
-        let run_fut = self.clone().run();
+        let mut run_api = pin!(self.run());
+        loop {
+            tokio::select! {
+                api_exit = &mut run_api => {
+                    match api_exit {
+                        Ok(_) => {
+                            tracing::info!("API server exited gracefully");
+                            Ok(())
+                        }
+                        Err(e) => {
+                            tracing::error!("API server exited with error: {e}");
+                            Err(e)
+                        }
+                    }
+                },
 
-        tokio::select! {
-            res = run_fut => res,
-            _ = stream.recv() => {
-                tracing::info!("API server received exit signal");
-                Ok(())
-            }
-        }?;
+                event = state.next() => {
+                    tracing::info!("API server received exit signal");
+                    Ok(())
+                }
+            };
+        }
 
         Ok(())
     }

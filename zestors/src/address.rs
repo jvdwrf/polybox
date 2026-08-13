@@ -26,7 +26,7 @@ where
 }
 
 impl<T: InboxKind> Observable for Address<T> {
-    async fn send_signal(&self, signal: Signal) -> Result<(), SendError<Signal>> {
+    async fn send_signal(&self, signal: SignalInterface) -> Result<(), SendError<SignalInterface>> {
         if !self.is_alive() {
             return Err(SendError(signal));
         }
@@ -210,9 +210,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_address_downcast_ref() {
-        let child = crate::spawn(Pid::rand(), |_: EventStream<MyInterface>, _| async move {
-            Ok(())
-        });
+        let child = crate::spawn(
+            Pid::rand(),
+            |_: ActorState<MyInterface>| async move { Ok(()) },
+        );
         let address = child.address().clone().into_dyn::<Set![]>();
 
         address

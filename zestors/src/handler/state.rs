@@ -8,28 +8,20 @@ use std::fmt::Debug;
 use tokio::select;
 
 pub struct HandlerState<H: Handler> {
-    status: signals::ActorStatus,
-    start_time: tokio::time::Instant,
-    address: Address<H::Interface>,
-    stream: EventStream<H::Interface>,
+    inner: ActorState<H::Interface>,
 }
 
 impl<H: Handler> HandlerState<H> {
-    pub fn new(stream: EventStream<H::Interface>, address: Address<H::Interface>) -> Self {
-        Self {
-            status: signals::ActorStatus::Running,
-            start_time: tokio::time::Instant::now(),
-            address,
-            stream,
-        }
+    pub fn new(inner: ActorState<H::Interface>) -> Self {
+        Self { inner }
     }
 
     pub fn address(&self) -> &Address<H::Interface> {
-        &self.address
+        &self.inner.address()
     }
 
     pub fn uptime(&self) -> std::time::Duration {
-        self.start_time.elapsed()
+        self.inner.uptime()
     }
 
     pub async fn run(&mut self, handler: &mut H) -> Result<H::Exit, H::Error>
@@ -63,13 +55,10 @@ impl<H: Handler> HandlerState<H> {
     }
 
     async fn _run_once(&mut self, handler: &mut H) -> Result<Option<H::Exit>, H::Error> {
-        let enable_messages = match self.status {
-            signals::ActorStatus::Running | signals::ActorStatus::Exiting => true,
-            signals::ActorStatus::Suspended => false,
-        };
+        let state = &mut self.inner;
 
         let msg = select! {
-            Some(msg) = self.stream.recv_enabled(enable_messages) => msg,
+            Some(msg) = state.next() => msg,
 
             next = handler.schedule_next() => {
                 match next {
@@ -88,59 +77,36 @@ impl<H: Handler> HandlerState<H> {
         };
 
         match msg {
-            Event::Signal(signal) => match signal {
-                Signal::Shutdown(_) => {
-                    self.status = signals::ActorStatus::Exiting;
-                    handler.on_shutdown().await?;
-                }
-
-                Signal::Exit(_) => {
-                    self.status = signals::ActorStatus::Exiting;
-                    handler.on_kill().await?;
-                    return handler.exit(ExitReason::Kill).await.map(Some);
-                }
-
-                Signal::Suspend(_) => {
-                    if self.status == signals::ActorStatus::Exiting {
-                        tracing::warn!("Actor is exiting, cannot suspend");
-                        return Ok(None);
+            ActorEvent::Signal(signal) => match signal {
+                SignalEvent::StatusUpdate(status) => match status {
+                    ActorStatus::Running => {
+                        handler.on_resume().await?;
                     }
-
-                    handler.on_suspend().await?;
-                    self.status = signals::ActorStatus::Suspended;
-                }
-
-                Signal::Resume(_) => {
-                    if self.status != signals::ActorStatus::Suspended {
-                        tracing::warn!("Actor is not suspended, cannot resume");
-                        return Ok(None);
+                    ActorStatus::Suspended => {
+                        handler.on_suspend().await?;
                     }
+                    ActorStatus::ShuttingDown => {
+                        handler.on_shutdown().await?;
+                    }
+                    ActorStatus::Killed => {
+                        return handler.exit(ExitReason::Kill).await.map(Some);
+                    }
+                },
 
-                    handler.on_resume().await?;
-                    self.status = signals::ActorStatus::Running;
-                }
-
-                Signal::GetStatus((_, tx)) => {
-                    tx.send(self.status).ok();
-                }
-
-                Signal::GetState((_, tx)) => {
+                SignalEvent::GetState(tx) => {
                     let _ = tx.send(signals::DebugState {
-                        status: self.status,
-                        uptime: self.uptime(),
+                        status: state.status(),
+                        uptime: state.uptime(),
                         description: handler.debug_state(),
                     });
                 }
 
-                Signal::Ping((_, tx)) => {
-                    tx.send(()).ok();
-                }
-                Signal::GetChildren((_, tx)) => {
+                SignalEvent::GetChildren(tx) => {
                     tx.send(handler.children()).ok();
                 }
             },
 
-            Event::Message(msg) => {
+            ActorEvent::Message(msg) => {
                 msg.handle_with(self, handler).await?;
             }
         }
@@ -150,8 +116,8 @@ impl<H: Handler> HandlerState<H> {
 }
 
 impl<H: Handler> Observable for HandlerState<H> {
-    async fn send_signal(&self, signal: Signal) -> Result<(), SendError<Signal>> {
-        <Address<H::Interface> as Observable>::send_signal(&self.address, signal).await
+    async fn send_signal(&self, signal: SignalInterface) -> Result<(), SendError<SignalInterface>> {
+        <Address<H::Interface> as Observable>::send_signal(&self.address(), signal).await
     }
 }
 
@@ -160,7 +126,7 @@ where
     Address<H::Interface>: Sends<M>,
 {
     async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
-        self.address.send(msg).await
+        self.address().send(msg).await
     }
 }
 

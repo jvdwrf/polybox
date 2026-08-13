@@ -143,7 +143,7 @@ where
 }
 
 impl<T, R: InboxKind> Observable for Child<T, R> {
-    fn send_signal(&self, signal: Signal) -> impl Future<Output = Result<(), SendError<Signal>>> {
+    fn send_signal(&self, signal: SignalInterface) -> impl Future<Output = Result<(), SendError<SignalInterface>>> {
         <Address<R> as Observable>::send_signal(&self.address, signal)
     }
 }

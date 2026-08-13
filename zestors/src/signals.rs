@@ -8,7 +8,7 @@ pub struct Shutdown;
 
 #[derive(Message, Debug)]
 #[msg(path = "crate")]
-pub struct Exit;
+pub struct Kill;
 
 #[derive(Message, Debug)]
 #[msg(path = "crate")]
@@ -27,7 +27,8 @@ pub struct GetStatus;
 pub enum ActorStatus {
     Running,
     Suspended,
-    Exiting,
+    ShuttingDown,
+    Killed,
 }
 
 #[derive(Message, Debug)]
@@ -55,9 +56,9 @@ pub struct Ping;
 
 #[derive(Interface, Debug)]
 #[interface(crate = "crate")]
-pub enum Signal {
+pub enum SignalInterface {
     Shutdown(Payload<Shutdown>),
-    Exit(Payload<Exit>),
+    Kill(Payload<Kill>),
     Suspend(Payload<Suspend>),
     Resume(Payload<Resume>),
     GetStatus(Payload<GetStatus>),
@@ -66,17 +67,17 @@ pub enum Signal {
     GetChildren(Payload<GetChildren>),
 }
 
-impl Signal {
+impl SignalInterface {
     pub fn kind(&self) -> SignalKind {
         match self {
-            Signal::Shutdown(_) => SignalKind::Shutdown,
-            Signal::Exit(_) => SignalKind::Exit,
-            Signal::Suspend(_) => SignalKind::Suspend,
-            Signal::Resume(_) => SignalKind::Resume,
-            Signal::GetStatus(_) => SignalKind::GetStatus,
-            Signal::GetState(_) => SignalKind::GetState,
-            Signal::Ping(_) => SignalKind::Ping,
-            Signal::GetChildren(_) => SignalKind::GetChildren,
+            SignalInterface::Shutdown(_) => SignalKind::Shutdown,
+            SignalInterface::Kill(_) => SignalKind::Kill,
+            SignalInterface::Suspend(_) => SignalKind::Suspend,
+            SignalInterface::Resume(_) => SignalKind::Resume,
+            SignalInterface::GetStatus(_) => SignalKind::GetStatus,
+            SignalInterface::GetState(_) => SignalKind::GetState,
+            SignalInterface::Ping(_) => SignalKind::Ping,
+            SignalInterface::GetChildren(_) => SignalKind::GetChildren,
         }
     }
 }
@@ -84,7 +85,7 @@ impl Signal {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SignalKind {
     Shutdown,
-    Exit,
+    Kill,
     Suspend,
     Resume,
     GetStatus,
@@ -96,35 +97,35 @@ pub enum SignalKind {
 pub trait Observable {
     fn send_signal(
         &self,
-        signal: Signal,
-    ) -> impl Future<Output = Result<(), SendError<Signal>>> + Send;
+        signal: SignalInterface,
+    ) -> impl Future<Output = Result<(), SendError<SignalInterface>>> + Send;
 
     fn signal_shutdown(&self) -> impl Future<Output = Result<(), SendError<()>>> + Send {
-        let fut = Self::send_signal(&self, Signal::Shutdown(Shutdown));
+        let fut = Self::send_signal(&self, SignalInterface::Shutdown(Shutdown));
         async { fut.await.map_err(|_| SendError(())) }
     }
 
     fn signal_exit(&self) -> impl Future<Output = Result<(), SendError<()>>> + Send {
-        let fut = Self::send_signal(&self, Signal::Exit(Exit));
+        let fut = Self::send_signal(&self, SignalInterface::Kill(Kill));
         async { fut.await.map_err(|_| SendError(())) }
     }
 
     fn signal_suspend(&self) -> impl Future<Output = Result<(), SendError<()>>> + Send {
-        let fut = Self::send_signal(&self, Signal::Suspend(Suspend));
+        let fut = Self::send_signal(&self, SignalInterface::Suspend(Suspend));
         async { fut.await.map_err(|_| SendError(())) }
     }
 
     fn signal_resume(&self) -> impl Future<Output = Result<(), SendError<()>>> + Send {
-        let fut = Self::send_signal(&self, Signal::Resume(Resume));
+        let fut = Self::send_signal(&self, SignalInterface::Resume(Resume));
         async { fut.await.map_err(|_| SendError(())) }
     }
 
     fn get_status(
         &self,
-    ) -> impl Future<Output = Result<<GetStatus as Message>::Reply, RequestError<Signal>>> + Send
+    ) -> impl Future<Output = Result<<GetStatus as Message>::Reply, RequestError<SignalInterface>>> + Send
     {
         let (tx, rx) = new_request();
-        let fut = Self::send_signal(&self, Signal::GetStatus((GetStatus, tx)));
+        let fut = Self::send_signal(&self, SignalInterface::GetStatus((GetStatus, tx)));
         async {
             fut.await?;
             rx.await.map_err(Into::into)
@@ -133,10 +134,10 @@ pub trait Observable {
 
     fn get_debug_state(
         &self,
-    ) -> impl Future<Output = Result<<GetState as Message>::Reply, RequestError<Signal>>> + Send
+    ) -> impl Future<Output = Result<<GetState as Message>::Reply, RequestError<SignalInterface>>> + Send
     {
         let (tx, rx) = new_request();
-        let fut = Self::send_signal(&self, Signal::GetState((GetState, tx)));
+        let fut = Self::send_signal(&self, SignalInterface::GetState((GetState, tx)));
         async {
             fut.await?;
             rx.await.map_err(Into::into)
@@ -145,9 +146,10 @@ pub trait Observable {
 
     fn ping(
         &self,
-    ) -> impl Future<Output = Result<<Ping as Message>::Reply, RequestError<Signal>>> + Send {
+    ) -> impl Future<Output = Result<<Ping as Message>::Reply, RequestError<SignalInterface>>> + Send
+    {
         let (tx, rx) = new_request();
-        let fut = Self::send_signal(&self, Signal::Ping((Ping, tx)));
+        let fut = Self::send_signal(&self, SignalInterface::Ping((Ping, tx)));
         async {
             fut.await?;
             rx.await.map_err(Into::into)
@@ -156,10 +158,10 @@ pub trait Observable {
 
     fn get_children(
         &self,
-    ) -> impl Future<Output = Result<<GetChildren as Message>::Reply, RequestError<Signal>>> + Send
-    {
+    ) -> impl Future<Output = Result<<GetChildren as Message>::Reply, RequestError<SignalInterface>>>
+    + Send {
         let (tx, rx) = new_request();
-        let fut = Self::send_signal(&self, Signal::GetChildren((GetChildren, tx)));
+        let fut = Self::send_signal(&self, SignalInterface::GetChildren((GetChildren, tx)));
         async {
             fut.await?;
             rx.await.map_err(Into::into)
@@ -169,7 +171,7 @@ pub trait Observable {
 
 #[derive(Clone, Debug)]
 pub struct SignalSender {
-    sender: async_channel::Sender<Signal>,
+    sender: async_channel::Sender<SignalInterface>,
 }
 
 impl SignalSender {
@@ -180,24 +182,24 @@ impl SignalSender {
 }
 
 impl SignalSender {
-    pub async fn send(&self, signal: Signal) -> Result<(), SendError<Signal>> {
+    pub async fn send(&self, signal: SignalInterface) -> Result<(), SendError<SignalInterface>> {
         self.sender.send(signal).await.map_err(|e| SendError(e.0))
     }
 }
 
 impl Observable for SignalSender {
-    async fn send_signal(&self, signal: Signal) -> Result<(), SendError<Signal>> {
+    async fn send_signal(&self, signal: SignalInterface) -> Result<(), SendError<SignalInterface>> {
         self.sender.send(signal).await.map_err(|e| SendError(e.0))
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct SignalReceiver {
-    receiver: async_channel::Receiver<Signal>,
+    receiver: async_channel::Receiver<SignalInterface>,
 }
 
 impl SignalReceiver {
-    pub async fn recv(&mut self) -> Option<Signal> {
+    pub async fn recv(&mut self) -> Option<SignalInterface> {
         self.receiver.recv().await.ok()
     }
 
@@ -247,7 +249,20 @@ impl SignalReceiver {
 }
 
 #[derive(Debug)]
-pub enum Event<T> {
-    Signal(Signal),
-    Message(T),
+pub enum Event<M> {
+    Signal(SignalInterface),
+    Message(M),
+}
+
+#[derive(Debug)]
+pub enum SignalEvent {
+    GetState(Tx<DebugState>),
+    GetChildren(Tx<Vec<Pid>>),
+    StatusUpdate(ActorStatus),
+}
+
+#[derive(Debug)]
+pub enum ActorEvent<M> {
+    Signal(SignalEvent),
+    Message(M),
 }
