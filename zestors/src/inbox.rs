@@ -103,6 +103,10 @@ impl<T> Receiver<T> {
     pub async fn recv(&mut self) -> Option<T> {
         self.receiver.recv().await.ok()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.receiver.is_empty()
+    }
 }
 
 impl<T> std::fmt::Debug for Receiver<T> {

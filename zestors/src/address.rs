@@ -27,10 +27,6 @@ where
 
 impl<T: InboxKind> Observable for Address<T> {
     async fn send_signal(&self, signal: SignalInterface) -> Result<(), SendError<SignalInterface>> {
-        if !self.is_alive() {
-            return Err(SendError(signal));
-        }
-
         self.signal_inbox.send(signal).await
     }
 }

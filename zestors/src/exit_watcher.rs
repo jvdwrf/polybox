@@ -78,6 +78,13 @@ pub(crate) struct ProcessAlerter {
 
 impl ProcessAlerter {
     pub fn alert(&mut self, status: ProcessStatus) {
-        let _ = self.alerter.send(status);
+        let _ = self.alerter.send_if_modified(|current| {
+            if *current != status {
+                *current = status;
+                true
+            } else {
+                false
+            }
+        });
     }
 }

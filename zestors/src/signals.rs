@@ -28,12 +28,11 @@ pub enum ActorStatus {
     Running,
     Suspended,
     ShuttingDown,
-    Killed,
 }
 
 impl ActorStatus {
     pub fn should_exit(&self) -> bool {
-        matches!(self, ActorStatus::ShuttingDown | ActorStatus::Killed)
+        matches!(self, ActorStatus::ShuttingDown)
     }
 
     pub fn should_accept_messages(&self) -> bool {
@@ -50,10 +49,6 @@ impl ActorStatus {
 
     pub fn shutting_down(&self) -> bool {
         matches!(self, ActorStatus::ShuttingDown)
-    }
-
-    pub fn killed(&self) -> bool {
-        matches!(self, ActorStatus::Killed)
     }
 }
 
@@ -84,7 +79,6 @@ pub struct Ping;
 #[interface(crate = "crate")]
 pub enum SignalInterface {
     Shutdown(Payload<Shutdown>),
-    Kill(Payload<Kill>),
     Suspend(Payload<Suspend>),
     Resume(Payload<Resume>),
     GetStatus(Payload<GetStatus>),
@@ -97,7 +91,6 @@ impl SignalInterface {
     pub fn kind(&self) -> SignalKind {
         match self {
             SignalInterface::Shutdown(_) => SignalKind::Shutdown,
-            SignalInterface::Kill(_) => SignalKind::Kill,
             SignalInterface::Suspend(_) => SignalKind::Suspend,
             SignalInterface::Resume(_) => SignalKind::Resume,
             SignalInterface::GetStatus(_) => SignalKind::GetStatus,
@@ -111,7 +104,6 @@ impl SignalInterface {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SignalKind {
     Shutdown,
-    Kill,
     Suspend,
     Resume,
     GetStatus,
@@ -128,11 +120,6 @@ pub trait Observable {
 
     fn signal_shutdown(&self) -> impl Future<Output = Result<(), SendError<()>>> + Send {
         let fut = Self::send_signal(&self, SignalInterface::Shutdown(Shutdown));
-        async { fut.await.map_err(|_| SendError(())) }
-    }
-
-    fn signal_exit(&self) -> impl Future<Output = Result<(), SendError<()>>> + Send {
-        let fut = Self::send_signal(&self, SignalInterface::Kill(Kill));
         async { fut.await.map_err(|_| SendError(())) }
     }
 
@@ -215,7 +202,10 @@ impl SignalSender {
 
 impl Observable for SignalSender {
     async fn send_signal(&self, signal: SignalInterface) -> Result<(), SendError<SignalInterface>> {
-        self.sender.send(signal).await.map_err(|e| SendError(e.0))
+        self.sender.send(signal).await.map_err(|e| {
+            tracing::debug!(?e, "Failed to send signal");
+            SendError(e.0)
+        })
     }
 }
 
@@ -243,6 +233,10 @@ impl SignalReceiver {
 
             else => None,
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.receiver.is_empty()
     }
 
     pub async fn recv_with_enabled<T>(

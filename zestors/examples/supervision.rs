@@ -1,12 +1,15 @@
 use futures::join;
-use std::time::Duration;
+use std::{convert::Infallible, time::Duration};
 use zestors::{
     HandlerInterface, Interface,
     handler::{ExitReason, Handle, Handler, HandlerState},
     node::{ApiConfig, Node},
     polybox::Payload,
     registry::Pid,
-    supervision::{ChildSpec, RestartIntensity, RestartMode, Supervisor},
+    signals::{ActorEvent, SignalEvent},
+    supervision::{
+        ActorRunnerExt, ActorState, ChildSpec, RestartIntensity, RestartMode, Supervisor,
+    },
 };
 
 #[derive(Interface, HandlerInterface)]
@@ -32,6 +35,12 @@ impl Handler for MyActor {
     type Exit = ();
 
     async fn exit(&mut self, _reason: ExitReason) -> Result<Self::Exit, Self::Error> {
+        Ok(())
+    }
+
+    async fn on_shutdown(&mut self) -> Result<(), Self::Error> {
+        tracing::info!("Actor {} is shutting down", self.name);
+
         Ok(())
     }
 }

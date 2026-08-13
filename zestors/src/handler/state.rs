@@ -1,6 +1,6 @@
 use crate::{
     handler::{Handler, HandlerInterface},
-    signals::{Event, Observable},
+    signals::Observable,
     *,
 };
 use polybox::errors::SendError;
@@ -29,23 +29,27 @@ impl<H: Handler> HandlerState<H> {
         H: Handler + Debug,
     {
         loop {
+            tracing::debug!("Running Handler loop for {:?}", handler);
+
             match self._run_once(handler).await {
-                Ok(None) => {}
+                Ok(None) => {
+                    tracing::debug!("Actor loop iteration completed, continuing...");
+                }
 
                 Ok(Some(exit)) => {
-                    tracing::info!("Actor exited");
+                    tracing::info!("Handler exited");
                     break Ok(exit);
                 }
 
                 Err(e) => {
-                    tracing::warn!("Actor encountered an error: {e}. Attempting to recover...");
+                    tracing::warn!("Handler encountered an error: {e}. Attempting to recover...");
 
                     match handler.recover_error(e).await {
                         Ok(()) => {
-                            tracing::info!("Actor recovered from error");
+                            tracing::info!("Handler recovered from error");
                         }
                         Err(e) => {
-                            tracing::error!("Actor failed to recover from error: {e}");
+                            tracing::error!("Handler failed to recover from error: {e}");
                             break Err(e);
                         }
                     }
@@ -57,6 +61,11 @@ impl<H: Handler> HandlerState<H> {
     async fn _run_once(&mut self, handler: &mut H) -> Result<Option<H::Exit>, H::Error> {
         let state = &mut self.inner;
 
+        if state.status().should_exit() && state.is_empty() {
+            tracing::debug!("Actor is exiting due to status: {:?}", state.status());
+            return handler.exit(ExitReason::Shutdown).await.map(Some);
+        }
+
         let msg = select! {
             Some(msg) = state.next() => msg,
 
@@ -67,7 +76,7 @@ impl<H: Handler> HandlerState<H> {
                         return Ok(None);
                     }
                     Err(e) => {
-                        tracing::error!("Actor encountered an error: {e}");
+                        tracing::error!("Handler encountered an error: {e}");
                         return Err(e);
                     }
                 }
@@ -87,9 +96,6 @@ impl<H: Handler> HandlerState<H> {
                     }
                     ActorStatus::ShuttingDown => {
                         handler.on_shutdown().await?;
-                    }
-                    ActorStatus::Killed => {
-                        return handler.exit(ExitReason::Kill).await.map(Some);
                     }
                 },
 
@@ -133,6 +139,5 @@ where
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ExitReason {
     Shutdown,
-    Kill,
     UnhandledError,
 }

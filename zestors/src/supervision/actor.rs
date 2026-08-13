@@ -2,6 +2,7 @@ use crate::_prelude::*;
 
 pub struct ActorState<I: Interface> {
     status: ActorStatus,
+    shutdown_at: Option<tokio::time::Instant>,
     start_time: tokio::time::Instant,
     address: Address<I>,
     stream: EventStream<I>,
@@ -14,6 +15,7 @@ impl<I: Interface> ActorState<I> {
             start_time: tokio::time::Instant::now(),
             address,
             stream,
+            shutdown_at: None,
         }
     }
 
@@ -37,6 +39,10 @@ impl<I: Interface> ActorState<I> {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.stream.is_empty()
+    }
+
     pub async fn next(&mut self) -> Option<ActorEvent<I>> {
         loop {
             match self
@@ -48,18 +54,15 @@ impl<I: Interface> ActorState<I> {
                 Event::Signal(signal) => match signal {
                     SignalInterface::Shutdown(_) => {
                         self.status = ActorStatus::ShuttingDown;
-                        break Some(ActorEvent::Signal(SignalEvent::StatusUpdate(
-                            ActorStatus::ShuttingDown,
-                        )));
-                    }
-                    SignalInterface::Kill(_) => {
-                        self.status = ActorStatus::ShuttingDown;
+                        if self.shutdown_at.is_none() {
+                            self.shutdown_at = Some(tokio::time::Instant::now());
+                        }
                         break Some(ActorEvent::Signal(SignalEvent::StatusUpdate(
                             ActorStatus::ShuttingDown,
                         )));
                     }
                     SignalInterface::Suspend(_) => {
-                        if self.status == ActorStatus::ShuttingDown {
+                        if self.status.should_exit() {
                             tracing::warn!("Actor is exiting, cannot suspend");
                             break None;
                         }

@@ -3,7 +3,7 @@ use crate::_prelude::*;
 use futures::{FutureExt as _, prelude::future::BoxFuture};
 use polybox::{
     errors::SendError,
-    type_sets::{TypeSet, Set},
+    type_sets::{Set, TypeSet},
 };
 use std::{fmt::Debug, task::Poll, time::Duration};
 
@@ -95,18 +95,27 @@ impl<T, R: InboxKind> Child<T, R> {
     }
 
     pub async fn shutdown_abort(mut self, timeout: Duration) -> Result<T, JoinError> {
-        let signal_res = self.address.signal_shutdown().await;
+        let shutdown_signal_result = self.address.signal_shutdown().await;
 
-        if signal_res.is_ok() {
+        if shutdown_signal_result.is_ok() {
+            let timeout = tokio::time::sleep(timeout);
+
             tokio::select! {
                 biased;
 
-                res = &mut self => {
-                    return res;
+                exit_result = &mut self => {
+                    return exit_result;
                 }
 
-                _ = tokio::time::sleep(timeout) => {}
+                _ = timeout => {
+                    tracing::warn!("Child did not exit within timeout. Aborting child.");
+                }
             };
+        } else {
+            tracing::debug!(
+                "Failed to send shutdown signal to child during `shutdown_abort`: {:?}. Aborting child.",
+                shutdown_signal_result
+            );
         }
 
         self.abort();
@@ -143,7 +152,10 @@ where
 }
 
 impl<T, R: InboxKind> Observable for Child<T, R> {
-    fn send_signal(&self, signal: SignalInterface) -> impl Future<Output = Result<(), SendError<SignalInterface>>> {
+    fn send_signal(
+        &self,
+        signal: SignalInterface,
+    ) -> impl Future<Output = Result<(), SendError<SignalInterface>>> {
         <Address<R> as Observable>::send_signal(&self.address, signal)
     }
 }

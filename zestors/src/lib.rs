@@ -56,9 +56,11 @@ impl<T: Interface> SpawnData<T> {
 
         let state = ActorState::new(EventStream::new(receiver, signal_receiver), address.clone());
         let spawned_future = AssertUnwindSafe(f(state)).catch_unwind();
+        let pid = address.pid().clone();
 
         let handle = tokio::spawn(async move {
             // Notify that the process is alive
+            tracing::debug!(pid = ?pid, "Process started");
             exit_alerter.alert(ProcessStatus::Alive);
 
             // Run the future and catch any panics that occur
@@ -69,15 +71,18 @@ impl<T: Interface> SpawnData<T> {
                 Ok(val) => {
                     match &val {
                         Ok(_) => {
+                            tracing::debug!(pid = ?pid, "Process exited normally");
                             exit_alerter.alert(ExitStatus::Normal.into());
                         }
                         Err(_) => {
+                            tracing::error!(pid = ?pid, "Process exited with error");
                             exit_alerter.alert(ExitStatus::Error.into());
                         }
                     };
                     val
                 }
                 Err(boxed) => {
+                    tracing::error!(pid = ?pid, "Process panicked");
                     exit_alerter.alert(ExitStatus::Panic.into());
                     std::panic::resume_unwind(boxed);
                 }

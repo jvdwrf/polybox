@@ -390,12 +390,10 @@ impl Actor for Supervisor {
                     SignalEvent::StatusUpdate(status) => match status {
                         ActorStatus::ShuttingDown => {
                             self.shutdown().await;
-
                             break;
                         }
                         ActorStatus::Running => (),
                         ActorStatus::Suspended => (),
-                        ActorStatus::Killed => (),
                     },
                 },
                 ActorEvent::Message(message) => match message {

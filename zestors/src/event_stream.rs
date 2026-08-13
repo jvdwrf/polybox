@@ -23,6 +23,10 @@ impl<T> EventStream<T> {
             .recv_with_enabled(&mut self.receiver, enabled)
             .await
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.receiver.is_empty() && self.signal_receiver.is_empty()
+    }
 }
 
 // impl<T> Stream for EventStream<T> {
