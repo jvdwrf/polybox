@@ -2,7 +2,7 @@ use crate::_prelude::*;
 use std::collections::VecDeque;
 use tokio::time::Instant;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum RestartMode {
     Always,
     OnError,

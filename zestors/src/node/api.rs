@@ -141,7 +141,14 @@ async fn get_tree(
 
     let pid = pid.pid.unwrap_or_else(|| state.root_supervisor.clone());
 
-    let tree = match SupervisionTree::new_populated(pid).await {
+    let tree = match SupervisionTree::new_populated(ChildDescription {
+        pid,
+        restart_mode: RestartMode::Always,
+        abort_timeout: Duration::from_secs(10),
+        children_restarted: 0,
+    })
+    .await
+    {
         Ok(tree) => tree,
         Err(_) => return "Failed to populate supervision tree".into_internal_server_error(),
     };

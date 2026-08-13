@@ -57,7 +57,7 @@ pub trait Handler: Debug + Sized + Send + Sync + 'static {
         pending::<Result<Infallible, _>>()
     }
 
-    fn children(&self) -> Vec<Pid> {
+    fn children(&self) -> Vec<ChildDescription> {
         vec![]
     }
 }

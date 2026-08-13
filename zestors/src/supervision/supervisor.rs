@@ -382,7 +382,11 @@ impl Actor for Supervisor {
                         let children = self
                             .supervisees
                             .iter()
-                            .map(|(pid, _)| pid.clone())
+                            .map(|(pid, supervisee)| ChildDescription {
+                                pid: pid.clone(),
+                                restart_mode: supervisee.spec.restart_mode,
+                                abort_timeout: supervisee.spec.abort_timeout,
+                            })
                             .collect::<Vec<_>>();
                         tx.send(children).ok();
                     }

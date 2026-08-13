@@ -105,6 +105,8 @@ async fn main() -> Result<(), anyhow::Error> {
         actor_d.watch_start()
     );
 
+    tracing::info!("All actors started, sending messages...");
+
     futures::future::pending::<()>().await;
     Ok(())
 }

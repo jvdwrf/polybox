@@ -4,24 +4,32 @@ use std::collections::VecDeque;
 #[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct SupervisionTree {
     pid: Pid,
+
+    restart_mode: RestartMode,
+    #[schema(value_type = String, example = "2024-06-01T12:00:00Z")]
+    abort_timeout: Duration,
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     debug_state: Option<DebugState>,
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schema(no_recursion)]
     children: Vec<SupervisionTree>,
 }
 
 impl SupervisionTree {
-    pub fn new(pid: Pid) -> Self {
+    pub fn new(child: ChildDescription) -> Self {
         Self {
-            pid,
+            pid: child.pid,
             debug_state: None,
+            restart_mode: child.restart_mode,
+            abort_timeout: child.abort_timeout,
             children: Vec::new(),
         }
     }
 
-    pub async fn new_populated(pid: Pid) -> Result<Self, anyhow::Error> {
-        let mut tree = Self::new(pid);
+    pub async fn new_populated(child: ChildDescription) -> Result<Self, anyhow::Error> {
+        let mut tree = Self::new(child);
         tree.populate_tree().await?;
         Ok(tree)
     }
@@ -66,9 +74,11 @@ impl SupervisionTree {
         queue.push_back(self);
 
         while let Some(node) = queue.pop_front() {
-            let address = Registry::local()
-                .get(&node.pid)
+            let entry = Registry::local()
+                .get_entry(&node.pid)
                 .ok_or_else(|| anyhow::anyhow!("Failed to get address from Registry"))?;
+
+            let address = entry.address();
 
             let debug_state = address.get_debug_state().await?;
             node.debug_state = Some(debug_state);

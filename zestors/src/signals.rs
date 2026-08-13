@@ -1,6 +1,6 @@
 use crate::*;
 use polybox::{Payload, errors::SendError, oneshot::new_request};
-use tokio::select;
+use tokio::{select, time::Instant};
 
 #[derive(Message, Debug)]
 #[msg(path = "crate")]
@@ -67,8 +67,15 @@ pub struct DebugState {
 
 #[derive(Message, Debug)]
 #[msg(path = "crate")]
-#[msg(reply = "Vec<Pid>")]
+#[msg(reply = "Vec<ChildDescription>")]
 pub struct GetChildren;
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ChildDescription {
+    pub pid: Pid,
+    pub restart_mode: RestartMode,
+    pub abort_timeout: Duration,
+}
 
 #[derive(Message, Debug)]
 #[msg(path = "crate")]
@@ -277,7 +284,7 @@ pub enum Event<M> {
 #[derive(Debug)]
 pub enum SignalEvent {
     GetState(Tx<DebugState>),
-    GetChildren(Tx<Vec<Pid>>),
+    GetChildren(Tx<Vec<ChildDescription>>),
     StatusUpdate(ActorStatus),
 }
 
