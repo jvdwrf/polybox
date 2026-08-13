@@ -1,9 +1,6 @@
 use crate::_prelude::*;
 use crate::signals::{Observable, SignalSender};
-use polybox::{
-    errors::SendError,
-    type_sets::{Members, Set},
-};
+use polybox::{errors::SendError, type_sets::Set};
 use std::{any::Any, fmt::Debug, marker::PhantomData, sync::Arc};
 
 pub struct Address<T: InboxKind = Dyn<Set![]>> {
@@ -54,7 +51,7 @@ impl<T: InboxKind> DynPolyBox for Address<T> {
 
 impl<T: InboxKind> PolyBox for Address<T> {
     type Set = T::Set;
-    type Dyn<R: Members + 'static> = Address<Dyn<R>>;
+    type Dyn<R: AsSet + 'static> = Address<Dyn<R>>;
 
     fn into_dyn_unchecked<R: Members + 'static>(self) -> Self::Dyn<R> {
         Address {

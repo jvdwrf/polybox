@@ -6,6 +6,7 @@ use axum::{
 };
 use std::{marker::PhantomData, net::SocketAddr};
 use tokio::net::TcpListener;
+use type_sets::sets::Zero;
 
 use crate::_prelude::*;
 
@@ -51,14 +52,14 @@ async fn get_tree(
     // Ok(Json(tree))
 
     let inbox: DynInbox<Set![]> = inbox();
-    let addr: Address = address();
+    let addr: Address<Set<dyn Zero + 'static>> = address();
     drop(addr);
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     todo!()
 }
 
-fn address() -> Address {
+fn address() -> Address<Set![]> {
     todo!()
 }
 
