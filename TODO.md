@@ -1,3 +1,4 @@
 - [ ] Drain inboxes
   - [ ] before starting process
   - [ ] after process exit
+- [ ] Fix that shutdown transfers through the whole supervision tree in the example

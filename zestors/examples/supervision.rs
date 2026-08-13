@@ -1,6 +1,5 @@
-use std::time::Duration;
-
 use futures::join;
+use std::time::Duration;
 use zestors::{
     HandlerInterface, Interface,
     handler::{ExitReason, Handle, Handler, HandlerState},
@@ -19,12 +18,12 @@ enum MyInterface {
 
 #[derive(Debug, Clone)]
 struct MyActor {
-    id: String,
+    name: String,
 }
 
 impl MyActor {
-    fn new() -> Self {
-        Self { id: "Hello".into() }
+    fn new(name: &str) -> Self {
+        Self { name: name.into() }
     }
 }
 
@@ -61,17 +60,17 @@ impl Handle<String> for MyActor {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), anyhow::Error> {
     let mut supervisor_a = Supervisor::blueprint();
 
     let mut actor_a = supervisor_a
-        .add_child(ChildSpec::new("HelloActor", MyActor::new()).mode(RestartMode::Never));
-    let mut actor_b = supervisor_a.add_child(ChildSpec::new("HelloActor2", MyActor::new()));
+        .add_child(ChildSpec::new("HelloActor", MyActor::new("A")).mode(RestartMode::Never));
+    let mut actor_b = supervisor_a.add_child(ChildSpec::new("HelloActor2", MyActor::new("B")));
 
     let mut supervisor_b = Supervisor::blueprint();
 
-    let mut actor_c = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new()));
-    let mut actor_d = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new()));
+    let mut actor_c = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new("C")));
+    let mut actor_d = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new("D")));
 
     let root_supervisor = Node::new(ChildSpec::new(
         "RootSupervisor",
@@ -80,8 +79,7 @@ async fn main() {
             .with_child(ChildSpec::new("SupervisorB", supervisor_b)),
     ))
     .with_restart_intensity(RestartIntensity::new(3, Duration::from_secs(60)))
-    .start()
-    .unwrap();
+    .start()?;
 
     join!(
         actor_a.watch_start(),
@@ -91,14 +89,13 @@ async fn main() {
     );
 
     let tree = SupervisionTree::new_populated(root_supervisor.pid().clone())
-        .await
-        .unwrap()
+        .await?
         .with_debug_state()
-        .await
-        .unwrap();
+        .await?;
 
     println!("Supervision tree: {:#?}", tree);
 
     root_supervisor.signal_shutdown().await.unwrap();
     tokio::time::sleep(Duration::from_secs(5)).await;
+    Ok(())
 }
