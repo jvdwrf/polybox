@@ -1,7 +1,7 @@
 use crate::_prelude::*;
 use axum::extract::{Query, State};
 use axum_autoroute::{AutorouteApiRouter, autoroute, method_routers};
-use std::{net::SocketAddr, pin::pin};
+use std::{convert::Infallible, net::SocketAddr, pin::pin};
 use tokio::net::TcpListener;
 use utoipa::IntoParams;
 use utoipa_swagger_ui::SwaggerUi;
@@ -24,47 +24,62 @@ impl Default for ApiConfig {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct ApiState {
+pub(super) struct ApiServer {
     pub root_supervisor: Pid,
     pub cfg: Arc<ApiConfig>,
 }
 
-impl Actor for ApiState {
-    type Interface = ();
+impl Actor for ApiServer {
+    type Interface = Infallible;
     type Exit = ();
 
     async fn run(
         self,
         mut state: ActorState<Self::Interface>,
     ) -> Result<Self::Exit, anyhow::Error> {
-        let mut run_api = pin!(self.run());
+        let mut run_api = pin!(self.clone().run());
+
         loop {
-            tokio::select! {
+            let event = tokio::select! {
                 api_exit = &mut run_api => {
-                    match api_exit {
+                    match &api_exit {
                         Ok(_) => {
                             tracing::info!("API server exited gracefully");
-                            Ok(())
                         }
                         Err(e) => {
                             tracing::error!("API server exited with error: {e}");
-                            Err(e)
+                        }
+                    }
+                    break api_exit.map_err(Into::into);
+                },
+
+                event = state.next() => match event {
+                    Some(event) => event,
+                    None => break Err(anyhow::anyhow!("Actor event stream closed unexpectedly")),
+                }
+            };
+
+            match event {
+                ActorEvent::Signal(signal) => match signal {
+                    SignalEvent::GetState(tx) => {
+                        let _ = tx.send(state.debug_state(&self));
+                    }
+                    SignalEvent::GetChildren(tx) => {
+                        tx.send(vec![]).ok();
+                    }
+                    SignalEvent::StatusUpdate(status) => {
+                        if status.should_exit() {
+                            break Ok(());
                         }
                     }
                 },
-
-                event = state.next() => {
-                    tracing::info!("API server received exit signal");
-                    Ok(())
-                }
-            };
+                ActorEvent::Message(_infallible) => unreachable!(),
+            }
         }
-
-        Ok(())
     }
 }
 
-impl ApiState {
+impl ApiServer {
     pub fn new(cfg: ApiConfig, root_supervisor: Pid) -> Self {
         Self {
             root_supervisor,
@@ -114,7 +129,7 @@ struct WithDebugParam {
 async fn get_tree(
     Query(include_debug): Query<WithDebugParam>,
     Query(pid): Query<StartTreeFrom>,
-    State(state): State<ApiState>,
+    State(state): State<ApiServer>,
 ) -> _ {
     tracing::debug!(
         "Received request for supervision tree with PID: {:?} and query: {:?}",

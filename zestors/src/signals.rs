@@ -31,6 +31,32 @@ pub enum ActorStatus {
     Killed,
 }
 
+impl ActorStatus {
+    pub fn should_exit(&self) -> bool {
+        matches!(self, ActorStatus::ShuttingDown | ActorStatus::Killed)
+    }
+
+    pub fn should_accept_messages(&self) -> bool {
+        !matches!(self, ActorStatus::Suspended)
+    }
+
+    pub fn running(&self) -> bool {
+        matches!(self, ActorStatus::Running)
+    }
+
+    pub fn suspended(&self) -> bool {
+        matches!(self, ActorStatus::Suspended)
+    }
+
+    pub fn shutting_down(&self) -> bool {
+        matches!(self, ActorStatus::ShuttingDown)
+    }
+
+    pub fn killed(&self) -> bool {
+        matches!(self, ActorStatus::Killed)
+    }
+}
+
 #[derive(Message, Debug)]
 #[msg(path = "crate")]
 #[msg(reply = DebugState)]

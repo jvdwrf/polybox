@@ -1,4 +1,4 @@
-use crate::{_prelude::*, node::ApiState};
+use crate::{_prelude::*, node::ApiServer};
 use anyhow::Context;
 use std::time::Duration;
 
@@ -43,7 +43,7 @@ impl Node {
         if let Some(api_cfg) = api_cfg {
             supervisor_spec.blueprint.add_child(ChildSpec::new(
                 api_cfg.pid.clone(),
-                ApiState::new(api_cfg, supervisor_spec.pid().clone()),
+                ApiServer::new(api_cfg, supervisor_spec.pid().clone()),
             ));
         }
 

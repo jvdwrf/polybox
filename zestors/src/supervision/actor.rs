@@ -29,6 +29,14 @@ impl<I: Interface> ActorState<I> {
         self.start_time.elapsed()
     }
 
+    pub fn debug_state(&self, actor: impl Debug) -> DebugState {
+        DebugState {
+            status: self.status,
+            uptime: self.uptime(),
+            description: format!("{actor:?}"),
+        }
+    }
+
     pub async fn next(&mut self) -> Option<ActorEvent<I>> {
         loop {
             match self
