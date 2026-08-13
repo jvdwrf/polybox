@@ -11,21 +11,24 @@ use std::marker::PhantomData;
 /// - `Set![u32, u64]` == `Set<dyn Two<u32, u64>>`
 pub struct Set<T: ?Sized>(PhantomData<fn() -> T>);
 
+unsafe impl<T: ?Sized> Send for Set<T> {}
+unsafe impl<T: ?Sized> Sync for Set<T> {}
+
 /// Create a [`struct@Set`] from a list of types.
 ///
 /// Example:
 /// - `Set![]` == `Set<dyn Zero>`
 /// - `Set![u32]` == `Set<dyn One<u32>>`
 /// - `Set![u32, u64]` == `Set<dyn Two<u32, u64>>`
-/// 
+///
 /// This macro works for up to 12 types.
 #[macro_export]
 macro_rules! Set {
     ($(,)?) => {
-        $crate::Set<dyn $crate::sets::Zero>
+        $crate::Set<dyn $crate::sets::Zero + 'static>
     };
     ($t1:ty $(,)?) => {
-        $crate::Set<dyn $crate::sets::One<$t1>>
+        $crate::Set<dyn $crate::sets::One<$t1> + 'static>
     };
     ($t1:ty, $t2:ty $(,)?) => {
         $crate::Set<dyn $crate::sets::Two<$t1, $t2>>

@@ -13,11 +13,11 @@ macro_rules! create_sets {
             /// This should not be implemented manually.
             ///
             /// For easy usage, see the macro [`macro@Set`].
-            pub trait $set<$($gen),*>: 'static + $($sub_sets +)* {}
-            impl<$($gen,)* S: ?Sized + 'static> $set<$($gen),*> for S where S: $($sub_sets +)* {}
+            pub trait $set<$($gen),*>: $($sub_sets +)* {}
+            impl<'a, $($gen,)* S: ?Sized> $set<$($gen),*> for S where S: 'a + $($sub_sets +)* {}
 
             // Implement the correct IsSubsetOf implementations
-            unsafe impl<$($gen,)* S> SubsetOf<S> for Set<dyn $set<$($gen),*>>
+            unsafe impl<'a, $($gen,)* S> SubsetOf<S> for Set<dyn $set<$($gen),*> + 'a>
             where
                 S: $set<$($gen),*>
             {}
@@ -27,7 +27,7 @@ macro_rules! create_sets {
             //     type Set = Set<dyn $set<$($gen),*>>;
             // }
 
-            unsafe impl<$($gen: 'static,)*> Members for Set<dyn $set<$($gen),*>>
+            unsafe impl<'a, $($gen: 'static,)*> Members for Set<dyn $set<$($gen),*> + 'a>
             {
                 fn members() -> &'static [TypeId] {
                     static MEMBERS: OnceLock<[TypeId; $n]> = OnceLock::new();
@@ -36,7 +36,7 @@ macro_rules! create_sets {
                     ),*])
                 }
 
-                type Set = Set<dyn $set<$($gen),*>>;
+                type Set = Self;
             }
         )*
     };

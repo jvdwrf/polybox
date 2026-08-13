@@ -12,7 +12,7 @@ use type_sets::SubsetOf;
 /// A trait that allows for conversions to [`DynInbox`].
 pub trait PolyBox: DynPolyBox {
     /// The set of message types that this inbox can accept.
-    type Set: Members + 'static;
+    type Set: Members;
     type Dyn<T: Members + 'static>;
 
     /// Converts into a dynamic inbox without checking if the types are compatible.

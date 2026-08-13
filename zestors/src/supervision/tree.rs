@@ -4,7 +4,9 @@ use std::collections::VecDeque;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SupervisionTree {
     pid: Pid,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     debug_state: Option<DebugState>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     children: Vec<SupervisionTree>,
 }
 

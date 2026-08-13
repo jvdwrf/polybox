@@ -13,8 +13,8 @@ use tokio::time::Instant;
 pub use childspec::*;
 mod childspec;
 
-pub use runner::*;
-mod runner;
+pub use actor::*;
+mod actor;
 
 pub use supervisor::*;
 mod supervisor;

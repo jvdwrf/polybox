@@ -88,18 +88,18 @@ impl NodeActor {
                 match exit {
                     Ok(()) => {
                         tracing::info!("Root-Supervisor exited gracefully. Shutting down node.");
-                        std::process::exit(0);
+                        std::process::exit(0)
                     }
                     Err(err) => {
                         tracing::error!("Root-Supervisor failed to exit gracefully within timeout: {:?}", err);
                         tokio::time::sleep(Duration::from_secs(3)).await;
-                        std::process::exit(1);
+                        std::process::exit(1)
                     }
                 }
             }
             _ = wait_for_shutdown_signal() => {
                 tracing::warn!("Received second shutdown signal. Forcing immediate termination.");
-                std::process::exit(130);
+                std::process::exit(130)
             }
         }
     }

@@ -56,7 +56,7 @@ impl<T: InboxKind> PolyBox for Address<T> {
     type Set = T::Set;
     type Dyn<R: Members + 'static> = Address<Dyn<R>>;
 
-    fn into_dyn_unchecked<R: Members + 'static>(self) -> Address<Dyn<R>> {
+    fn into_dyn_unchecked<R: Members + 'static>(self) -> Self::Dyn<R> {
         Address {
             inbox: T::map_inbox_into_dyn_unchecked(self.inbox),
             signal_inbox: self.signal_inbox,
@@ -90,6 +90,10 @@ impl<T: InboxKind> Address<T> {
             process_watcher,
             pid,
         }
+    }
+
+    pub fn into_dyn_unchecked_test(self) -> Address {
+        todo!()
     }
 
     pub fn exit(&self) -> &ProcessWatcher {
@@ -144,16 +148,16 @@ impl<T: InboxKind> Debug for Address<T> {
     }
 }
 
-pub trait InboxKind: 'static {
+pub trait InboxKind {
     type Inbox: PolyBox + Clone + Debug + Unpin;
-    type Set: Members + 'static;
+    type Set: Members;
     type Receiver: Clone + Send + Sync + 'static;
 
     fn map_inbox_into_dyn_unchecked<R: Members + 'static>(address: Self::Inbox) -> DynInbox<R>;
     fn map_receiver_into_any(receiver: Self::Receiver) -> Arc<dyn Any + Send + Sync>;
 }
 
-pub struct Dyn<T>(PhantomData<fn() -> T>);
+pub struct Dyn<T: ?Sized>(T);
 
 impl<T: Members + 'static> InboxKind for Dyn<T> {
     type Inbox = DynInbox<T>;
@@ -169,12 +173,9 @@ impl<T: Members + 'static> InboxKind for Dyn<T> {
     }
 }
 
-impl<T: ?Sized + 'static> InboxKind for Set<T>
-where
-    Set<T>: Members,
-{
-    type Inbox = DynInbox<Set<T>>;
-    type Set = Set<T>;
+impl InboxKind for Set![] {
+    type Inbox = DynInbox<Set![]>;
+    type Set = Set![];
     type Receiver = Arc<dyn Any + Send + Sync>;
 
     fn map_inbox_into_dyn_unchecked<R: Members + 'static>(inbox: Self::Inbox) -> DynInbox<R> {

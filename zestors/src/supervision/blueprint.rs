@@ -1,12 +1,12 @@
 use super::*;
 
-pub trait Blueprint: Debug {
+pub trait Blueprint: Debug + Send + Sync + 'static {
     type Actor: Actor;
 
     fn instantiate(&self) -> Self::Actor;
 }
 
-impl<T: Actor + Clone + Debug> Blueprint for T {
+impl<T: Actor + Clone + Debug + Send + Sync + 'static> Blueprint for T {
     type Actor = T;
 
     fn instantiate(&self) -> Self::Actor {
@@ -33,3 +33,17 @@ pub trait BlueprintExt: Blueprint + Sized {
     }
 }
 impl<T: Blueprint> BlueprintExt for T {}
+
+pub trait IntoBlueprint {
+    type Blueprint: Blueprint;
+
+    fn into_blueprint(self) -> Self::Blueprint;
+}
+
+impl<T: Blueprint> IntoBlueprint for T {
+    type Blueprint = T;
+
+    fn into_blueprint(self) -> Self::Blueprint {
+        self
+    }
+}

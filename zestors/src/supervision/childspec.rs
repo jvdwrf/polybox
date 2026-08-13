@@ -3,16 +3,17 @@ use super::*;
 pub struct ChildSpec<T: RepeatSpawn = DynRepeatSpawner> {
     pub(crate) restart_mode: RestartMode,
     pub(crate) abort_timeout: Duration,
-    pub(crate) spawner: T,
+    pub(crate) blueprint: T,
     pub(crate) data: SpawnData<T::Inbox>,
 }
 
+// Implementations just when T is statically known
 impl<T: Blueprint> ChildSpec<T> {
     pub fn new(id: impl Into<Pid>, blueprint: T) -> Self {
         Self {
             restart_mode: RestartMode::OnError,
             abort_timeout: Duration::from_millis(5_000),
-            spawner: blueprint.into(),
+            blueprint: blueprint.into(),
             data: SpawnData::<<T::Actor as Actor>::Interface>::new(id.into()),
         }
     }
@@ -23,12 +24,27 @@ impl<T: Blueprint> ChildSpec<T> {
         Self {
             restart_mode: RestartMode::OnError,
             abort_timeout: Duration::from_millis(5_000),
-            spawner: spawner.into(),
+            blueprint: spawner.into(),
             data: data,
+        }
+    }
+
+    pub fn supervise(self, supervisor: &mut Supervisor) -> Address<<T::Actor as Actor>::Interface> {
+        supervisor.add_child(self)
+    }
+
+    pub fn into_dyn(self) -> ChildSpec {
+        ChildSpec {
+            restart_mode: self.restart_mode,
+            abort_timeout: self.abort_timeout,
+            blueprint: self.blueprint.into(),
+            data: self.data.into_any(),
         }
     }
 }
 
+// Implementations when T can be any type that implements RepeatSpawn
+// (including DynRepeatSpawner)
 impl<T: RepeatSpawn> ChildSpec<T> {
     pub fn pid(&self) -> &Pid {
         self.data.pid()
@@ -48,26 +64,7 @@ impl<T: RepeatSpawn> ChildSpec<T> {
     where
         T: RepeatSpawn,
     {
-        self.spawner.spawn_with_data(self.data.clone())
-    }
-
-    pub fn into_dyn(self) -> ChildSpec
-    where
-        T: Into<DynRepeatSpawner>,
-    {
-        ChildSpec {
-            restart_mode: self.restart_mode,
-            abort_timeout: self.abort_timeout,
-            spawner: self.spawner.into(),
-            data: self.data.into_any(),
-        }
-    }
-
-    pub fn supervise(self, supervisor: &mut Supervisor) -> Address<<T::Actor as Actor>::Interface>
-    where
-        T: Blueprint + Send + Sync + 'static,
-    {
-        supervisor.add_child(self)
+        self.blueprint.spawn_with_data(self.data.clone())
     }
 
     pub fn address(&self) -> &Address<T::Inbox> {
@@ -80,7 +77,7 @@ impl<T: RepeatSpawn + Clone> Clone for ChildSpec<T> {
         Self {
             restart_mode: self.restart_mode,
             abort_timeout: self.abort_timeout,
-            spawner: self.spawner.clone(),
+            blueprint: self.blueprint.clone(),
             data: self.data.clone(),
         }
     }
@@ -91,20 +88,15 @@ impl<T: RepeatSpawn + Debug> Debug for ChildSpec<T> {
         f.debug_struct("ChildSpec")
             .field("restart_mode", &self.restart_mode)
             .field("abort_timeout", &self.abort_timeout)
-            .field("spawner", &self.spawner)
+            .field("spawner", &self.blueprint)
             .field("data", &self.data)
             .finish()
     }
 }
 
-impl<T: Blueprint + Send + Sync + 'static> From<ChildSpec<T>> for ChildSpec<DynRepeatSpawner> {
-    fn from(value: ChildSpec<T>) -> Self {
-        ChildSpec {
-            restart_mode: value.restart_mode,
-            abort_timeout: value.abort_timeout,
-            spawner: DynRepeatSpawner::new(value.spawner),
-            data: value.data.into_any(),
-        }
+impl<T: Blueprint> From<ChildSpec<T>> for ChildSpec {
+    fn from(spec: ChildSpec<T>) -> Self {
+        spec.into_dyn()
     }
 }
 

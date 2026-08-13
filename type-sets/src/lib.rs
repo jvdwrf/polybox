@@ -6,6 +6,8 @@ pub use set::*;
 /// Sets from 0 to 10 elements.
 pub mod sets;
 
+mod v2;
+
 //-------------------------------------
 // Contains
 //-------------------------------------
@@ -30,23 +32,23 @@ unsafe impl<T: ?Sized, E> Contains<E> for Set<T> where T: Contains<E> {}
 ///
 /// # Safety
 /// Implementing this is unsafe, for custom set-types, implement [`AsSet`] instead.
-pub unsafe trait Members: 'static {
+pub unsafe trait Members {
     /// Get the members (type-ids) of this set.
     fn members() -> &'static [TypeId];
 
     type Set: Members;
 }
 
-unsafe impl<T: ?Sized> Members for Set<Set<T>>
-where
-    Set<T>: Members,
-{
-    fn members() -> &'static [TypeId] {
-        <Set<T> as Members>::members()
-    }
+// unsafe impl<T: ?Sized> Members for Set<Set<T>>
+// where
+//     Set<T>: Members,
+// {
+//     fn members() -> &'static [TypeId] {
+//         <Set<T> as Members>::members()
+//     }
 
-    type Set = Set<T>;
-}
+//     type Set = Set<T>;
+// }
 
 // // Implement Members for `impl AsSet`
 // unsafe impl<T> Members for T
@@ -96,6 +98,8 @@ unsafe impl<T, S> SupersetOf<S> for T where S: SubsetOf<T> {}
 
 #[cfg(test)]
 mod tests {
+    use crate::sets::Zero;
+
     use super::*;
 
     // struct MySet;
@@ -174,6 +178,22 @@ mod tests {
     fn is_superset2<T>()
     where
         T: SupersetOf<Set![u32, u64, u128]>,
+    {
+    }
+
+    #[allow(dead_code)]
+    fn assert_members<T: Members>() {}
+
+    // Passes: Single named lifetime 'a (early-bound)
+    fn test_members<'a>() {
+        assert_members::<Set<dyn Zero + 'a>>();
+        test_members_hrtb();
+    }
+
+    // Fails: Higher-Ranked Trait Bound across ALL lifetimes (what async requires)
+    fn test_members_hrtb()
+    where
+        for<'a> Set<dyn Zero + 'a>: Members,
     {
     }
 }
