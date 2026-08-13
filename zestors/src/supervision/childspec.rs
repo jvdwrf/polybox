@@ -1,6 +1,6 @@
 use super::*;
 
-pub struct ChildSpec<T: SpawnWithData = DynSpawner> {
+pub struct ChildSpec<T: RepeatSpawn = DynRepeatSpawner> {
     pub(crate) restart_mode: RestartMode,
     pub(crate) abort_timeout: Duration,
     pub(crate) spawner: T,
@@ -29,7 +29,7 @@ impl<T: Blueprint> ChildSpec<T> {
     }
 }
 
-impl<T: SpawnWithData> ChildSpec<T> {
+impl<T: RepeatSpawn> ChildSpec<T> {
     pub fn pid(&self) -> &Pid {
         self.data.pid()
     }
@@ -46,14 +46,14 @@ impl<T: SpawnWithData> ChildSpec<T> {
 
     pub fn spawn(&self) -> Child<T::Exit, T::Inbox>
     where
-        T: SpawnWithData,
+        T: RepeatSpawn,
     {
         self.spawner.spawn_with_data(self.data.clone())
     }
 
     pub fn into_dyn(self) -> ChildSpec
     where
-        T: Into<DynSpawner>,
+        T: Into<DynRepeatSpawner>,
     {
         ChildSpec {
             restart_mode: self.restart_mode,
@@ -75,7 +75,7 @@ impl<T: SpawnWithData> ChildSpec<T> {
     }
 }
 
-impl<T: SpawnWithData + Clone> Clone for ChildSpec<T> {
+impl<T: RepeatSpawn + Clone> Clone for ChildSpec<T> {
     fn clone(&self) -> Self {
         Self {
             restart_mode: self.restart_mode,
@@ -86,7 +86,7 @@ impl<T: SpawnWithData + Clone> Clone for ChildSpec<T> {
     }
 }
 
-impl<T: SpawnWithData + Debug> Debug for ChildSpec<T> {
+impl<T: RepeatSpawn + Debug> Debug for ChildSpec<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ChildSpec")
             .field("restart_mode", &self.restart_mode)
@@ -97,12 +97,12 @@ impl<T: SpawnWithData + Debug> Debug for ChildSpec<T> {
     }
 }
 
-impl<T: Blueprint + Send + Sync + 'static> From<ChildSpec<T>> for ChildSpec<DynSpawner> {
+impl<T: Blueprint + Send + Sync + 'static> From<ChildSpec<T>> for ChildSpec<DynRepeatSpawner> {
     fn from(value: ChildSpec<T>) -> Self {
         ChildSpec {
             restart_mode: value.restart_mode,
             abort_timeout: value.abort_timeout,
-            spawner: DynSpawner::new(value.spawner),
+            spawner: DynRepeatSpawner::new(value.spawner),
             data: value.data.into_any(),
         }
     }

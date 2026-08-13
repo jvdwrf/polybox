@@ -1,41 +1,13 @@
 use super::*;
 
-pub trait SpawnWithData {
+pub trait RepeatSpawn {
     type Inbox: InboxKind;
     type Exit: Send + 'static;
 
     fn spawn_with_data(&self, data: SpawnData<Self::Inbox>) -> Child<Self::Exit, Self::Inbox>;
 }
 
-trait SpawnDyn: Debug {
-    fn spawn_dyn_with_data(&self, data: SpawnData) -> Child;
-}
-
-impl<R: Blueprint> SpawnDyn for R {
-    fn spawn_dyn_with_data(&self, data: SpawnData) -> Child {
-        let runner = self.instantiate().map(|res| res.map(std::mem::forget));
-
-        data.clone()
-            .downcast::<<R::Actor as Actor>::Interface>()
-            .expect("ProcessData should be of correct type")
-            .spawn(|stream, address| runner.run(stream, address))
-            .into_dyn()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct DynSpawner(Arc<dyn SpawnDyn + Send + Sync + 'static>);
-
-impl SpawnWithData for DynSpawner {
-    type Inbox = Dyn<Set![]>;
-    type Exit = ();
-
-    fn spawn_with_data(&self, data: SpawnData<Self::Inbox>) -> Child<Self::Exit, Self::Inbox> {
-        self.0.spawn_dyn_with_data(data)
-    }
-}
-
-impl<T: Blueprint> SpawnWithData for T {
+impl<T: Blueprint> RepeatSpawn for T {
     type Inbox = <T::Actor as Actor>::Interface;
     type Exit = <T::Actor as Actor>::Exit;
 
@@ -47,16 +19,44 @@ impl<T: Blueprint> SpawnWithData for T {
     }
 }
 
-impl DynSpawner {
+#[derive(Debug, Clone)]
+pub struct DynRepeatSpawner(Arc<dyn RepeatSpawnDyn + Send + Sync + 'static>);
+
+trait RepeatSpawnDyn: Debug {
+    fn spawn_dyn_with_data(&self, data: SpawnData) -> Child;
+}
+
+impl<R: Blueprint> RepeatSpawnDyn for R {
+    fn spawn_dyn_with_data(&self, data: SpawnData) -> Child {
+        let runner = self.instantiate().map(|res| res.map(std::mem::forget));
+
+        data.clone()
+            .downcast::<<R::Actor as Actor>::Interface>()
+            .expect("ProcessData should be of correct type")
+            .spawn(|stream, address| runner.run(stream, address))
+            .into_dyn()
+    }
+}
+
+impl RepeatSpawn for DynRepeatSpawner {
+    type Inbox = Dyn<Set![]>;
+    type Exit = ();
+
+    fn spawn_with_data(&self, data: SpawnData<Self::Inbox>) -> Child<Self::Exit, Self::Inbox> {
+        self.0.spawn_dyn_with_data(data)
+    }
+}
+
+impl DynRepeatSpawner {
     pub fn new<R>(blueprint: R) -> Self
     where
         R: Blueprint + Send + Sync + 'static,
     {
-        DynSpawner(Arc::new(blueprint))
+        DynRepeatSpawner(Arc::new(blueprint))
     }
 }
 
-impl<R> From<R> for DynSpawner
+impl<R> From<R> for DynRepeatSpawner
 where
     R: Blueprint + Send + Sync + 'static,
 {

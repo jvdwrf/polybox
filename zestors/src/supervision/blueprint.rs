@@ -15,11 +15,11 @@ impl<T: Actor + Clone + Debug> Blueprint for T {
 }
 
 pub trait BlueprintExt: Blueprint + Sized {
-    fn into_spawn_fn(self) -> DynSpawner
+    fn into_spawn_fn(self) -> DynRepeatSpawner
     where
         Self: Send + Sync + 'static,
     {
-        DynSpawner::new(self)
+        DynRepeatSpawner::new(self)
     }
 
     fn spawn(

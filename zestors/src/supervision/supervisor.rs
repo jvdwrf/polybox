@@ -26,7 +26,7 @@ impl SupervisorBlueprint {
         self
     }
 
-    pub fn with_child<T: SpawnWithData>(mut self, spec: ChildSpec<T>) -> Self
+    pub fn with_child<T: RepeatSpawn>(mut self, spec: ChildSpec<T>) -> Self
     where
         ChildSpec<T>: Into<ChildSpec>,
     {
@@ -35,7 +35,7 @@ impl SupervisorBlueprint {
         self
     }
 
-    pub fn with_children<T: SpawnWithData>(
+    pub fn with_children<T: RepeatSpawn>(
         mut self,
         specs: impl IntoIterator<Item = ChildSpec<T>>,
     ) -> Self
@@ -180,7 +180,7 @@ impl Supervisor {
             .collect()
     }
 
-    pub fn with_child<T: SpawnWithData>(mut self, spec: ChildSpec<T>) -> Self
+    pub fn with_child<T: RepeatSpawn>(mut self, spec: ChildSpec<T>) -> Self
     where
         ChildSpec<T>: Into<ChildSpec>,
     {
@@ -188,7 +188,7 @@ impl Supervisor {
         self
     }
 
-    pub fn with_children<T: SpawnWithData>(
+    pub fn with_children<T: RepeatSpawn>(
         mut self,
         specs: impl IntoIterator<Item = ChildSpec<T>>,
     ) -> Self
