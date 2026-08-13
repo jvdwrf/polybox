@@ -1,1 +1,0 @@
-Message-passing abstractions to make working with channels and actors a more seamless experience.

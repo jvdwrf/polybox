@@ -13,6 +13,15 @@ pub struct ApiConfig {
     pub pid: Pid,
 }
 
+impl ApiConfig {
+    pub fn generate_openapi(&self) -> utoipa::openapi::OpenApi {
+        ApiServer::new(Self::default(), Pid::new(""))
+            .create_router()
+            .split_for_parts()
+            .1
+    }
+}
+
 impl Default for ApiConfig {
     fn default() -> Self {
         Self {
@@ -87,11 +96,14 @@ impl ApiServer {
         }
     }
 
-    pub async fn run(self) -> Result<(), anyhow::Error> {
-        let (router, api) = AutorouteApiRouter::new()
+    fn create_router(&self) -> AutorouteApiRouter {
+        AutorouteApiRouter::new()
             .with_pub_routes(method_routers!(get_tree))
             .with_state(self.clone())
-            .split_for_parts();
+    }
+
+    pub async fn run(self) -> Result<(), anyhow::Error> {
+        let (router, api) = self.create_router().split_for_parts();
 
         let router = match self.cfg.swagger_ui {
             true => router
@@ -145,18 +157,17 @@ async fn get_tree(
         pid,
         restart_mode: RestartMode::Always,
         abort_timeout: Duration::from_secs(10),
-        children_restarted: 0,
     })
     .await
     {
         Ok(tree) => tree,
-        Err(_) => return "Failed to populate supervision tree".into_internal_server_error(),
+        Err(_) => return "Failed to populate supervision tree".into_404(),
     };
 
     let tree = if include_debug {
         match tree.with_debug_state().await {
             Ok(tree) => tree,
-            Err(_) => return "Failed to populate debug state".into_internal_server_error(),
+            Err(_) => return "Failed to populate debug state".into_500(),
         }
     } else {
         tree

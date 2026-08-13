@@ -1,11 +1,10 @@
 [workspace]
 resolver = "3"
-members = ["polybox-codegen", "type-sets", "zestors"]
+members = ["polybox-codegen", "type-sets", "zestors", "zestors-gen-oapi"]
 
 [workspace.dependencies]
 polybox-codegen = { path = "polybox-codegen", version = "0.0.2" }
-# polybox-core = { path = "polybox-core", version = "0.0.2" }
-# polybox = { path = "polybox", version = "0.0.2" }
+zestors = { path = "zestors", version = "0.1.0" }
 
 
 tokio = { version = "1", features = ["full"] }
