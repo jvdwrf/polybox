@@ -1,12 +1,13 @@
 use crate::_prelude::*;
 use std::collections::VecDeque;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct SupervisionTree {
     pid: Pid,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     debug_state: Option<DebugState>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schema(no_recursion)]
     children: Vec<SupervisionTree>,
 }
 

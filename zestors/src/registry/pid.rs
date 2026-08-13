@@ -106,3 +106,24 @@ mod test {
         assert_ne!(pid1, pid2);
     }
 }
+
+impl utoipa::PartialSchema for Pid {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        <String as utoipa::PartialSchema>::schema()
+    }
+}
+
+impl utoipa::ToSchema for Pid {
+    fn name() -> Cow<'static, str> {
+        <String as utoipa::ToSchema>::name()
+    }
+
+    fn schemas(
+        schemas: &mut Vec<(
+            String,
+            utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
+        )>,
+    ) {
+        <String as utoipa::ToSchema>::schemas(schemas)
+    }
+}

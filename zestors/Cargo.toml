@@ -21,6 +21,13 @@ rand.workspace = true
 bs58.workspace = true
 axum.workspace = true
 serde_json.workspace = true
+utoipa-axum.workspace = true
+utoipa-swagger-ui.workspace = true
+utoipa.workspace = true
+axum-autoroute.workspace = true
+
+[dev-dependencies]
+tracing-subscriber.workspace = true
 
 [features]
 _ra = []

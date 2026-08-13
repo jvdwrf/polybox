@@ -6,7 +6,6 @@ use zestors::{
     node::Node,
     polybox::Payload,
     registry::Pid,
-    signals::Observable,
     supervision::{ChildSpec, RestartIntensity, RestartMode, SupervisionTree, Supervisor},
 };
 
@@ -61,6 +60,10 @@ impl Handle<String> for MyActor {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .init();
+
     let mut supervisor_a = Supervisor::blueprint();
 
     let mut actor_a = supervisor_a
@@ -72,13 +75,14 @@ async fn main() -> Result<(), anyhow::Error> {
     let mut actor_c = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new("C")));
     let mut actor_d = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new("D")));
 
-    let root_supervisor = Node::new(ChildSpec::new(
+    let _root = Node::new(ChildSpec::new(
         "RootSupervisor",
         Supervisor::blueprint()
             .with_child(ChildSpec::new("SupervisorA", supervisor_a))
             .with_child(ChildSpec::new("SupervisorB", supervisor_b)),
     ))
     .with_restart_intensity(RestartIntensity::new(3, Duration::from_secs(60)))
+    .with_api_socket_addr("127.0.0.1:8080".parse()?)
     .start()?;
 
     join!(
@@ -88,14 +92,6 @@ async fn main() -> Result<(), anyhow::Error> {
         actor_d.watch_start()
     );
 
-    let tree = SupervisionTree::new_populated(root_supervisor.pid().clone())
-        .await?
-        .with_debug_state()
-        .await?;
-
-    println!("Supervision tree: {:#?}", tree);
-
-    root_supervisor.signal_shutdown().await.unwrap();
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    futures::future::pending::<()>().await;
     Ok(())
 }

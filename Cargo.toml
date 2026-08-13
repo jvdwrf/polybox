@@ -25,5 +25,10 @@ dashmap = { version = "6", features = ["serde"] }
 arc-swap = { version = "1", features = ["serde"] }
 rand = { version = "0.10" }
 bs58 = { version = "0.5" }
-axum = "0.7"
+axum = "0.8"
 serde_json = "1"
+utoipa = { version = "5", features = ["axum_extras"] }
+utoipa-axum = { version = "0.2" }
+utoipa-swagger-ui = { version = "9", features = ["axum"] }
+axum-autoroute = { version = "0.2", features = [] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }

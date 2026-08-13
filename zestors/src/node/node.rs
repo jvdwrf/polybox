@@ -1,10 +1,11 @@
-use crate::_prelude::*;
+use crate::{_prelude::*, node::ApiClient};
 use anyhow::Context;
-use std::time::Duration;
+use std::{net::SocketAddr, time::Duration};
 
 pub struct Node {
     restart_intensity: RestartIntensity,
     spec: ChildSpec<SupervisorBlueprint>,
+    api_socket_addr: Option<SocketAddr>,
 }
 
 struct NodeActor {
@@ -18,7 +19,13 @@ impl Node {
         Self {
             restart_intensity: RestartIntensity::new(3, Duration::from_secs(120)),
             spec,
+            api_socket_addr: None,
         }
+    }
+
+    pub fn with_api_socket_addr(mut self, addr: SocketAddr) -> Self {
+        self.api_socket_addr = Some(addr);
+        self
     }
 
     pub fn with_restart_intensity(mut self, intensity: RestartIntensity) -> Self {
@@ -39,7 +46,23 @@ impl Node {
             restart_limiter: RestartLimiter::new(self.restart_intensity),
         };
 
-        tokio::task::spawn(actor.run());
+        let api_client = self
+            .api_socket_addr
+            .map(|addr| ApiClient::new(addr, supervisor_address.clone()));
+
+        if let Some(api_client) = api_client {
+            tokio::spawn(async move {
+                loop {
+                    if let Err(err) = api_client.clone().run_api().await {
+                        tracing::error!("API server encountered an error: {:?}", err);
+                    }
+
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                }
+            });
+        }
+
+        tokio::spawn(actor.run());
 
         Ok(supervisor_address)
     }
