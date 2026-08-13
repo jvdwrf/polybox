@@ -29,15 +29,13 @@ impl<H: Handler> HandlerState<H> {
         H: Handler + Debug,
     {
         loop {
-            tracing::debug!("Running Handler loop for {:?}", handler);
-
             match self._run_once(handler).await {
                 Ok(None) => {
-                    tracing::debug!("Actor loop iteration completed, continuing...");
+                    tracing::trace!("Actor loop iteration completed, continuing...");
                 }
 
                 Ok(Some(exit)) => {
-                    tracing::info!("Handler exited");
+                    tracing::debug!("Handler exited");
                     break Ok(exit);
                 }
 

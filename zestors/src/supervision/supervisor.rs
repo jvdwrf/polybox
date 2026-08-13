@@ -1,3 +1,5 @@
+use futures::future::join_all;
+
 use super::*;
 
 #[derive(Debug)]
@@ -213,10 +215,7 @@ impl Supervisor {
     }
 
     async fn shutdown(&mut self) {
-        ShutdownSupervisees {
-            supervisees: &mut self.supervisees.values_mut().collect::<Vec<_>>(),
-        }
-        .await;
+        shutdown_supervisees(&mut self.supervisees.values_mut().collect::<Vec<_>>()).await;
     }
 
     async fn handle_child_termination(
@@ -273,7 +272,7 @@ impl Supervisor {
 
     async fn restart_children<'a>(supervisees: &mut [&mut Supervisee]) {
         // First, shutdown all affected children
-        let _ = ShutdownSupervisees { supervisees }.await;
+        let _ = shutdown_supervisees(supervisees).await;
 
         // Now restart all affected children
         for supervisee in supervisees {
@@ -415,6 +414,43 @@ impl Actor for Supervisor {
     }
 }
 
+async fn shutdown_supervisees<'a>(supervisees: &mut [&'a mut Supervisee]) {
+    let futures = supervisees
+        .iter_mut()
+        .filter_map(|supervisee| supervisee.child.take().map(|s| (s, &supervisee.spec)))
+        .map(|(child, spec)| child.shutdown_abort(spec.abort_timeout));
+
+    let _results = join_all(futures).await;
+}
+
+// struct ShutdownSupervisees<'a, 'b> {
+//     supervisees: &'a mut [&'b mut Supervisee],
+// }
+
+// impl<'a, 'b> Future for ShutdownSupervisees<'a, 'b> {
+//     type Output = Vec<Result<(), JoinError>>;
+
+//     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+//         let mut results = Vec::new();
+
+//         for supervisee in self.supervisees.iter_mut() {
+//             if let Some(child) = &mut supervisee.child
+//                 && let Poll::Ready(exit) = child.poll_unpin(cx)
+//             {
+//                 let _exited_child = supervisee.child.take().expect("child should be present");
+
+//                 results.push(exit);
+//             }
+//         }
+
+//         if results.len() == self.supervisees.len() {
+//             Poll::Ready(results)
+//         } else {
+//             Poll::Pending
+//         }
+//     }
+// }
+
 #[derive(Debug)]
 pub struct ChildTermination {
     pub id: Pid,
@@ -465,34 +501,6 @@ pub enum SupervisorError {
         #[from]
         RegistryAddError,
     ),
-}
-
-struct ShutdownSupervisees<'a, 'b> {
-    supervisees: &'a mut [&'b mut Supervisee],
-}
-
-impl<'a, 'b> Future for ShutdownSupervisees<'a, 'b> {
-    type Output = Vec<Result<(), JoinError>>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut results = Vec::new();
-
-        for supervisee in self.supervisees.iter_mut() {
-            if let Some(child) = &mut supervisee.child
-                && let Poll::Ready(exit) = child.poll_unpin(cx)
-            {
-                let _exited_child = supervisee.child.take().expect("child should be present");
-
-                results.push(exit);
-            }
-        }
-
-        if results.len() == self.supervisees.len() {
-            Poll::Ready(results)
-        } else {
-            Poll::Pending
-        }
-    }
 }
 
 #[derive(Debug, Clone, Default)]
