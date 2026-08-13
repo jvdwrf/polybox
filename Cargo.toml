@@ -1,14 +1,19 @@
 [workspace]
 resolver = "3"
-members = ["polybox-codegen", "type-sets", "zestors", "zestors-gen-oapi"]
+members = [
+    "crates/polybox-codegen",
+    "crates/type-sets",
+    "crates/zestors",
+    "crates/zestors-gen-oapi",
+]
 
 [workspace.dependencies]
-polybox-codegen = { path = "polybox-codegen", version = "0.0.2" }
-zestors = { path = "zestors", version = "0.1.0" }
+polybox-codegen = { path = "crates/polybox-codegen", version = "0.0.2" }
+zestors = { path = "crates/zestors", version = "0.1.0" }
+type-sets = { path = "crates/type-sets" }
 
 
 tokio = { version = "1", features = ["full"] }
-type-sets = { path = "type-sets" }
 async-trait = "0.1"
 futures = "0.3"
 thiserror = "2"
