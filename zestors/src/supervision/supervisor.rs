@@ -398,7 +398,7 @@ impl Actor for Supervisor {
                         tx.send(status).ok();
                     }
                     Signal::GetState((_, tx)) => {
-                        tx.send(State {
+                        tx.send(DebugState {
                             status: if suspended {
                                 signals::Status::Suspended
                             } else {

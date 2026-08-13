@@ -23,7 +23,7 @@ pub struct Resume;
 #[msg(reply = Status)]
 pub struct GetStatus;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Status {
     Running,
     Suspended,
@@ -32,11 +32,11 @@ pub enum Status {
 
 #[derive(Message, Debug)]
 #[msg(path = "crate")]
-#[msg(reply = State)]
+#[msg(reply = DebugState)]
 pub struct GetState;
 
-#[derive(Debug, Clone)]
-pub struct State {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DebugState {
     pub status: Status,
     pub uptime: std::time::Duration,
     pub description: String,
@@ -130,7 +130,7 @@ pub trait Observable {
         }
     }
 
-    fn get_state(
+    fn get_debug_state(
         &self,
     ) -> impl Future<Output = Result<<GetState as Message>::Reply, RequestError<Signal>>> + Send
     {

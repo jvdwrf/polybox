@@ -6,11 +6,9 @@ use zestors::{
     handler::{ExitReason, Handle, Handler, HandlerState},
     node::Node,
     polybox::Payload,
-    registry::{Pid, Registry},
+    registry::Pid,
     signals::Observable,
-    supervision::{
-        BlueprintExt, ChildSpec, RestartIntensity, RestartMode, SupervisionTree, Supervisor,
-    },
+    supervision::{ChildSpec, RestartIntensity, RestartMode, SupervisionTree, Supervisor},
 };
 
 #[derive(Interface, HandlerInterface)]
@@ -62,33 +60,6 @@ impl Handle<String> for MyActor {
     }
 }
 
-// #[tokio::main]
-// async fn main() -> Result<(), anyhow::Error> {
-//     let registry = Registry::local();
-
-//     let supervisor = Supervisor::blueprint()
-//         .with_child(ChildSpec::new(
-//             "SupervisorA",
-//             Supervisor::blueprint()
-//                 .with_child(ChildSpec::new("HelloActor", MyActor::new()))
-//                 .with_child(ChildSpec::new("HelloActor2", MyActor::new())),
-//         ))
-//         .with_child(ChildSpec::new(
-//             "SupervisorB",
-//             Supervisor::blueprint()
-//                 .with_child(ChildSpec::new(Pid::rand(), MyActor::new()))
-//                 .with_child(ChildSpec::new(Pid::rand(), MyActor::new())),
-//         ));
-
-//     supervisor.spawn(Pid::rand());
-//     supervisor.spawn(Pid::rand());
-
-//     let actor_a = registry.get_typed::<MyInterface>(&Pid::from("HelloActor"))?;
-//     let actor_b = registry.get_typed::<MyInterface>(&Pid::from("HelloActor2"))?;
-
-//     Ok(())
-// }
-
 #[tokio::main]
 async fn main() {
     let mut supervisor_a = Supervisor::blueprint();
@@ -122,7 +93,13 @@ async fn main() {
 
     let tree = SupervisionTree::new_populated(root_supervisor.pid().clone())
         .await
+        .unwrap()
+        .with_debug_state()
+        .await
         .unwrap();
 
     println!("Supervision tree: {:#?}", tree);
+
+    root_supervisor.signal_shutdown().await.unwrap();
+    tokio::time::sleep(Duration::from_secs(5)).await;
 }

@@ -131,7 +131,7 @@ impl<H: Handler> HandlerState<H> {
                 }
 
                 Signal::GetState((_, tx)) => {
-                    let _ = tx.send(signals::State {
+                    let _ = tx.send(signals::DebugState {
                         status: self.status,
                         uptime: self.uptime(),
                         description: handler.debug_state(),

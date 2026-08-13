@@ -1,10 +1,10 @@
-use std::collections::VecDeque;
-
 use crate::_prelude::*;
+use std::collections::VecDeque;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SupervisionTree {
     pid: Pid,
+    debug_state: Option<DebugState>,
     children: Vec<SupervisionTree>,
 }
 
@@ -12,6 +12,7 @@ impl SupervisionTree {
     pub fn new(pid: Pid) -> Self {
         Self {
             pid,
+            debug_state: None,
             children: Vec::new(),
         }
     }
@@ -49,5 +50,30 @@ impl SupervisionTree {
         }
 
         Ok(())
+    }
+
+    pub async fn populate_debug_state(&mut self) -> Result<(), anyhow::Error> {
+        let mut queue = VecDeque::new();
+        queue.push_back(self);
+
+        while let Some(node) = queue.pop_front() {
+            let address = Registry::local()
+                .get(&node.pid)
+                .ok_or_else(|| anyhow::anyhow!("Failed to get address from Registry"))?;
+
+            let debug_state = address.get_debug_state().await?;
+            node.debug_state = Some(debug_state);
+
+            for child in &mut node.children {
+                queue.push_back(child);
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn with_debug_state(mut self) -> Result<Self, anyhow::Error> {
+        self.populate_debug_state().await?;
+        Ok(self)
     }
 }
