@@ -1,30 +1,30 @@
-use crate::{_prelude::*, node::ApiClient};
+use crate::{_prelude::*, node::ApiState};
 use anyhow::Context;
-use std::{net::SocketAddr, time::Duration};
+use std::time::Duration;
 
 pub struct Node {
     restart_intensity: RestartIntensity,
-    spec: ChildSpec<SupervisorBlueprint>,
-    api_socket_addr: Option<SocketAddr>,
+    supervisor_spec: ChildSpec<SupervisorBlueprint>,
+    api_cfg: Option<ApiConfig>,
 }
 
 struct NodeActor {
     supervisor_child: Child<(), SupervisorInterface>,
     restart_limiter: RestartLimiter,
-    spec: ChildSpec<SupervisorBlueprint>,
+    supervisor_spec: ChildSpec<SupervisorBlueprint>,
 }
 
 impl Node {
-    pub fn new(spec: ChildSpec<SupervisorBlueprint>) -> Self {
+    pub fn new(supervisor_spec: ChildSpec<SupervisorBlueprint>) -> Self {
         Self {
             restart_intensity: RestartIntensity::new(3, Duration::from_secs(120)),
-            spec,
-            api_socket_addr: None,
+            supervisor_spec,
+            api_cfg: None,
         }
     }
 
-    pub fn with_api_socket_addr(mut self, addr: SocketAddr) -> Self {
-        self.api_socket_addr = Some(addr);
+    pub fn with_api(mut self, api_cfg: ApiConfig) -> Self {
+        self.api_cfg = Some(api_cfg);
         self
     }
 
@@ -34,35 +34,34 @@ impl Node {
     }
 
     pub fn start(self) -> Result<Address<SupervisorInterface>, anyhow::Error> {
-        let supervisor_child = self.spec.spawn();
-        let supervisor_address = supervisor_child.address().clone();
-        Registry::local()
-            .register(self.spec.data.clone())
-            .context("Root Supervisor failed to register")?;
+        let Self {
+            restart_intensity,
+            mut supervisor_spec,
+            api_cfg,
+        } = self;
 
-        let actor = NodeActor {
-            supervisor_child,
-            spec: self.spec,
-            restart_limiter: RestartLimiter::new(self.restart_intensity),
-        };
-
-        let api_client = self
-            .api_socket_addr
-            .map(|addr| ApiClient::new(addr, supervisor_address.clone()));
-
-        if let Some(api_client) = api_client {
-            tokio::spawn(async move {
-                loop {
-                    if let Err(err) = api_client.clone().run_api().await {
-                        tracing::error!("API server encountered an error: {:?}", err);
-                    }
-
-                    tokio::time::sleep(Duration::from_secs(5)).await;
-                }
-            });
+        if let Some(api_cfg) = api_cfg {
+            supervisor_spec.blueprint.add_child(ChildSpec::new(
+                api_cfg.pid.clone(),
+                ApiState::new(api_cfg, supervisor_spec.pid().clone()),
+            ));
         }
 
-        tokio::spawn(actor.run());
+        let supervisor_child = supervisor_spec.spawn();
+        let supervisor_address = supervisor_child.address().clone();
+
+        Registry::local()
+            .register(supervisor_spec.data.clone())
+            .context("Root Supervisor failed to register")?;
+
+        tokio::spawn(
+            NodeActor {
+                supervisor_child,
+                supervisor_spec,
+                restart_limiter: RestartLimiter::new(restart_intensity),
+            }
+            .run(),
+        );
 
         Ok(supervisor_address)
     }
@@ -95,7 +94,7 @@ impl NodeActor {
                             "Root-Supervisor exited with error: {:?}. Restarting...",
                             err
                         );
-                        let new_supervisor_child = self.spec.spawn();
+                        let new_supervisor_child = self.supervisor_spec.spawn();
                         self.supervisor_child = new_supervisor_child;
                     }
                 }
@@ -104,7 +103,7 @@ impl NodeActor {
     }
 
     async fn exit_gracefully(self) -> ! {
-        let timeout = self.spec.abort_timeout;
+        let timeout = self.supervisor_spec.abort_timeout;
 
         tokio::select! {
             exit = self.supervisor_child.shutdown_abort(timeout) => {

@@ -1,5 +1,5 @@
 use super::*;
-use std::any::TypeId;
+use std::{any::TypeId, convert::Infallible};
 use type_sets::TypeSet;
 
 /// An interface defines the set of messages that can be sent to a given actor.
@@ -41,4 +41,50 @@ pub trait FromPayload<M: Message> {
 
 pub trait TryIntoPayload<M: Message>: Sized {
     fn try_into_payload(self) -> Result<M::Payload, Self>;
+}
+
+impl Interface for () {
+    type Set = Set![];
+
+    fn try_from_boxed_payload(payload: BoxedPayload) -> Result<Self, BoxedPayload> {
+        payload.downcast::<()>()
+    }
+
+    fn into_boxed_payload(self) -> BoxedPayload {
+        BoxedPayload::new::<()>(())
+    }
+}
+
+impl FromPayload<()> for () {
+    fn from_payload(_payload: ()) -> Self {
+        ()
+    }
+}
+impl TryIntoPayload<()> for () {
+    fn try_into_payload(self) -> Result<(), Self> {
+        Ok(())
+    }
+}
+
+impl Interface for Infallible {
+    type Set = Set![];
+
+    fn try_from_boxed_payload(payload: BoxedPayload) -> Result<Self, BoxedPayload> {
+        Err(payload)
+    }
+
+    fn into_boxed_payload(self) -> BoxedPayload {
+        unreachable!()
+    }
+}
+
+impl FromPayload<Infallible> for Infallible {
+    fn from_payload(_payload: Infallible) -> Self {
+        unreachable!()
+    }
+}
+impl TryIntoPayload<Infallible> for Infallible {
+    fn try_into_payload(self) -> Result<Infallible, Self> {
+        unreachable!()
+    }
 }

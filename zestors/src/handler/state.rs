@@ -8,17 +8,19 @@ use std::fmt::Debug;
 use tokio::select;
 
 pub struct HandlerState<H: Handler> {
-    status: signals::Status,
+    status: signals::ActorStatus,
     start_time: tokio::time::Instant,
     address: Address<H::Interface>,
+    stream: EventStream<H::Interface>,
 }
 
 impl<H: Handler> HandlerState<H> {
-    pub fn new(address: Address<H::Interface>) -> Self {
+    pub fn new(stream: EventStream<H::Interface>, address: Address<H::Interface>) -> Self {
         Self {
-            status: signals::Status::Running,
+            status: signals::ActorStatus::Running,
             start_time: tokio::time::Instant::now(),
             address,
+            stream,
         }
     }
 
@@ -30,16 +32,12 @@ impl<H: Handler> HandlerState<H> {
         self.start_time.elapsed()
     }
 
-    pub async fn run(
-        &mut self,
-        handler: &mut H,
-        stream: &mut EventStream<H::Interface>,
-    ) -> Result<H::Exit, H::Error>
+    pub async fn run(&mut self, handler: &mut H) -> Result<H::Exit, H::Error>
     where
         H: Handler + Debug,
     {
         loop {
-            match self._run_once(handler, stream).await {
+            match self._run_once(handler).await {
                 Ok(None) => {}
 
                 Ok(Some(exit)) => {
@@ -64,18 +62,14 @@ impl<H: Handler> HandlerState<H> {
         }
     }
 
-    async fn _run_once(
-        &mut self,
-        handler: &mut H,
-        stream: &mut EventStream<H::Interface>,
-    ) -> Result<Option<H::Exit>, H::Error> {
+    async fn _run_once(&mut self, handler: &mut H) -> Result<Option<H::Exit>, H::Error> {
         let enable_messages = match self.status {
-            signals::Status::Running | signals::Status::Exiting => true,
-            signals::Status::Suspended => false,
+            signals::ActorStatus::Running | signals::ActorStatus::Exiting => true,
+            signals::ActorStatus::Suspended => false,
         };
 
         let msg = select! {
-            Some(msg) = stream.recv_enabled(enable_messages) => msg,
+            Some(msg) = self.stream.recv_enabled(enable_messages) => msg,
 
             next = handler.schedule_next() => {
                 match next {
@@ -96,34 +90,34 @@ impl<H: Handler> HandlerState<H> {
         match msg {
             Event::Signal(signal) => match signal {
                 Signal::Shutdown(_) => {
-                    self.status = signals::Status::Exiting;
+                    self.status = signals::ActorStatus::Exiting;
                     handler.on_shutdown().await?;
                 }
 
                 Signal::Exit(_) => {
-                    self.status = signals::Status::Exiting;
+                    self.status = signals::ActorStatus::Exiting;
                     handler.on_kill().await?;
                     return handler.exit(ExitReason::Kill).await.map(Some);
                 }
 
                 Signal::Suspend(_) => {
-                    if self.status == signals::Status::Exiting {
+                    if self.status == signals::ActorStatus::Exiting {
                         tracing::warn!("Actor is exiting, cannot suspend");
                         return Ok(None);
                     }
 
                     handler.on_suspend().await?;
-                    self.status = signals::Status::Suspended;
+                    self.status = signals::ActorStatus::Suspended;
                 }
 
                 Signal::Resume(_) => {
-                    if self.status != signals::Status::Suspended {
+                    if self.status != signals::ActorStatus::Suspended {
                         tracing::warn!("Actor is not suspended, cannot resume");
                         return Ok(None);
                     }
 
                     handler.on_resume().await?;
-                    self.status = signals::Status::Running;
+                    self.status = signals::ActorStatus::Running;
                 }
 
                 Signal::GetStatus((_, tx)) => {

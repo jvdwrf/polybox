@@ -20,11 +20,11 @@ pub struct Resume;
 
 #[derive(Message, Debug)]
 #[msg(path = "crate")]
-#[msg(reply = Status)]
+#[msg(reply = ActorStatus)]
 pub struct GetStatus;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
-pub enum Status {
+pub enum ActorStatus {
     Running,
     Suspended,
     Exiting,
@@ -37,7 +37,7 @@ pub struct GetState;
 
 #[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct DebugState {
-    pub status: Status,
+    pub status: ActorStatus,
     #[schema(value_type = String, example = "2024-06-01T12:00:00Z")]
     pub uptime: std::time::Duration,
     pub description: String,

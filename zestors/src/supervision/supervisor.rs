@@ -387,18 +387,18 @@ impl Actor for Supervisor {
                     }
                     Signal::GetStatus((_, tx)) => {
                         let status = if suspended {
-                            signals::Status::Suspended
+                            signals::ActorStatus::Suspended
                         } else {
-                            signals::Status::Running
+                            signals::ActorStatus::Running
                         };
                         tx.send(status).ok();
                     }
                     Signal::GetState((_, tx)) => {
                         tx.send(DebugState {
                             status: if suspended {
-                                signals::Status::Suspended
+                                signals::ActorStatus::Suspended
                             } else {
-                                signals::Status::Running
+                                signals::ActorStatus::Running
                             },
                             uptime: start_time.elapsed(),
                             description: "Supervisor".to_string(),

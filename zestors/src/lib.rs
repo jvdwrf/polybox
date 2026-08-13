@@ -179,5 +179,8 @@ pub(crate) mod _prelude {
     };
 
     pub(crate) use serde::{Deserialize, Serialize};
-    pub(crate) use std::time::Duration;
+    pub(crate) use std::{
+        fmt::{Debug, Display},
+        time::Duration,
+    };
 }

@@ -77,11 +77,11 @@ impl<H: Handler> Actor for H {
 
     async fn run(
         mut self,
-        mut stream: EventStream<Self::Interface>,
+        stream: EventStream<Self::Interface>,
         address: Address<Self::Interface>,
     ) -> Result<Self::Exit, anyhow::Error> {
-        HandlerState::new(address)
-            .run(&mut self, &mut stream)
+        HandlerState::new(stream, address)
+            .run(&mut self)
             .await
             .map_err(Into::into)
     }

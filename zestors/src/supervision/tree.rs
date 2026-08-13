@@ -31,7 +31,13 @@ impl SupervisionTree {
             .get(&self.pid)
             .ok_or_else(|| anyhow::anyhow!("Failed to get address from Registry"))?;
 
-        let children = address.get_children().await?;
+        let children = match address.get_children().await {
+            Ok(children) => children,
+            Err(err) => {
+                tracing::warn!("Failed to get children for PID {}: {}", self.pid, err);
+                vec![]
+            }
+        };
 
         for child in children {
             self.children.push(SupervisionTree::new(child));

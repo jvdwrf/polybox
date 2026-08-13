@@ -23,11 +23,11 @@ async fn main() {
                         Signal::Suspend(_) => todo!(),
                         Signal::Resume(_) => todo!(),
                         Signal::GetStatus((_, tx)) => {
-                            let _ = tx.send(signals::Status::Running);
+                            let _ = tx.send(signals::ActorStatus::Running);
                         }
                         Signal::GetState((_, tx)) => {
                             let _ = tx.send(signals::DebugState {
-                                status: signals::Status::Running,
+                                status: signals::ActorStatus::Running,
                                 uptime: Duration::from_secs(0),
                                 description: "Test".to_string(),
                             });

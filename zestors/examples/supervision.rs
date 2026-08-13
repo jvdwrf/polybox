@@ -3,10 +3,10 @@ use std::time::Duration;
 use zestors::{
     HandlerInterface, Interface,
     handler::{ExitReason, Handle, Handler, HandlerState},
-    node::Node,
+    node::{ApiConfig, Node},
     polybox::Payload,
     registry::Pid,
-    supervision::{ChildSpec, RestartIntensity, RestartMode, SupervisionTree, Supervisor},
+    supervision::{ChildSpec, RestartIntensity, RestartMode, Supervisor},
 };
 
 #[derive(Interface, HandlerInterface)]
@@ -82,7 +82,11 @@ async fn main() -> Result<(), anyhow::Error> {
             .with_child(ChildSpec::new("SupervisorB", supervisor_b)),
     ))
     .with_restart_intensity(RestartIntensity::new(3, Duration::from_secs(60)))
-    .with_api_socket_addr("127.0.0.1:8080".parse()?)
+    .with_api(ApiConfig {
+        addr: "127.0.0.1:8080".parse()?,
+        swagger_ui: true,
+        ..Default::default()
+    })
     .start()?;
 
     join!(

@@ -1,4 +1,40 @@
-use super::*;
+use crate::_prelude::*;
+
+pub struct ActorState<I: Interface> {
+    status: ActorStatus,
+    start_time: tokio::time::Instant,
+    address: Address<I>,
+    stream: EventStream<I>,
+}
+
+impl<I: Interface> ActorState<I> {
+    pub(crate) fn new(stream: EventStream<I>, address: Address<I>) -> Self {
+        Self {
+            status: ActorStatus::Running,
+            start_time: tokio::time::Instant::now(),
+            address,
+            stream,
+        }
+    }
+
+    pub fn address(&self) -> &Address<I> {
+        &self.address
+    }
+
+    pub fn uptime(&self) -> std::time::Duration {
+        self.start_time.elapsed()
+    }
+
+    pub fn stream(&mut self) -> &mut EventStream<I> {
+        &mut self.stream
+    }
+
+    pub async fn recv(&mut self) -> Option<Event<I>> {
+        self.stream
+            .recv_enabled(self.status != ActorStatus::Suspended)
+            .await
+    }
+}
 
 pub trait Actor: Send + Sized + 'static {
     type Interface: Interface;
