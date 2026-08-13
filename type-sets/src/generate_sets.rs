@@ -16,6 +16,7 @@ macro_rules! generate_sets {
         mod _priv {
             use super::*;
             $(
+                /// A private trait that defines the set of types contained in a type set.
                 pub trait $trait<$($el),*>: $($sub_trait <$($sub_el),*> +)* {}
             )*
         }
@@ -23,11 +24,15 @@ macro_rules! generate_sets {
 
         // Struct definitions
         $(
+            /// A [`TypeSet`] of `n` types.
+            ///
+            /// Look at the [`Set`] macro for a more convenient way to define type sets.
             pub struct $struct<$($el),*>(PhantomData<fn() -> ($($el),*)>);
         )*
 
         // Subset implementations
         $(
+            #[diagnostic::do_not_recommend]
             impl<S: ?Sized, $($el),*> SubsetOf<S> for dyn $trait<$($el),*>
                 where S: $trait<$($el),*>
             {}

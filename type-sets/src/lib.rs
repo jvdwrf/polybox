@@ -19,6 +19,9 @@ impl<E, T: ?Sized> Contains<E> for T where T: Contains1<E> {}
 )]
 pub trait SubsetOf<S: ?Sized> {}
 
+#[diagnostic::do_not_recommend]
+impl<T: TypeSet, R: TypeSet> SubsetOf<R> for T where T::Set: SubsetOf<R::Set> {}
+
 /// Indicates that a type is a superset of set `S`.
 #[diagnostic::on_unimplemented(
     message = "`{Self}` is not a superset of `{S}`",
@@ -28,9 +31,6 @@ pub trait SubsetOf<S: ?Sized> {}
 pub trait SupersetOf<S: ?Sized> {}
 
 #[diagnostic::do_not_recommend]
-impl<T: TypeSet, R: TypeSet> SubsetOf<R> for T where T::Set: SubsetOf<R::Set> {}
-
-#[diagnostic::do_not_recommend]
 impl<S1: ?Sized, S2: ?Sized> SupersetOf<S2> for S1 where S2: SubsetOf<S1> {}
 pub trait TypeSet {
     type Set: ?Sized;
@@ -38,6 +38,16 @@ pub trait TypeSet {
     where
         Self: 'static;
 }
+
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` and `{R}` do not represent the same set",
+    label = "the sets contain different members",
+    note = "two sets are equal when every member of one is also a member of the other"
+)]
+pub trait SetEqual<R: ?Sized> {}
+
+#[diagnostic::do_not_recommend]
+impl<T: TypeSet, R: TypeSet> SetEqual<R> for T where T: SubsetOf<R> + SupersetOf<R> {}
 
 mod generate_sets;
 pub use generate_sets::*;
