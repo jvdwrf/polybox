@@ -1,20 +1,19 @@
 use super::*;
 
-pub trait SpawnRef: Debug {
-    fn spawn(&self, data: SpawnData) -> Child;
+pub trait SpawnWithData {
+    type Inbox: InboxKind;
+    type Exit: Send + 'static;
+
+    fn spawn_with_data(&self, data: SpawnData<Self::Inbox>) -> Child<Self::Exit, Self::Inbox>;
 }
 
-pub struct Spawner<R: Blueprint> {
-    blueprint: R,
-    data: SpawnData<<R::Actor as Actor>::Interface>,
+trait SpawnDyn: Debug {
+    fn spawn_dyn_with_data(&self, data: SpawnData) -> Child;
 }
 
-impl<R: Blueprint> SpawnRef for Spawner<R> {
-    fn spawn(&self, data: SpawnData) -> Child {
-        let runner = self
-            .blueprint
-            .instantiate()
-            .map(|res| res.map(std::mem::forget));
+impl<R: Blueprint> SpawnDyn for R {
+    fn spawn_dyn_with_data(&self, data: SpawnData) -> Child {
+        let runner = self.instantiate().map(|res| res.map(std::mem::forget));
 
         data.clone()
             .downcast::<<R::Actor as Actor>::Interface>()
@@ -24,43 +23,27 @@ impl<R: Blueprint> SpawnRef for Spawner<R> {
     }
 }
 
-impl<R: Blueprint> Spawner<R> {
-    pub fn new(blueprint: R) -> Self {
-        Self {
-            data: SpawnData::new(Pid::rand()),
-            blueprint,
-        }
-    }
-
-    pub fn into_dyn(self) -> DynSpawner
-    where
-        R: Send + Sync + 'static,
-    {
-        DynSpawner(Arc::new(self))
-    }
-}
-
-impl<R: Blueprint> From<R> for Spawner<R> {
-    fn from(value: R) -> Self {
-        Self::new(value)
-    }
-}
-
-impl<R: Blueprint> Debug for Spawner<R> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Spawner")
-            .field("data", &self.data)
-            .field("blueprint", &self.blueprint)
-            .finish()
-    }
-}
-
 #[derive(Debug, Clone)]
-pub struct DynSpawner(Arc<dyn SpawnRef + Send + Sync + 'static>);
+pub struct DynSpawner(Arc<dyn SpawnDyn + Send + Sync + 'static>);
 
-impl SpawnRef for DynSpawner {
-    fn spawn(&self, data: SpawnData) -> Child {
-        self.0.spawn(data)
+impl SpawnWithData for DynSpawner {
+    type Inbox = Dyn<Set![]>;
+    type Exit = ();
+
+    fn spawn_with_data(&self, data: SpawnData<Self::Inbox>) -> Child<Self::Exit, Self::Inbox> {
+        self.0.spawn_dyn_with_data(data)
+    }
+}
+
+impl<T: Blueprint> SpawnWithData for T {
+    type Inbox = <T::Actor as Actor>::Interface;
+    type Exit = <T::Actor as Actor>::Exit;
+
+    fn spawn_with_data(&self, data: SpawnData<Self::Inbox>) -> Child<Self::Exit, Self::Inbox> {
+        let runner = self.instantiate();
+
+        data.clone()
+            .spawn(|stream, address| runner.run(stream, address))
     }
 }
 
@@ -69,7 +52,7 @@ impl DynSpawner {
     where
         R: Blueprint + Send + Sync + 'static,
     {
-        DynSpawner(Arc::new(Spawner::new(blueprint)))
+        DynSpawner(Arc::new(blueprint))
     }
 }
 

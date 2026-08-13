@@ -73,13 +73,12 @@ async fn main() {
     let mut actor_c = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new()));
     let mut actor_d = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new()));
 
-    let root_supervisor = Node::new(
+    let root_supervisor = Node::new(ChildSpec::new(
         "RootSupervisor",
         Supervisor::blueprint()
             .with_child(ChildSpec::new("SupervisorA", supervisor_a))
             .with_child(ChildSpec::new("SupervisorB", supervisor_b)),
-    )
-    .with_shutdown_timeout(Duration::from_secs(60))
+    ))
     .with_restart_intensity(RestartIntensity::new(3, Duration::from_secs(60)))
     .start()
     .unwrap();

@@ -26,7 +26,7 @@ impl SupervisorBlueprint {
         self
     }
 
-    pub fn with_child<T>(mut self, spec: ChildSpec<T>) -> Self
+    pub fn with_child<T: SpawnWithData>(mut self, spec: ChildSpec<T>) -> Self
     where
         ChildSpec<T>: Into<ChildSpec>,
     {
@@ -35,7 +35,10 @@ impl SupervisorBlueprint {
         self
     }
 
-    pub fn with_children<T>(mut self, specs: impl IntoIterator<Item = ChildSpec<T>>) -> Self
+    pub fn with_children<T: SpawnWithData>(
+        mut self,
+        specs: impl IntoIterator<Item = ChildSpec<T>>,
+    ) -> Self
     where
         ChildSpec<T>: Into<ChildSpec>,
     {
@@ -60,14 +63,9 @@ impl SupervisorBlueprint {
     where
         T: Blueprint + Send + Sync + 'static,
     {
-        let address = spec.address();
+        let address = spec.address().clone();
 
-        self.add_dyn_child(ChildSpec {
-            restart_mode: spec.restart_mode,
-            abort_timeout: spec.abort_timeout,
-            spawner: DynSpawner::new(spec.spawner),
-            data: spec.data,
-        });
+        self.add_dyn_child(spec.into_dyn());
 
         address
     }
@@ -162,14 +160,9 @@ impl Supervisor {
     where
         T: Blueprint + Send + Sync + 'static,
     {
-        let address = spec.address();
+        let address = spec.address().clone();
 
-        self.add_dyn_child(ChildSpec {
-            restart_mode: spec.restart_mode,
-            abort_timeout: spec.abort_timeout,
-            spawner: DynSpawner::new(spec.spawner),
-            data: spec.data,
-        });
+        self.add_dyn_child(spec.into_dyn());
 
         address
     }
@@ -187,7 +180,7 @@ impl Supervisor {
             .collect()
     }
 
-    pub fn with_child<T>(mut self, spec: ChildSpec<T>) -> Self
+    pub fn with_child<T: SpawnWithData>(mut self, spec: ChildSpec<T>) -> Self
     where
         ChildSpec<T>: Into<ChildSpec>,
     {
@@ -195,7 +188,10 @@ impl Supervisor {
         self
     }
 
-    pub fn with_children<T>(mut self, specs: impl IntoIterator<Item = ChildSpec<T>>) -> Self
+    pub fn with_children<T: SpawnWithData>(
+        mut self,
+        specs: impl IntoIterator<Item = ChildSpec<T>>,
+    ) -> Self
     where
         ChildSpec<T>: Into<ChildSpec>,
     {

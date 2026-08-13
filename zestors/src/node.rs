@@ -3,27 +3,21 @@ use anyhow::Context;
 use std::time::Duration;
 
 pub struct Node {
-    supervisor: SupervisorBlueprint,
-    supervisor_pid: Pid,
     restart_intensity: RestartIntensity,
-    shutdown_timeout: Duration,
+    spec: ChildSpec<SupervisorBlueprint>,
 }
 
 struct NodeActor {
-    supervisor_blueprint: SupervisorBlueprint,
     supervisor_child: Child<(), SupervisorInterface>,
-    supervisor_pid: Pid,
     restart_limiter: RestartLimiter,
-    shutdown_timeout: Duration,
+    spec: ChildSpec<SupervisorBlueprint>,
 }
 
 impl Node {
-    pub fn new(supervisor_pid: impl Into<Pid>, supervisor: SupervisorBlueprint) -> Self {
+    pub fn new(spec: ChildSpec<SupervisorBlueprint>) -> Self {
         Self {
-            supervisor,
-            supervisor_pid: supervisor_pid.into(),
             restart_intensity: RestartIntensity::new(3, Duration::from_secs(120)),
-            shutdown_timeout: Duration::from_secs(30),
+            spec,
         }
     }
 
@@ -32,24 +26,17 @@ impl Node {
         self
     }
 
-    pub fn with_shutdown_timeout(mut self, timeout: Duration) -> Self {
-        self.shutdown_timeout = timeout;
-        self
-    }
-
     pub fn start(self) -> Result<Address<SupervisorInterface>, anyhow::Error> {
-        let supervisor_child = self.supervisor.spawn(self.supervisor_pid.clone());
+        let supervisor_child = self.spec.spawn();
         let supervisor_address = supervisor_child.address().clone();
         Registry::local()
-            .register(supervisor_child.address().clone())
+            .register(self.spec.data.clone())
             .context("Root Supervisor failed to register")?;
 
         let actor = NodeActor {
-            supervisor_blueprint: self.supervisor,
             supervisor_child,
-            supervisor_pid: self.supervisor_pid,
+            spec: self.spec,
             restart_limiter: RestartLimiter::new(self.restart_intensity),
-            shutdown_timeout: self.shutdown_timeout,
         };
 
         tokio::task::spawn(actor.run());
@@ -85,8 +72,7 @@ impl NodeActor {
                             "Root-Supervisor exited with error: {:?}. Restarting...",
                             err
                         );
-                        let new_supervisor_child =
-                            self.supervisor_blueprint.spawn(self.supervisor_pid.clone());
+                        let new_supervisor_child = self.spec.spawn();
                         self.supervisor_child = new_supervisor_child;
                     }
                 }
@@ -95,8 +81,10 @@ impl NodeActor {
     }
 
     async fn exit_gracefully(self) -> ! {
+        let timeout = self.spec.abort_timeout;
+
         tokio::select! {
-            exit = self.supervisor_child.shutdown_abort(self.shutdown_timeout) => {
+            exit = self.supervisor_child.shutdown_abort(timeout) => {
                 match exit {
                     Ok(()) => {
                         tracing::info!("Root-Supervisor exited gracefully. Shutting down node.");
