@@ -145,7 +145,7 @@ impl<T: InboxKind> RegistryEntry<T> {
                 inner: _RegistryEntry::Data(data.into_any()),
             },
             _RegistryEntry::Address(address) => RegistryEntry {
-                inner: _RegistryEntry::Address(address.into_dyn()),
+                inner: _RegistryEntry::Address(address.into_dyn::<Set!()>()),
             },
         }
     }

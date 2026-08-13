@@ -2,7 +2,7 @@ use crate::*;
 use futures::future::BoxFuture;
 use polybox_core::errors::{SendCheckedError, SendError};
 use std::sync::Arc;
-use type_sets::Members;
+use type_sets::AsSet;
 
 /// A wrapper around a [`async_channel::Sender`] that acts as a [`PolyBox`].
 pub struct TokioInbox<T> {
@@ -30,7 +30,7 @@ impl<T> TokioInbox<T> {
 
 impl<T: Interface> PolyBox for TokioInbox<T> {
     type Set = T::Set;
-    type Dyn<R: Members> = DynInbox<R>;
+    type Dyn<R: AsSet> = DynInbox<R>;
 
     fn into_dyn_unchecked<R>(self) -> DynInbox<R> {
         DynInbox::new_unchecked(Arc::new(self))

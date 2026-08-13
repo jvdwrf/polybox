@@ -4,7 +4,7 @@ use std::{any::TypeId, marker::PhantomData, sync::OnceLock};
 
 macro_rules! generate_sets {
     ($(
-        for<$($el:ident),*> $n:literal = {
+        for<$($el:ident),*> $n:literal $($true:literal)? = {
             pub struct $struct:ident;
 
             trait $trait:ident: $(
@@ -13,9 +13,12 @@ macro_rules! generate_sets {
         }
     )*) => {
         // Trait definitions
-        mod _priv {$(
-            pub trait $trait<$($el),*>: $($sub_trait <$($sub_el),*> +)* {}
-        )*}
+        mod _priv {
+            use super::*;
+            $(
+                pub trait $trait<$($el),*>: $($sub_trait <$($sub_el),*> +)* {}
+            )*
+        }
         pub(crate) use _priv::*;
 
         // Struct definitions
@@ -32,6 +35,7 @@ macro_rules! generate_sets {
 
         // AsSet implementations
         $(
+            #[diagnostic::do_not_recommend]
             impl<$($el),*> AsSet for $struct<$($el),*>
             {
                 type Set = dyn $trait<$($el),*>;
@@ -61,10 +65,11 @@ macro_rules! generate_sets {
 }
 
 generate_sets! {
-    for<> 0 = {
-        pub struct Set0;
-        trait Contains0: {}
-    }
+    // Set0 is implemented manually below, because it has no constraints
+    // for<> 0 = {
+    //     pub struct Set0;
+    //     trait Contains0: {}
+    // }
 
     for<E1> 1 = {
         pub struct Set1;
@@ -184,5 +189,26 @@ generate_sets! {
     for<E1, E2, E3, E4, E5, E6, E7, E8, E9, E10, E11, E12, E13, E14, E15, E16, E17, E18, E19, E20, E21, E22, E23, E24> 24 = {
         pub struct Set24;
         trait Contains24: Contains23<E1, E2, E3, E4, E5, E6, E7, E8, E9, E10, E11, E12, E13, E14, E15, E16, E17, E18, E19, E20, E21, E22, E23>, Contains1<E24> {}
+    }
+}
+
+mod _priv_0 {
+    pub trait Contains0 {}
+}
+pub(crate) use _priv_0::*;
+
+pub struct Set0;
+
+#[diagnostic::do_not_recommend]
+impl<S: ?Sized> SubsetOf<S> for dyn Contains0 {}
+
+#[diagnostic::do_not_recommend]
+impl<S: ?Sized> Contains0 for S {}
+
+impl AsSet for Set0 {
+    type Set = dyn Contains0;
+
+    fn members() -> &'static [TypeId] {
+        &[]
     }
 }

@@ -53,7 +53,7 @@ impl<T: InboxKind> PolyBox for Address<T> {
     type Set = T::Set;
     type Dyn<R: AsSet + 'static> = Address<Dyn<R>>;
 
-    fn into_dyn_unchecked<R: Members + 'static>(self) -> Self::Dyn<R> {
+    fn into_dyn_unchecked<R: AsSet + 'static>(self) -> Self::Dyn<R> {
         Address {
             inbox: T::map_inbox_into_dyn_unchecked(self.inbox),
             signal_inbox: self.signal_inbox,
@@ -122,7 +122,7 @@ impl<T: InboxKind> Address<T> {
     }
 }
 
-impl<T: Members + 'static> Address<Dyn<T>> {
+impl<T: AsSet + 'static> Address<Dyn<T>> {
     pub fn downcast_ref<R: Interface>(&self) -> Option<Address<R>> {
         let inbox = self.inbox.downcast_ref::<R>()?.clone();
 
@@ -147,21 +147,21 @@ impl<T: InboxKind> Debug for Address<T> {
 
 pub trait InboxKind {
     type Inbox: PolyBox + Clone + Debug + Unpin;
-    type Set: Members;
+    type Set: AsSet + 'static;
     type Receiver: Clone + Send + Sync + 'static;
 
-    fn map_inbox_into_dyn_unchecked<R: Members + 'static>(address: Self::Inbox) -> DynInbox<R>;
+    fn map_inbox_into_dyn_unchecked<R: AsSet + 'static>(address: Self::Inbox) -> DynInbox<R>;
     fn map_receiver_into_any(receiver: Self::Receiver) -> Arc<dyn Any + Send + Sync>;
 }
 
 pub struct Dyn<T: ?Sized>(T);
 
-impl<T: Members + 'static> InboxKind for Dyn<T> {
+impl<T: AsSet + 'static> InboxKind for Dyn<T> {
     type Inbox = DynInbox<T>;
     type Set = T;
     type Receiver = Arc<dyn Any + Send + Sync>;
 
-    fn map_inbox_into_dyn_unchecked<R: Members + 'static>(inbox: Self::Inbox) -> DynInbox<R> {
+    fn map_inbox_into_dyn_unchecked<R: AsSet + 'static>(inbox: Self::Inbox) -> DynInbox<R> {
         inbox.into_dyn_unchecked()
     }
 
@@ -175,7 +175,7 @@ impl InboxKind for Set![] {
     type Set = Set![];
     type Receiver = Arc<dyn Any + Send + Sync>;
 
-    fn map_inbox_into_dyn_unchecked<R: Members + 'static>(inbox: Self::Inbox) -> DynInbox<R> {
+    fn map_inbox_into_dyn_unchecked<R: AsSet + 'static>(inbox: Self::Inbox) -> DynInbox<R> {
         inbox.into_dyn_unchecked()
     }
 
@@ -189,7 +189,7 @@ impl<T: Interface> InboxKind for T {
     type Set = T::Set;
     type Receiver = Receiver<T>;
 
-    fn map_inbox_into_dyn_unchecked<R: Members + 'static>(inbox: Self::Inbox) -> DynInbox<R> {
+    fn map_inbox_into_dyn_unchecked<R: AsSet + 'static>(inbox: Self::Inbox) -> DynInbox<R> {
         inbox.into_dyn_unchecked()
     }
 

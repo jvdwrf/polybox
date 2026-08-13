@@ -1,6 +1,6 @@
 use super::*;
 use std::any::TypeId;
-use type_sets::Members;
+use type_sets::AsSet;
 
 /// An interface defines the set of messages that can be sent to a given actor.
 /// This is usually derived on an enum using the `#[derive(Interface)]` macro.
@@ -9,7 +9,7 @@ use type_sets::Members;
 pub trait Interface:
     Message<Output = ()> + TryIntoPayload<Self> + FromPayload<Self> + Sized + Send + 'static
 {
-    type Set: Members;
+    type Set: AsSet;
 
     fn try_from_boxed_payload(payload: BoxedPayload) -> Result<Self, BoxedPayload>;
     fn into_boxed_payload(self) -> BoxedPayload;
@@ -31,7 +31,7 @@ pub trait Interface:
     }
 
     fn invocable_with(type_id: TypeId) -> bool {
-        <Self::Set as Members>::members().contains(&type_id)
+        <Self::Set as AsSet>::members().contains(&type_id)
     }
 }
 

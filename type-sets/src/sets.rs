@@ -27,7 +27,7 @@
 //             //     type Set = Set<dyn $set<$($gen),*>>;
 //             // }
 
-//             unsafe impl<'a, $($gen: 'static,)*> Members for Set<dyn $set<$($gen),*> + 'a>
+//             unsafe impl<'a, $($gen: 'static,)*> AsSet for Set<dyn $set<$($gen),*> + 'a>
 //             {
 //                 fn members() -> &'static [TypeId] {
 //                     static MEMBERS: OnceLock<[TypeId; $n]> = OnceLock::new();

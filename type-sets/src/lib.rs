@@ -25,38 +25,38 @@
 // // unsafe impl<T, E> Contains<E> for T where T: Contains<E> {}
 
 // //-------------------------------------
-// // Members
+// // AsSet
 // //-------------------------------------
 
 // /// Trait to get the members (type-ids) of a set.
 // ///
 // /// # Safety
 // /// Implementing this is unsafe, for custom set-types, implement [`AsSet`] instead.
-// pub unsafe trait Members {
+// pub unsafe trait AsSet {
 //     /// Get the members (type-ids) of this set.
 //     fn members() -> &'static [TypeId];
 
-//     type Set: Members;
+//     type Set: AsSet;
 // }
 
-// // unsafe impl<T: ?Sized> Members for Set<Set<T>>
+// // unsafe impl<T: ?Sized> AsSet for Set<Set<T>>
 // // where
-// //     Set<T>: Members,
+// //     Set<T>: AsSet,
 // // {
 // //     fn members() -> &'static [TypeId] {
-// //         <Set<T> as Members>::members()
+// //         <Set<T> as AsSet>::members()
 // //     }
 
 // //     type Set = Set<T>;
 // // }
 
-// // // Implement Members for `impl AsSet`
-// // unsafe impl<T> Members for T
+// // // Implement AsSet for `impl AsSet`
+// // unsafe impl<T> AsSet for T
 // // where
 // //     T: AsSet,
 // // {
 // //     fn members() -> &'static [TypeId] {
-// //         <T::Set as Members>::members()
+// //         <T::Set as AsSet>::members()
 // //     }
 // // }
 
@@ -93,7 +93,7 @@
 // // /// Trait that allows usage of custom types instead of [`Set`].
 // // pub trait AsSet {
 // //     /// The [`struct@Set`] type.
-// //     type Set: Members;
+// //     type Set: AsSet;
 // // }
 
 // #[cfg(test)]
@@ -182,7 +182,7 @@
 //     }
 
 //     #[allow(dead_code)]
-//     fn assert_members<T: Members>() {}
+//     fn assert_members<T: AsSet>() {}
 
 //     // Passes: Single named lifetime 'a (early-bound)
 //     fn test_members<'a>() {
@@ -193,7 +193,7 @@
 //     // Fails: Higher-Ranked Trait Bound across ALL lifetimes (what async requires)
 //     fn test_members_hrtb()
 //     where
-//         for<'a> Set<dyn Zero + 'a>: Members,
+//         for<'a> Set<dyn Zero + 'a>: AsSet,
 //     {
 //     }
 // }
