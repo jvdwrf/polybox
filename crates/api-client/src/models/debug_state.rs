@@ -18,15 +18,15 @@ pub struct DebugState {
     #[serde(rename = "status")]
     pub status: models::ActorStatus,
     #[serde(rename = "uptime")]
-    pub uptime: String,
+    pub uptime: Box<models::DurationSchema>,
 }
 
 impl DebugState {
-    pub fn new(description: String, status: models::ActorStatus, uptime: String) -> DebugState {
+    pub fn new(description: String, status: models::ActorStatus, uptime: models::DurationSchema) -> DebugState {
         DebugState {
             description,
             status,
-            uptime,
+            uptime: Box::new(uptime),
         }
     }
 }

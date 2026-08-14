@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**abort_timeout** | **String** |  | 
+**abort_timeout** | [**models::DurationSchema**](DurationSchema.md) |  | 
 **children** | Option<[**Vec<models::SupervisionTree>**](SupervisionTree.md)> |  | [optional]
 **debug_state** | Option<[**models::DebugState**](DebugState.md)> |  | [optional]
 **pid** | **String** |  | 

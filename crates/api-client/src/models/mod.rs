@@ -2,6 +2,8 @@ pub mod actor_status;
 pub use self::actor_status::ActorStatus;
 pub mod debug_state;
 pub use self::debug_state::DebugState;
+pub mod duration_schema;
+pub use self::duration_schema::DurationSchema;
 pub mod restart_mode;
 pub use self::restart_mode::RestartMode;
 pub mod supervision_tree;

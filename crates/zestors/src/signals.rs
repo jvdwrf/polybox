@@ -1,4 +1,4 @@
-use crate::*;
+use crate::{schemas::DurationSchema, *};
 use polybox::{Payload, errors::SendError, oneshot::new_request};
 use tokio::{select, time::Instant};
 
@@ -60,8 +60,14 @@ pub struct GetState;
 #[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct DebugState {
     pub status: ActorStatus,
-    #[schema(value_type = String, example = "2024-06-01T12:00:00Z")]
+
+    #[schema(value_type = DurationSchema, example = "{\"secs\": 5, \"nanos\": 0}")]
+    #[serde(
+        deserialize_with = "DurationSchema::deserializer",
+        serialize_with = "DurationSchema::serializer"
+    )]
     pub uptime: std::time::Duration,
+
     pub description: String,
 }
 

@@ -1,12 +1,11 @@
-# DebugState
+# DurationSchema
 
 ## Properties
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**description** | **String** |  | 
-**status** | [**models::ActorStatus**](ActorStatus.md) |  | 
-**uptime** | [**models::DurationSchema**](DurationSchema.md) |  | 
+**nanos** | **i32** |  | 
+**secs** | **i64** |  | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

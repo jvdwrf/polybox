@@ -5,8 +5,8 @@ members = [
     "crates/polybox-codegen",
     "crates/type-sets",
     "crates/zestors",
-    "crates/zestors-gen-oapi",
-    "crates/zestors-gui",
+    "crates/gen-oapi",
+    "crates/inspector",
 ]
 
 [workspace.dependencies]

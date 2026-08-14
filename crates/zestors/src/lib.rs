@@ -191,3 +191,5 @@ pub(crate) mod _prelude {
 
     pub(crate) use rootcause::Report;
 }
+
+pub(crate) mod schemas;

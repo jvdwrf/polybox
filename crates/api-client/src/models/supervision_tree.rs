@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SupervisionTree {
     #[serde(rename = "abort_timeout")]
-    pub abort_timeout: String,
+    pub abort_timeout: Box<models::DurationSchema>,
     #[serde(rename = "children", skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<models::SupervisionTree>>,
     #[serde(rename = "debug_state", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
@@ -26,9 +26,9 @@ pub struct SupervisionTree {
 }
 
 impl SupervisionTree {
-    pub fn new(abort_timeout: String, pid: String, restart_mode: models::RestartMode) -> SupervisionTree {
+    pub fn new(abort_timeout: models::DurationSchema, pid: String, restart_mode: models::RestartMode) -> SupervisionTree {
         SupervisionTree {
-            abort_timeout,
+            abort_timeout: Box::new(abort_timeout),
             children: None,
             debug_state: None,
             pid,

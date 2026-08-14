@@ -19,4 +19,4 @@ generate-api-client: generate-openapi
         --additional-properties=packageName=zestors-api-client \
         --additional-properties=packageVersion=0.1.0
 
-mod gui "crates/zestors-gui"
+mod inspector "crates/inspector"

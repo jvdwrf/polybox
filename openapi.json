@@ -98,8 +98,26 @@
             "$ref": "#/components/schemas/ActorStatus"
           },
           "uptime": {
-            "type": "string",
-            "example": "2024-06-01T12:00:00Z"
+            "$ref": "#/components/schemas/DurationSchema"
+          }
+        }
+      },
+      "DurationSchema": {
+        "type": "object",
+        "required": [
+          "secs",
+          "nanos"
+        ],
+        "properties": {
+          "nanos": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "secs": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
           }
         }
       },
@@ -123,8 +141,7 @@
         ],
         "properties": {
           "abort_timeout": {
-            "type": "string",
-            "example": "2024-06-01T12:00:00Z"
+            "$ref": "#/components/schemas/DurationSchema"
           },
           "children": {
             "type": "array",

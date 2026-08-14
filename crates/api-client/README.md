@@ -33,6 +33,7 @@ Class | Method | HTTP request | Description
 
  - [ActorStatus](docs/ActorStatus.md)
  - [DebugState](docs/DebugState.md)
+ - [DurationSchema](docs/DurationSchema.md)
  - [RestartMode](docs/RestartMode.md)
  - [SupervisionTree](docs/SupervisionTree.md)
 

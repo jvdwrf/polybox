@@ -1,4 +1,4 @@
-use crate::_prelude::*;
+use crate::{_prelude::*, schemas::DurationSchema};
 use std::collections::VecDeque;
 
 #[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
@@ -6,7 +6,12 @@ pub struct SupervisionTree {
     pid: Pid,
 
     restart_mode: RestartMode,
-    #[schema(value_type = String, example = "2024-06-01T12:00:00Z")]
+
+    #[schema(value_type = DurationSchema, example = "{\"secs\": 5, \"nanos\": 0}")]
+    #[serde(
+        deserialize_with = "DurationSchema::deserializer",
+        serialize_with = "DurationSchema::serializer"
+    )]
     abort_timeout: Duration,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
