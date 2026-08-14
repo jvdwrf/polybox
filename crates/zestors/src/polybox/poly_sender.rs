@@ -36,6 +36,7 @@ pub trait DynPolySender: Any + Send + Sync {
         futures::executor::block_on(self._send_boxed_payload_checked(msg))
     }
 
+    /// Returns the type IDs of the message types that this inbox can accept.
     fn members(&self) -> &'static [TypeId]
     where
         Self: 'static;
@@ -130,6 +131,10 @@ pub trait PolySenderExt: PolySender + Sized {
     #[must_use]
     fn accepts_msgs(&self, ids: &[TypeId]) -> bool {
         ids.iter().all(|id| self.members().contains(id))
+    }
+
+    fn accepts_current_set<T: DynSenderKind>(&self) -> bool {
+        self.accepts_msgs(<T as TypeSet>::members())
     }
 }
 impl<T: PolySender> PolySenderExt for T {}

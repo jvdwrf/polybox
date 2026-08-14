@@ -105,6 +105,16 @@ where
     R: DynSenderKind + Contains<M>,
 {
     async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
+        debug_assert!(
+            self.accepts_current_set::<R>(),
+            "DynSender has incorrect type.
+    - Expected {:?}
+    - to be a superset of {:?} - ({})",
+            self.members(),
+            <R as TypeSet>::members(),
+            std::any::type_name::<R>(),
+        );
+
         self.send_checked(msg).await.map_err(|e| match e {
             SendCheckedError::Closed(msg) => SendError(msg),
             SendCheckedError::NotAccepted(_msg) => {
