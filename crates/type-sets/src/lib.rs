@@ -47,6 +47,20 @@ pub trait TypeSet {
         Self: 'static;
 }
 
+pub trait AsTypeSet {
+    type Set: TypeSet + 'static;
+
+    fn members() -> &'static [TypeId]
+    where
+        Self: 'static,
+    {
+        <Self::Set as TypeSet>::members()
+    }
+}
+impl<T: TypeSet + 'static> AsTypeSet for T {
+    type Set = T;
+}
+
 #[diagnostic::on_unimplemented(
     message = "`{Self}` and `{R}` do not represent the same set",
     label = "the sets contain different members",

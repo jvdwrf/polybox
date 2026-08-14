@@ -155,7 +155,7 @@ impl<T, R: InboxKind> Observable for Child<T, R> {
     }
 }
 
-impl<T: Send, R: InboxKind> DynPolyBox for Child<T, R> {
+impl<T: Send, R: InboxKind> SendsBoxedPayload for Child<T, R> {
     fn _send_boxed_payload_checked(
         &self,
         msg: BoxedPayload,
@@ -164,14 +164,16 @@ impl<T: Send, R: InboxKind> DynPolyBox for Child<T, R> {
     }
 }
 
-impl<T: Send, R: InboxKind> PolyBox for Child<T, R> {
-    type Set = Set![];
+impl<T: Send, R: InboxKind> PolySend for Child<T, R> {
     type Dyn<S: TypeSet + 'static> = Child<T, Dyn<S>>;
 
     fn into_dyn_unchecked<S: TypeSet + 'static>(self) -> Child<T, Dyn<S>> {
         let (handle, address) = self.into_parts();
         Child::new(handle, address.into_dyn_unchecked())
     }
+}
+impl<T: Send, R: InboxKind> AsTypeSet for Child<T, R> {
+    type Set = R::Set;
 }
 
 #[derive(thiserror::Error, Debug)]
