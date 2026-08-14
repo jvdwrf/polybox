@@ -1,6 +1,6 @@
 #[allow(unused_imports)]
 use crate::_prelude::*;
-use futures::{FutureExt as _, prelude::future::BoxFuture};
+use futures::prelude::future::BoxFuture;
 use polybox::{
     errors::SendError,
     type_sets::{Set, TypeSet},
@@ -153,16 +153,23 @@ impl<T, R: SenderKind> Observable for Child<T, R> {
     }
 }
 
-impl<T: Send + 'static, R: SenderKind> SendsBoxedPayload for Child<T, R> {
+impl<T: Send + 'static, R: SenderKind> DynPolySender for Child<T, R> {
     fn _send_boxed_payload_checked(
         &self,
         msg: BoxedPayload,
     ) -> BoxFuture<'_, Result<(), errors::SendCheckedError<BoxedPayload>>> {
         self.address._send_boxed_payload_checked(msg)
     }
+
+    fn members(&self) -> &'static [std::any::TypeId]
+    where
+        Self: 'static,
+    {
+        R::members()
+    }
 }
 
-impl<T: Send + 'static, R: SenderKind> DynConversions for Child<T, R> {
+impl<T: Send + 'static, R: SenderKind> PolySender for Child<T, R> {
     type DynVariant<S: DynSenderKind> = Child<T, S>;
 
     fn into_dyn_unchecked<S: DynSenderKind>(self) -> Child<T, S> {

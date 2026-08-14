@@ -29,7 +29,7 @@ impl<T: SenderKind> Observable for Address<T> {
     }
 }
 
-impl<T: SenderKind> SendsBoxedPayload for Address<T> {
+impl<T: SenderKind> DynPolySender for Address<T> {
     fn _send_boxed_payload_checked(
         &self,
         msg: BoxedPayload,
@@ -41,9 +41,16 @@ impl<T: SenderKind> SendsBoxedPayload for Address<T> {
 
         self.inbox._send_boxed_payload_checked(msg)
     }
+
+    fn members(&self) -> &'static [std::any::TypeId]
+    where
+        Self: 'static,
+    {
+        T::members()
+    }
 }
 
-impl<T: SenderKind> DynConversions for Address<T>
+impl<T: SenderKind> PolySender for Address<T>
 where
     <T::Sender as TypeSet>::Set: 'static,
 {
@@ -161,6 +168,9 @@ pub trait SenderKind: 'static {
 
     fn map_inbox_into_dyn_unchecked<R: DynSenderKind>(address: Self::Sender) -> DynSender<R>;
     fn map_receiver_into_any(receiver: Self::Receiver) -> Arc<dyn Any + Send + Sync>;
+    fn members() -> &'static [std::any::TypeId]
+    where
+        Self: 'static;
 }
 
 impl<E> SenderKind for Set<E>
@@ -177,6 +187,13 @@ where
     fn map_receiver_into_any(receiver: Self::Receiver) -> Arc<dyn Any + Send + Sync> {
         receiver
     }
+
+    fn members() -> &'static [std::any::TypeId]
+    where
+        Self: 'static,
+    {
+        <Set<E> as TypeSet>::members()
+    }
 }
 
 impl<I: Interface> SenderKind for I {
@@ -189,6 +206,13 @@ impl<I: Interface> SenderKind for I {
 
     fn map_receiver_into_any(receiver: Self::Receiver) -> Arc<dyn Any + Send + Sync> {
         Arc::new(receiver)
+    }
+
+    fn members() -> &'static [std::any::TypeId]
+    where
+        Self: 'static,
+    {
+        <I::Set as TypeSet>::members()
     }
 }
 

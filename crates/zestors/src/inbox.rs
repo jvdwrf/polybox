@@ -1,7 +1,7 @@
 use crate::*;
 use futures::future::BoxFuture;
 use polybox::{
-    BoxedPayload, FromPayload, PolySender, SendsBoxedPayload, TryIntoPayload,
+    BoxedPayload, DynPolySender, FromPayload, PolySender, TryIntoPayload,
     errors::{SendCheckedError, SendError},
 };
 use polybox::{MessageExt, type_sets::TypeSet};
@@ -35,7 +35,7 @@ impl<T> Sender<T> {
     }
 }
 
-impl<T: Interface> DynConversions for Sender<T> {
+impl<T: Interface> PolySender for Sender<T> {
     type DynVariant<R: DynSenderKind> = DynSender<R>;
 
     fn into_dyn_unchecked<R: DynSenderKind>(self) -> DynSender<R> {
@@ -54,7 +54,7 @@ impl<T: Interface> TypeSet for Sender<T> {
     }
 }
 
-impl<T: Interface> SendsBoxedPayload for Sender<T> {
+impl<T: Interface> DynPolySender for Sender<T> {
     fn _send_boxed_payload_checked(
         &self,
         msg: BoxedPayload,
@@ -68,6 +68,13 @@ impl<T: Interface> SendsBoxedPayload for Sender<T> {
                 SendCheckedError::Closed(T::into_boxed_payload(payload))
             })
         })
+    }
+
+    fn members(&self) -> &'static [std::any::TypeId]
+    where
+        Self: 'static,
+    {
+        T::members()
     }
 }
 
