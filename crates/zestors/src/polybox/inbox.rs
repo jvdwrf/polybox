@@ -146,12 +146,12 @@ impl<T: Any + DynPolyBox> AnyDynPolyBox for T {}
 /// Conversions between inboxes:
 /// - Into more specific subsets -> [`PolyboxExt::into_dyn_subset`].
 /// - Into more general supersets -> [`PolyboxExt::into_dyn_checked`] or [`PolyBox::into_dyn_unchecked`].
-pub struct DynInbox<T> {
+pub struct DynSender<T> {
     inbox: Arc<dyn AnyDynPolyBox>,
     _t: PhantomData<fn() -> T>,
 }
 
-impl<T> Clone for DynInbox<T> {
+impl<T> Clone for DynSender<T> {
     fn clone(&self) -> Self {
         Self {
             inbox: self.inbox.clone(),
@@ -160,15 +160,15 @@ impl<T> Clone for DynInbox<T> {
     }
 }
 
-impl<T> Debug for DynInbox<T> {
+impl<T> Debug for DynSender<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DynInbox")
+        f.debug_struct("DynSender")
             .field("inbox", &std::any::type_name::<T>())
             .finish()
     }
 }
 
-impl<T> DynInbox<T> {
+impl<T> DynSender<T> {
     pub(crate) fn new_unchecked(inbox: Arc<dyn AnyDynPolyBox>) -> Self {
         Self {
             inbox,
@@ -187,22 +187,22 @@ impl<T> DynInbox<T> {
         }
     }
 
-    pub fn downcast_ref<R: Interface>(&self) -> Option<&Inbox<R>> {
+    pub fn downcast_ref<R: Interface>(&self) -> Option<&Sender<R>> {
         let inbox = &*self.inbox as &dyn Any;
-        inbox.downcast_ref::<Inbox<R>>()
+        inbox.downcast_ref::<Sender<R>>()
     }
 }
 
-impl<T: TypeSet + 'static> PolyBox for DynInbox<T> {
+impl<T: TypeSet + 'static> PolyBox for DynSender<T> {
     type Set = T;
-    type Dyn<R: TypeSet + 'static> = DynInbox<R>;
+    type Dyn<R: TypeSet + 'static> = DynSender<R>;
 
-    fn into_dyn_unchecked<R>(self) -> DynInbox<R> {
-        DynInbox::new_unchecked(self.inbox)
+    fn into_dyn_unchecked<R>(self) -> DynSender<R> {
+        DynSender::new_unchecked(self.inbox)
     }
 }
 
-impl<M, R> Sends<M> for DynInbox<R>
+impl<M, R> Sends<M> for DynSender<R>
 where
     M: Message<Output: Send, Payload: Send>,
     R: TypeSet + 'static + Contains<M>,
@@ -219,7 +219,7 @@ where
     }
 }
 
-impl<T> DynPolyBox for DynInbox<T> {
+impl<T> DynPolyBox for DynSender<T> {
     fn _send_boxed_payload_checked(
         &self,
         msg: BoxedPayload,

@@ -2,7 +2,7 @@ use crate::{
     _prelude::*,
     address::Address,
     child::Child,
-    inbox::{Inbox, Receiver},
+    inbox::{Receiver, Sender},
     signals::{SignalInterface, SignalSender},
 };
 use futures::FutureExt;
@@ -28,7 +28,7 @@ pub struct SpawnData<T: InboxKind = Dyn<Set![]>> {
 
 impl<T: Interface> SpawnData<T> {
     pub fn new(pid: Pid) -> Self {
-        let (inbox, receiver) = Inbox::new();
+        let (inbox, receiver) = Sender::new();
         let (signal_sender, signal_receiver) = SignalSender::new();
         let (exit_watcher, exit_alerter) = ProcessWatcher::new();
 

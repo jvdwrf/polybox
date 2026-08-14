@@ -8,11 +8,11 @@ use polybox::{MessageExt, type_sets::TypeSet};
 use std::sync::Arc;
 
 /// A wrapper around a [`async_channel::Sender`] that acts as a [`PolyBox`].
-pub struct Inbox<T> {
+pub struct Sender<T> {
     sender: async_channel::Sender<T>,
 }
 
-impl<T> Inbox<T> {
+impl<T> Sender<T> {
     pub fn new() -> (Self, Receiver<T>) {
         Self::new_with_capacity(1_000_000)
     }
@@ -35,16 +35,16 @@ impl<T> Inbox<T> {
     }
 }
 
-impl<T: Interface> PolyBox for Inbox<T> {
+impl<T: Interface> PolyBox for Sender<T> {
     type Set = T::Set;
-    type Dyn<R: TypeSet + 'static> = DynInbox<R>;
+    type Dyn<R: TypeSet + 'static> = DynSender<R>;
 
-    fn into_dyn_unchecked<R>(self) -> DynInbox<R> {
-        DynInbox::new_unchecked(Arc::new(self))
+    fn into_dyn_unchecked<R>(self) -> DynSender<R> {
+        DynSender::new_unchecked(Arc::new(self))
     }
 }
 
-impl<T: Interface> DynPolyBox for Inbox<T> {
+impl<T: Interface> DynPolyBox for Sender<T> {
     fn _send_boxed_payload_checked(
         &self,
         msg: BoxedPayload,
@@ -61,7 +61,7 @@ impl<T: Interface> DynPolyBox for Inbox<T> {
     }
 }
 
-impl<M, R> Sends<M> for Inbox<R>
+impl<M, R> Sends<M> for Sender<R>
 where
     M: Message,
     R: TryIntoPayload<M> + FromPayload<M> + Send,
@@ -81,7 +81,7 @@ where
     }
 }
 
-impl<T> Clone for Inbox<T> {
+impl<T> Clone for Sender<T> {
     fn clone(&self) -> Self {
         Self {
             sender: self.sender.clone(),
@@ -89,9 +89,9 @@ impl<T> Clone for Inbox<T> {
     }
 }
 
-impl<T> std::fmt::Debug for Inbox<T> {
+impl<T> std::fmt::Debug for Sender<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Inbox").finish()
+        f.debug_struct("Sender").finish()
     }
 }
 

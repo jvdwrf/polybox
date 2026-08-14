@@ -1,7 +1,7 @@
 use crate::_prelude::*;
 use crate::signals::{Observable, SignalSender};
 use polybox::{errors::SendError, type_sets::Set};
-use std::{any::Any, fmt::Debug, marker::PhantomData, sync::Arc};
+use std::{any::Any, fmt::Debug, sync::Arc};
 
 pub struct Address<T: InboxKind = Dyn<Set![]>> {
     inbox: T::Inbox,
@@ -146,7 +146,7 @@ pub trait InboxKind {
     type Set: TypeSet + 'static;
     type Receiver: Clone + Send + Sync + 'static;
 
-    fn map_inbox_into_dyn_unchecked<R: TypeSet + 'static>(address: Self::Inbox) -> DynInbox<R>;
+    fn map_inbox_into_dyn_unchecked<R: TypeSet + 'static>(address: Self::Inbox) -> DynSender<R>;
     fn map_receiver_into_any(receiver: Self::Receiver) -> Arc<dyn Any + Send + Sync>;
 }
 
@@ -156,11 +156,11 @@ pub trait InboxKind {
 pub struct Dyn<T: ?Sized>(T);
 
 impl<T: TypeSet + 'static> InboxKind for Dyn<T> {
-    type Inbox = DynInbox<T>;
+    type Inbox = DynSender<T>;
     type Set = T;
     type Receiver = Arc<dyn Any + Send + Sync>;
 
-    fn map_inbox_into_dyn_unchecked<R: TypeSet + 'static>(inbox: Self::Inbox) -> DynInbox<R> {
+    fn map_inbox_into_dyn_unchecked<R: TypeSet + 'static>(inbox: Self::Inbox) -> DynSender<R> {
         inbox.into_dyn_unchecked()
     }
 
@@ -170,11 +170,11 @@ impl<T: TypeSet + 'static> InboxKind for Dyn<T> {
 }
 
 impl InboxKind for Set![] {
-    type Inbox = DynInbox<Set![]>;
+    type Inbox = DynSender<Set![]>;
     type Set = Set![];
     type Receiver = Arc<dyn Any + Send + Sync>;
 
-    fn map_inbox_into_dyn_unchecked<R: TypeSet + 'static>(inbox: Self::Inbox) -> DynInbox<R> {
+    fn map_inbox_into_dyn_unchecked<R: TypeSet + 'static>(inbox: Self::Inbox) -> DynSender<R> {
         inbox.into_dyn_unchecked()
     }
 
@@ -184,11 +184,11 @@ impl InboxKind for Set![] {
 }
 
 impl<T: Interface> InboxKind for T {
-    type Inbox = Inbox<T>;
+    type Inbox = Sender<T>;
     type Set = T::Set;
     type Receiver = Receiver<T>;
 
-    fn map_inbox_into_dyn_unchecked<R: TypeSet + 'static>(inbox: Self::Inbox) -> DynInbox<R> {
+    fn map_inbox_into_dyn_unchecked<R: TypeSet + 'static>(inbox: Self::Inbox) -> DynSender<R> {
         inbox.into_dyn_unchecked()
     }
 
