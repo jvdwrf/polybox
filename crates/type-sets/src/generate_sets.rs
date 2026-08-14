@@ -27,7 +27,8 @@ macro_rules! generate_sets {
             /// A [`TypeSet`] of `n` types.
             ///
             /// Look at the [`Set`] macro for a more convenient way to define type sets.
-            pub struct $struct<$($el),*>(PhantomData<fn() -> ($($el),*)>);
+            // pub struct $struct<$($el),*>(PhantomData<fn() -> ($($el),*)>);
+            pub(crate) type $struct<$($el),*> = crate::Set<($($el,)*)>;
         )*
 
         // Subset implementations
@@ -41,7 +42,7 @@ macro_rules! generate_sets {
         // TypeSet implementations
         $(
             #[diagnostic::do_not_recommend]
-            impl<$($el),*> TypeSet for $struct<$($el),*>
+            impl<$($el),*> TypeSet for $struct<$($el,)*>
             {
                 type Set = dyn $trait<$($el),*>;
 
@@ -198,7 +199,7 @@ mod _priv_0 {
 }
 pub(crate) use _priv_0::*;
 
-pub struct Set0;
+pub(crate) type Set0 = Set<()>;
 
 #[diagnostic::do_not_recommend]
 impl<S: ?Sized> SubsetOf<S> for dyn Contains0 {}

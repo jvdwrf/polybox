@@ -150,6 +150,9 @@ pub trait InboxKind {
     fn map_receiver_into_any(receiver: Self::Receiver) -> Arc<dyn Any + Send + Sync>;
 }
 
+// pub trait DynInboxKind: InboxKind<Inbox = DynInbox<Self>> + Sized + 'static {}
+// impl<T: InboxKind<Inbox = DynInbox<T>> + Sized + 'static> DynInboxKind for T {}
+
 pub struct Dyn<T: ?Sized>(T);
 
 impl<T: TypeSet + 'static> InboxKind for Dyn<T> {

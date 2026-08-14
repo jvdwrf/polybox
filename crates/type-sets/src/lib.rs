@@ -1,4 +1,12 @@
-use std::any::TypeId;
+use std::{any::TypeId, fmt::Debug, marker::PhantomData};
+
+pub struct Set<T>(PhantomData<fn() -> T>);
+
+impl<T> Debug for Set<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Set<{}>", std::any::type_name::<T>())
+    }
+}
 
 /// Indicates that a type contains member `E` in its set.
 #[diagnostic::on_unimplemented(
