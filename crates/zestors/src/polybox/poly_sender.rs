@@ -133,8 +133,10 @@ pub trait PolySenderExt: PolySender + Sized {
         ids.iter().all(|id| self.members().contains(id))
     }
 
-    fn accepts_current_set<T: DynSenderKind>(&self) -> bool {
-        self.accepts_msgs(<T as TypeSet>::members())
+    /// Checks if the inbox is valid, i.e., if it accepts messages of the types in its type set.
+    #[must_use]
+    fn is_valid(&self) -> bool {
+        self.accepts_msgs(<Self as TypeSet>::members())
     }
 }
 impl<T: PolySender> PolySenderExt for T {}

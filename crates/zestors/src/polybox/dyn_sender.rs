@@ -99,20 +99,20 @@ impl<T: TypeSet + 'static> DynPolySender for DynSender<T> {
     }
 }
 
-impl<M, R> Sends<M> for DynSender<R>
+impl<M, T> Sends<M> for DynSender<T>
 where
     M: Message<Output: Send, Payload: Send>,
-    R: DynSenderKind + Contains<M>,
+    T: DynSenderKind + Contains<M>,
 {
     async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
         debug_assert!(
-            self.accepts_current_set::<R>(),
+            self.is_valid(),
             "DynSender has incorrect type.
     - Expected {:?}
     - to be a superset of {:?} - ({})",
             self.members(),
-            <R as TypeSet>::members(),
-            std::any::type_name::<R>(),
+            <T as TypeSet>::members(),
+            std::any::type_name::<T>(),
         );
 
         self.send_checked(msg).await.map_err(|e| match e {
