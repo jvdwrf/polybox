@@ -3,16 +3,14 @@ use crate::signals::{Observable, SignalSender};
 use polybox::{errors::SendError, type_sets::Set};
 use std::{any::Any, fmt::Debug, sync::Arc};
 
-pub struct Address<T: InboxKind = Dyn<Set![]>> {
+pub struct Address<T: SenderKind = Set!()> {
     inbox: T::Sender,
     signal_inbox: SignalSender,
     process_watcher: ProcessWatcher,
     pid: Pid,
 }
 
-pub type DynAddress<T = Set![]> = Address<Dyn<T>>;
-
-impl<T: InboxKind, M: Message> Sends<M> for Address<T>
+impl<T: SenderKind, M: Message> Sends<M> for Address<T>
 where
     T::Sender: Sends<M>,
 {
@@ -25,13 +23,13 @@ where
     }
 }
 
-impl<T: InboxKind> Observable for Address<T> {
+impl<T: SenderKind> Observable for Address<T> {
     async fn send_signal(&self, signal: SignalInterface) -> Result<(), SendError<SignalInterface>> {
         self.signal_inbox.send(signal).await
     }
 }
 
-impl<T: InboxKind> SendsBoxedPayload for Address<T> {
+impl<T: SenderKind> SendsBoxedPayload for Address<T> {
     fn _send_boxed_payload_checked(
         &self,
         msg: BoxedPayload,
@@ -45,10 +43,10 @@ impl<T: InboxKind> SendsBoxedPayload for Address<T> {
     }
 }
 
-impl<T: InboxKind> PolySend for Address<T> {
-    type Dyn<R: TypeSet + 'static> = Address<Dyn<R>>;
+impl<T: SenderKind> PolySender for Address<T> {
+    type DynVariant<R: DynSenderKind> = Address<R>;
 
-    fn into_dyn_unchecked<R: TypeSet + 'static>(self) -> Self::Dyn<R> {
+    fn into_dyn_unchecked<R: DynSenderKind>(self) -> Self::DynVariant<R> {
         Address {
             inbox: T::map_inbox_into_dyn_unchecked(self.inbox),
             signal_inbox: self.signal_inbox,
@@ -57,11 +55,12 @@ impl<T: InboxKind> PolySend for Address<T> {
         }
     }
 }
-impl<T: InboxKind> AsTypeSet for Address<T> {
-    type Set = T::Set;
+
+impl<T: SenderKind> AsTypeSet for Address<T> {
+    type Set = <T::Sender as AsTypeSet>::Set;
 }
 
-impl<T: InboxKind> Clone for Address<T> {
+impl<T: SenderKind> Clone for Address<T> {
     fn clone(&self) -> Self {
         Self {
             inbox: self.inbox.clone(),
@@ -72,7 +71,7 @@ impl<T: InboxKind> Clone for Address<T> {
     }
 }
 
-impl<T: InboxKind> Address<T> {
+impl<T: SenderKind> Address<T> {
     pub(super) fn new(
         inbox: T::Sender,
         signal_inbox: SignalSender,
@@ -103,7 +102,7 @@ impl<T: InboxKind> Address<T> {
         self.process_watcher.is_alive()
     }
 
-    pub fn is_same_process<R: InboxKind>(&self, other: &Address<R>) -> bool {
+    pub fn is_same_process<R: SenderKind>(&self, other: &Address<R>) -> bool {
         self.pid == other.pid
     }
 
@@ -120,7 +119,10 @@ impl<T: InboxKind> Address<T> {
     }
 }
 
-impl<T: TypeSet + 'static> Address<Dyn<T>> {
+impl<T> Address<Set<T>>
+where
+    Set<T>: TypeSet + 'static,
+{
     pub fn downcast_ref<R: Interface>(&self) -> Option<Address<R>> {
         let inbox = self.inbox.downcast_ref::<R>()?.clone();
 
@@ -133,7 +135,7 @@ impl<T: TypeSet + 'static> Address<Dyn<T>> {
     }
 }
 
-impl<T: InboxKind> Debug for Address<T> {
+impl<T: SenderKind> Debug for Address<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Address")
             .field("inbox", &self.inbox)
@@ -143,27 +145,23 @@ impl<T: InboxKind> Debug for Address<T> {
     }
 }
 
-pub trait InboxKind {
-    type Sender: PolySend + AsTypeSet + Clone + Debug + Unpin;
-    type Set: TypeSet + 'static;
+pub trait SenderKind {
+    type Sender: PolySender + Clone + Debug + Unpin;
     type Receiver: Clone + Send + Sync + 'static;
 
-    fn map_inbox_into_dyn_unchecked<R: TypeSet + 'static>(address: Self::Sender) -> DynSender<R>;
+    fn map_inbox_into_dyn_unchecked<R: DynSenderKind>(address: Self::Sender) -> DynSender<R>;
     fn map_receiver_into_any(receiver: Self::Receiver) -> Arc<dyn Any + Send + Sync>;
 }
 
-// pub trait DynInboxKind: InboxKind<Inbox = DynInbox<Self>> + Sized + 'static {}
-// impl<T: InboxKind<Inbox = DynInbox<T>> + Sized + 'static> DynInboxKind for T {}
-
-pub struct Dyn<T: ?Sized>(T);
-
-impl<T: TypeSet + 'static> InboxKind for Dyn<T> {
-    type Sender = DynSender<T>;
-    type Set = T;
+impl<E> SenderKind for Set<E>
+where
+    Set<E>: TypeSet + 'static,
+{
+    type Sender = DynSender<Set<E>>;
     type Receiver = Arc<dyn Any + Send + Sync>;
 
-    fn map_inbox_into_dyn_unchecked<R: TypeSet + 'static>(inbox: Self::Sender) -> DynSender<R> {
-        inbox.into_dyn_unchecked()
+    fn map_inbox_into_dyn_unchecked<R: DynSenderKind>(sender: Self::Sender) -> DynSender<R> {
+        sender.into_dyn_unchecked()
     }
 
     fn map_receiver_into_any(receiver: Self::Receiver) -> Arc<dyn Any + Send + Sync> {
@@ -171,33 +169,21 @@ impl<T: TypeSet + 'static> InboxKind for Dyn<T> {
     }
 }
 
-// impl InboxKind for Set![] {
-//     type Inbox = DynSender<Set![]>;
-//     type Set = Set![];
-//     type Receiver = Arc<dyn Any + Send + Sync>;
+impl<I: Interface> SenderKind for I {
+    type Sender = Sender<I>;
+    type Receiver = Receiver<I>;
 
-//     fn map_inbox_into_dyn_unchecked<R: TypeSet + 'static>(inbox: Self::Inbox) -> DynSender<R> {
-//         inbox.into_dyn_unchecked()
-//     }
-
-//     fn map_receiver_into_any(receiver: Self::Receiver) -> Arc<dyn Any + Send + Sync> {
-//         receiver
-//     }
-// }
-
-impl<T: Interface> InboxKind for T {
-    type Sender = Sender<T>;
-    type Set = T::Set;
-    type Receiver = Receiver<T>;
-
-    fn map_inbox_into_dyn_unchecked<R: TypeSet + 'static>(inbox: Self::Sender) -> DynSender<R> {
-        inbox.into_dyn_unchecked()
+    fn map_inbox_into_dyn_unchecked<R: DynSenderKind>(sender: Self::Sender) -> DynSender<R> {
+        sender.into_dyn_unchecked()
     }
 
     fn map_receiver_into_any(receiver: Self::Receiver) -> Arc<dyn Any + Send + Sync> {
         Arc::new(receiver)
     }
 }
+
+pub trait DynSenderKind: TypeSet + SenderKind<Sender = DynSender<Self>> + Sized + 'static {}
+impl<T: TypeSet + SenderKind<Sender = DynSender<T>> + Sized + 'static> DynSenderKind for T {}
 
 #[cfg(test)]
 mod tests {

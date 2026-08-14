@@ -10,8 +10,8 @@ use std::{
 use type_sets::SubsetOf;
 
 /// A trait that allows for conversions to [`DynInbox`].
-pub trait PolySend: SendsBoxedPayload + AsTypeSet {
-    type Dyn<T: TypeSet + 'static>;
+pub trait PolySender: SendsBoxedPayload + AsTypeSet<Set: DynSenderKind> {
+    type DynVariant<T: DynSenderKind>;
 
     /// Converts into a dynamic inbox without checking if the types are compatible.
     ///
@@ -20,15 +20,135 @@ pub trait PolySend: SendsBoxedPayload + AsTypeSet {
     /// # Safety
     /// This method is not marked as unsafe, because violating the type system can
     /// only lead to runtime errors, not undefined behavior.
-    fn into_dyn_unchecked<T: TypeSet>(self) -> Self::Dyn<T>;
+    fn into_dyn_unchecked<T: DynSenderKind>(self) -> Self::DynVariant<T>;
+}
+
+/// Object-safe sub-trait of [`PolyBox`], allowing for dynamic dispatch.
+pub trait SendsBoxedPayload: Send + Sync {
+    /// Send a boxed payload.
+    fn _send_boxed_payload_checked(
+        &self,
+        msg: BoxedPayload,
+    ) -> BoxFuture<'_, Result<(), SendCheckedError<BoxedPayload>>>;
+
+    /// Same as [`Self::_send_boxed_payload_checked`], but blocks the current thread until the message is sent.
+    fn _send_boxed_payload_checked_blocking(
+        &self,
+        msg: BoxedPayload,
+    ) -> Result<(), SendCheckedError<BoxedPayload>> {
+        futures::executor::block_on(self._send_boxed_payload_checked(msg))
+    }
+}
+// impl<T: PolyBox> SendsBoxedPayload for T {
+//     fn _send_boxed_payload_checked(
+//         &self,
+//         msg: BoxedPayload,
+//     ) -> BoxFuture<'_, Result<(), SendCheckedError<BoxedPayload>>> {
+//         self.send_checked(msg).map(|res| res.map(|_| ())).boxed()
+//     }
+// }
+
+pub(crate) trait AnySendsBoxedPayload: Any + SendsBoxedPayload {}
+impl<T: Any + SendsBoxedPayload> AnySendsBoxedPayload for T {}
+
+/// A dynamic inbox that can accept messages of any type, as long as they are part of the specified set.
+///
+/// An inbox is typed as: `DynInbox<Set![Msg1, Msg2, ...]>`.
+///
+/// Conversions between inboxes:
+/// - Into more specific subsets -> [`PolyboxExt::into_dyn_subset`].
+/// - Into more general supersets -> [`PolyboxExt::into_dyn_checked`] or [`PolyBox::into_dyn_unchecked`].
+pub struct DynSender<T> {
+    inbox: Arc<dyn AnySendsBoxedPayload>,
+    _t: PhantomData<fn() -> T>,
+}
+
+impl<T> Clone for DynSender<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inbox: self.inbox.clone(),
+            _t: PhantomData,
+        }
+    }
+}
+
+impl<T> Debug for DynSender<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DynSender")
+            .field("inbox", &std::any::type_name::<T>())
+            .finish()
+    }
+}
+
+impl<T> DynSender<T> {
+    pub(crate) fn new_unchecked(inbox: Arc<dyn AnySendsBoxedPayload>) -> Self {
+        Self {
+            inbox,
+            _t: PhantomData,
+        }
+    }
+
+    pub fn new<R>(inbox: R) -> Self
+    where
+        R: SendsBoxedPayload + PolySender + 'static,
+        T: SubsetOf<R::Set>,
+    {
+        Self {
+            inbox: Arc::new(inbox),
+            _t: PhantomData,
+        }
+    }
+
+    pub fn downcast_ref<R: Interface>(&self) -> Option<&Sender<R>> {
+        let inbox = &*self.inbox as &dyn Any;
+        inbox.downcast_ref::<Sender<R>>()
+    }
+}
+
+impl<T: DynSenderKind> PolySender for DynSender<T> {
+    type DynVariant<R: DynSenderKind> = DynSender<R>;
+
+    fn into_dyn_unchecked<R: DynSenderKind>(self) -> DynSender<R> {
+        DynSender::new_unchecked(self.inbox)
+    }
+}
+
+impl<T: TypeSet + 'static> AsTypeSet for DynSender<T> {
+    type Set = T;
+}
+
+impl<M, R> Sends<M> for DynSender<R>
+where
+    M: Message<Output: Send, Payload: Send>,
+    R: DynSenderKind + Contains<M>,
+{
+    async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
+        self.send_checked(msg).await.map_err(|e| match e {
+            SendCheckedError::Closed(msg) => SendError(msg),
+            SendCheckedError::NotAccepted(_msg) => {
+                panic!(
+                    "Payload was not accepted, this should not happen if the type system is used correctly"
+                )
+            }
+        })
+    }
+}
+
+impl<T> SendsBoxedPayload for DynSender<T> {
+    fn _send_boxed_payload_checked(
+        &self,
+        msg: BoxedPayload,
+    ) -> BoxFuture<'_, Result<(), SendCheckedError<BoxedPayload>>> {
+        self.inbox._send_boxed_payload_checked(msg)
+    }
 }
 
 /// A trait that extends [`PolyBox`] with some helper methods.
-pub trait PolyboxExt: PolySend + Sized {
+pub trait PolySendExt: PolySender + Sized {
     /// Converts into a dynamic inbox with a subset of the original types.
     ///
     /// This conversion is type-safe, and entirely at compile-time.
-    fn into_dyn<T: TypeSet>(self) -> Self::Dyn<T>
+    fn into_dyn<T: DynSenderKind>(self) -> Self::DynVariant<T>
     where
         T: SubsetOf<Self::Set>,
     {
@@ -36,13 +156,13 @@ pub trait PolyboxExt: PolySend + Sized {
     }
 
     /// Converts into a dynamic inbox with the full set of original types.
-    fn into_dyn_full(self) -> Self::Dyn<Self::Set> {
+    fn into_dyn_full(self) -> Self::DynVariant<Self::Set> {
         self.into_dyn_unchecked()
     }
 
     /// Converts into a dynamic inbox, checking at runtime if the types are compatible.
-    fn into_dyn_checked<T: TypeSet>(self) -> Result<Self::Dyn<T>, Self> {
-        if self.accepts_msgs(&T::members()) {
+    fn into_dyn_checked<T: DynSenderKind>(self) -> Result<Self::DynVariant<T>, Self> {
+        if self.accepts_msgs(&<T as AsTypeSet>::members()) {
             Ok(self.into_dyn_unchecked())
         } else {
             Err(self)
@@ -115,124 +235,4 @@ pub trait PolyboxExt: PolySend + Sized {
         }
     }
 }
-impl<T: PolySend> PolyboxExt for T {}
-
-/// Object-safe sub-trait of [`PolyBox`], allowing for dynamic dispatch.
-pub trait SendsBoxedPayload: Send + Sync {
-    /// Send a boxed payload.
-    fn _send_boxed_payload_checked(
-        &self,
-        msg: BoxedPayload,
-    ) -> BoxFuture<'_, Result<(), SendCheckedError<BoxedPayload>>>;
-
-    /// Same as [`Self::_send_boxed_payload_checked`], but blocks the current thread until the message is sent.
-    fn _send_boxed_payload_checked_blocking(
-        &self,
-        msg: BoxedPayload,
-    ) -> Result<(), SendCheckedError<BoxedPayload>> {
-        futures::executor::block_on(self._send_boxed_payload_checked(msg))
-    }
-}
-// impl<T: PolyBox> SendsBoxedPayload for T {
-//     fn _send_boxed_payload_checked(
-//         &self,
-//         msg: BoxedPayload,
-//     ) -> BoxFuture<'_, Result<(), SendCheckedError<BoxedPayload>>> {
-//         self.send_checked(msg).map(|res| res.map(|_| ())).boxed()
-//     }
-// }
-
-pub(crate) trait AnySendsBoxedPayload: Any + SendsBoxedPayload {}
-impl<T: Any + SendsBoxedPayload> AnySendsBoxedPayload for T {}
-
-/// A dynamic inbox that can accept messages of any type, as long as they are part of the specified set.
-///
-/// An inbox is typed as: `DynInbox<Set![Msg1, Msg2, ...]>`.
-///
-/// Conversions between inboxes:
-/// - Into more specific subsets -> [`PolyboxExt::into_dyn_subset`].
-/// - Into more general supersets -> [`PolyboxExt::into_dyn_checked`] or [`PolyBox::into_dyn_unchecked`].
-pub struct DynSender<T> {
-    inbox: Arc<dyn AnySendsBoxedPayload>,
-    _t: PhantomData<fn() -> T>,
-}
-
-impl<T> Clone for DynSender<T> {
-    fn clone(&self) -> Self {
-        Self {
-            inbox: self.inbox.clone(),
-            _t: PhantomData,
-        }
-    }
-}
-
-impl<T> Debug for DynSender<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DynSender")
-            .field("inbox", &std::any::type_name::<T>())
-            .finish()
-    }
-}
-
-impl<T> DynSender<T> {
-    pub(crate) fn new_unchecked(inbox: Arc<dyn AnySendsBoxedPayload>) -> Self {
-        Self {
-            inbox,
-            _t: PhantomData,
-        }
-    }
-
-    pub fn new<R>(inbox: R) -> Self
-    where
-        R: SendsBoxedPayload + PolySend + 'static,
-        T: SubsetOf<R::Set>,
-    {
-        Self {
-            inbox: Arc::new(inbox),
-            _t: PhantomData,
-        }
-    }
-
-    pub fn downcast_ref<R: Interface>(&self) -> Option<&Sender<R>> {
-        let inbox = &*self.inbox as &dyn Any;
-        inbox.downcast_ref::<Sender<R>>()
-    }
-}
-
-impl<T: TypeSet + 'static> PolySend for DynSender<T> {
-    type Dyn<R: TypeSet + 'static> = DynSender<R>;
-
-    fn into_dyn_unchecked<R>(self) -> DynSender<R> {
-        DynSender::new_unchecked(self.inbox)
-    }
-}
-
-impl<T: TypeSet + 'static> AsTypeSet for DynSender<T> {
-    type Set = T;
-}
-
-impl<M, R> Sends<M> for DynSender<R>
-where
-    M: Message<Output: Send, Payload: Send>,
-    R: TypeSet + 'static + Contains<M>,
-{
-    async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
-        self.send_checked(msg).await.map_err(|e| match e {
-            SendCheckedError::Closed(msg) => SendError(msg),
-            SendCheckedError::NotAccepted(_msg) => {
-                panic!(
-                    "Payload was not accepted, this should not happen if the type system is used correctly"
-                )
-            }
-        })
-    }
-}
-
-impl<T> SendsBoxedPayload for DynSender<T> {
-    fn _send_boxed_payload_checked(
-        &self,
-        msg: BoxedPayload,
-    ) -> BoxFuture<'_, Result<(), SendCheckedError<BoxedPayload>>> {
-        self.inbox._send_boxed_payload_checked(msg)
-    }
-}
+impl<T: PolySender> PolySendExt for T {}

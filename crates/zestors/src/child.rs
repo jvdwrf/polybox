@@ -7,15 +7,13 @@ use polybox::{
 };
 use std::{fmt::Debug, task::Poll, time::Duration};
 
-pub struct Child<T = (), R: InboxKind = Dyn<Set![]>> {
+pub struct Child<T = (), R: SenderKind = Set!()> {
     handle: Option<tokio::task::JoinHandle<Result<T, Report>>>,
     attached: bool,
     address: Address<R>,
 }
 
-pub type DynChild<T = (), R = Set![]> = Child<T, Dyn<R>>;
-
-impl<T, R: InboxKind> Child<T, R> {
+impl<T, R: SenderKind> Child<T, R> {
     pub(crate) fn new(
         handle: tokio::task::JoinHandle<Result<T, Report>>,
         address: Address<R>,
@@ -118,7 +116,7 @@ impl<T, R: InboxKind> Child<T, R> {
     }
 }
 
-impl<T, R: InboxKind> Future for Child<T, R> {
+impl<T, R: SenderKind> Future for Child<T, R> {
     type Output = Result<T, JoinError>;
 
     fn poll(
@@ -137,7 +135,7 @@ impl<T, R: InboxKind> Future for Child<T, R> {
     }
 }
 
-impl<T, R: InboxKind, M: Message> Sends<M> for Child<T, R>
+impl<T, R: SenderKind, M: Message> Sends<M> for Child<T, R>
 where
     Address<R>: Sends<M>,
 {
@@ -146,7 +144,7 @@ where
     }
 }
 
-impl<T, R: InboxKind> Observable for Child<T, R> {
+impl<T, R: SenderKind> Observable for Child<T, R> {
     fn send_signal(
         &self,
         signal: SignalInterface,
@@ -155,7 +153,7 @@ impl<T, R: InboxKind> Observable for Child<T, R> {
     }
 }
 
-impl<T: Send, R: InboxKind> SendsBoxedPayload for Child<T, R> {
+impl<T: Send, R: SenderKind> SendsBoxedPayload for Child<T, R> {
     fn _send_boxed_payload_checked(
         &self,
         msg: BoxedPayload,
@@ -164,16 +162,16 @@ impl<T: Send, R: InboxKind> SendsBoxedPayload for Child<T, R> {
     }
 }
 
-impl<T: Send, R: InboxKind> PolySend for Child<T, R> {
-    type Dyn<S: TypeSet + 'static> = Child<T, Dyn<S>>;
+impl<T: Send, R: SenderKind> PolySender for Child<T, R> {
+    type DynVariant<S: DynSenderKind> = Child<T, S>;
 
-    fn into_dyn_unchecked<S: TypeSet + 'static>(self) -> Child<T, Dyn<S>> {
+    fn into_dyn_unchecked<S: DynSenderKind>(self) -> Child<T, S> {
         let (handle, address) = self.into_parts();
         Child::new(handle, address.into_dyn_unchecked())
     }
 }
-impl<T: Send, R: InboxKind> AsTypeSet for Child<T, R> {
-    type Set = R::Set;
+impl<T: Send, R: SenderKind> AsTypeSet for Child<T, R> {
+    type Set = <R::Sender as AsTypeSet>::Set;
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -203,7 +201,7 @@ impl From<tokio::task::JoinError> for JoinError {
     }
 }
 
-impl<T, R: InboxKind> Drop for Child<T, R> {
+impl<T, R: SenderKind> Drop for Child<T, R> {
     fn drop(&mut self) {
         if self.attached && self.handle.is_some() {
             self.abort();
@@ -211,7 +209,7 @@ impl<T, R: InboxKind> Drop for Child<T, R> {
     }
 }
 
-impl<T, R: InboxKind> Debug for Child<T, R> {
+impl<T, R: SenderKind> Debug for Child<T, R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Child")
             .field("handle", &std::any::type_name::<T>())

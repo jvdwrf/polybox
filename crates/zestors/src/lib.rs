@@ -19,7 +19,7 @@ where
     SpawnData::new(pid).spawn(f)
 }
 
-pub struct SpawnData<T: InboxKind = Dyn<Set![]>> {
+pub struct SpawnData<T: SenderKind = Set!()> {
     address: Address<T>,
     receiver: T::Receiver,
     signal_receiver: SignalReceiver,
@@ -93,7 +93,7 @@ impl<T: Interface> SpawnData<T> {
     }
 }
 
-impl<T: InboxKind> std::fmt::Debug for SpawnData<T> {
+impl<T: SenderKind> std::fmt::Debug for SpawnData<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ProcessData")
             .field("address", &self.address)
@@ -104,7 +104,7 @@ impl<T: InboxKind> std::fmt::Debug for SpawnData<T> {
     }
 }
 
-impl<T: InboxKind> SpawnData<T> {
+impl<T: SenderKind> SpawnData<T> {
     pub fn pid(&self) -> &Pid {
         self.address.pid()
     }
@@ -149,7 +149,7 @@ impl SpawnData {
     }
 }
 
-impl<T: InboxKind> Clone for SpawnData<T> {
+impl<T: SenderKind> Clone for SpawnData<T> {
     fn clone(&self) -> Self {
         Self {
             address: self.address.clone(),

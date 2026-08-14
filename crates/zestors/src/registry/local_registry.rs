@@ -29,7 +29,7 @@ impl Registry {
     }
 
     /// Add a process to the registry if not already present.
-    pub fn register<T: InboxKind>(
+    pub fn register<T: SenderKind>(
         &self,
         entry: impl Into<RegistryEntry<T>>,
     ) -> Result<(), RegistryAddError<T>> {
@@ -97,16 +97,16 @@ impl Registry {
 }
 
 /// An entry into a [`Registry`] that can either be [`ProcessData`] or just an [`Address`].
-pub struct RegistryEntry<T: InboxKind = Dyn<Set![]>> {
+pub struct RegistryEntry<T: SenderKind = Set!()> {
     inner: _RegistryEntry<T>,
 }
 
-enum _RegistryEntry<T: InboxKind> {
+enum _RegistryEntry<T: SenderKind> {
     Data(SpawnData<T>),
     Address(Address<T>),
 }
 
-impl<T: InboxKind> RegistryEntry<T> {
+impl<T: SenderKind> RegistryEntry<T> {
     pub fn new(data: impl Into<RegistryEntry<T>>) -> Self {
         data.into()
     }
@@ -155,7 +155,7 @@ impl<T: InboxKind> RegistryEntry<T> {
     }
 }
 
-impl<T: InboxKind> From<SpawnData<T>> for RegistryEntry<T> {
+impl<T: SenderKind> From<SpawnData<T>> for RegistryEntry<T> {
     fn from(data: SpawnData<T>) -> Self {
         RegistryEntry {
             inner: _RegistryEntry::Data(data),
@@ -163,7 +163,7 @@ impl<T: InboxKind> From<SpawnData<T>> for RegistryEntry<T> {
     }
 }
 
-impl<T: InboxKind> From<Address<T>> for RegistryEntry<T> {
+impl<T: SenderKind> From<Address<T>> for RegistryEntry<T> {
     fn from(address: Address<T>) -> Self {
         RegistryEntry {
             inner: _RegistryEntry::Address(address),
@@ -171,7 +171,7 @@ impl<T: InboxKind> From<Address<T>> for RegistryEntry<T> {
     }
 }
 
-impl<T: InboxKind> Clone for RegistryEntry<T> {
+impl<T: SenderKind> Clone for RegistryEntry<T> {
     fn clone(&self) -> Self {
         match &self.inner {
             _RegistryEntry::Data(data) => RegistryEntry {
@@ -184,7 +184,7 @@ impl<T: InboxKind> Clone for RegistryEntry<T> {
     }
 }
 
-impl<T: InboxKind> std::fmt::Debug for RegistryEntry<T> {
+impl<T: SenderKind> std::fmt::Debug for RegistryEntry<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.inner {
             _RegistryEntry::Data(data) => {
@@ -200,12 +200,12 @@ impl<T: InboxKind> std::fmt::Debug for RegistryEntry<T> {
 
 #[derive(thiserror::Error)]
 #[error("Failed to add entry for pid {pid}")]
-pub struct RegistryAddError<T: InboxKind = Dyn<Set![]>> {
+pub struct RegistryAddError<T: SenderKind = Set!()> {
     pid: Pid,
     entry: RegistryEntry<T>,
 }
 
-impl<T: InboxKind> std::fmt::Debug for RegistryAddError<T> {
+impl<T: SenderKind> std::fmt::Debug for RegistryAddError<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RegistryAddError")
             .field("pid", &self.pid)

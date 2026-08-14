@@ -1,7 +1,7 @@
 use super::*;
 
 pub trait RepeatSpawn {
-    type Inbox: InboxKind;
+    type Inbox: SenderKind;
     type Exit: Send + 'static;
 
     fn spawn_with_data(&self, data: SpawnData<Self::Inbox>) -> Child<Self::Exit, Self::Inbox>;
@@ -38,7 +38,7 @@ impl<R: Blueprint> RepeatSpawnDyn for R {
 }
 
 impl RepeatSpawn for DynRepeatSpawner {
-    type Inbox = Dyn<Set![]>;
+    type Inbox = Set!();
     type Exit = ();
 
     fn spawn_with_data(&self, data: SpawnData<Self::Inbox>) -> Child<Self::Exit, Self::Inbox> {
