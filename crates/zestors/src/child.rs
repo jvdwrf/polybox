@@ -162,7 +162,7 @@ impl<T: Send, R: SenderKind> SendsBoxedPayload for Child<T, R> {
     }
 }
 
-impl<T: Send, R: SenderKind> PolySender for Child<T, R> {
+impl<T: Send, R: SenderKind> IntoDynVariant for Child<T, R> {
     type DynVariant<S: DynSenderKind> = Child<T, S>;
 
     fn into_dyn_unchecked<S: DynSenderKind>(self) -> Child<T, S> {

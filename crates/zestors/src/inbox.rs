@@ -35,7 +35,7 @@ impl<T> Sender<T> {
     }
 }
 
-impl<T: Interface> PolySender for Sender<T> {
+impl<T: Interface> IntoDynVariant for Sender<T> {
     type DynVariant<R: DynSenderKind> = DynSender<R>;
 
     fn into_dyn_unchecked<R: DynSenderKind>(self) -> DynSender<R> {

@@ -10,7 +10,11 @@ use std::{
 use type_sets::SubsetOf;
 
 /// A trait that allows for conversions to [`DynInbox`].
-pub trait PolySender: SendsBoxedPayload + AsTypeSet<Set: DynSenderKind> {
+pub trait PolySender: IntoDynVariant + SendsBoxedPayload + AsTypeSet<Set: DynSenderKind> {}
+
+impl<T: IntoDynVariant + SendsBoxedPayload + AsTypeSet<Set: DynSenderKind>> PolySender for T {}
+
+pub trait IntoDynVariant {
     type DynVariant<T: DynSenderKind>;
 
     /// Converts into a dynamic inbox without checking if the types are compatible.
@@ -39,14 +43,6 @@ pub trait SendsBoxedPayload: Send + Sync {
         futures::executor::block_on(self._send_boxed_payload_checked(msg))
     }
 }
-// impl<T: PolyBox> SendsBoxedPayload for T {
-//     fn _send_boxed_payload_checked(
-//         &self,
-//         msg: BoxedPayload,
-//     ) -> BoxFuture<'_, Result<(), SendCheckedError<BoxedPayload>>> {
-//         self.send_checked(msg).map(|res| res.map(|_| ())).boxed()
-//     }
-// }
 
 pub(crate) trait AnySendsBoxedPayload: Any + SendsBoxedPayload {}
 impl<T: Any + SendsBoxedPayload> AnySendsBoxedPayload for T {}
@@ -105,7 +101,7 @@ impl<T> DynSender<T> {
     }
 }
 
-impl<T: DynSenderKind> PolySender for DynSender<T> {
+impl<T: DynSenderKind> IntoDynVariant for DynSender<T> {
     type DynVariant<R: DynSenderKind> = DynSender<R>;
 
     fn into_dyn_unchecked<R: DynSenderKind>(self) -> DynSender<R> {

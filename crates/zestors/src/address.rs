@@ -43,7 +43,7 @@ impl<T: SenderKind> SendsBoxedPayload for Address<T> {
     }
 }
 
-impl<T: SenderKind> PolySender for Address<T> {
+impl<T: SenderKind> IntoDynVariant for Address<T> {
     type DynVariant<R: DynSenderKind> = Address<R>;
 
     fn into_dyn_unchecked<R: DynSenderKind>(self) -> Self::DynVariant<R> {
