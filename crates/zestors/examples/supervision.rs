@@ -1,15 +1,13 @@
 use futures::join;
-use std::{convert::Infallible, time::Duration};
+use rootcause::Report;
+use std::time::Duration;
 use zestors::{
     HandlerInterface, Interface,
     handler::{ExitReason, Handle, Handler, HandlerState},
     node::{ApiConfig, Node},
     polybox::Payload,
     registry::Pid,
-    signals::{ActorEvent, SignalEvent},
-    supervision::{
-        ActorRunnerExt, ActorState, ChildSpec, RestartIntensity, RestartMode, Supervisor,
-    },
+    supervision::{ChildSpec, RestartIntensity, RestartMode, Supervisor},
 };
 
 #[derive(Interface, HandlerInterface)]
@@ -31,7 +29,7 @@ impl MyActor {
 
 impl Handler for MyActor {
     type Interface = MyInterface;
-    type Error = anyhow::Error;
+    type Error = Report;
     type Exit = ();
 
     async fn exit(&mut self, _reason: ExitReason) -> Result<Self::Exit, Self::Error> {
@@ -68,7 +66,7 @@ impl Handle<String> for MyActor {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
+async fn main() -> Result<(), Report> {
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::DEBUG)
         .init();

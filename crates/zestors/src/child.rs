@@ -8,7 +8,7 @@ use polybox::{
 use std::{fmt::Debug, task::Poll, time::Duration};
 
 pub struct Child<T = (), R: InboxKind = Dyn<Set![]>> {
-    handle: Option<tokio::task::JoinHandle<Result<T, anyhow::Error>>>,
+    handle: Option<tokio::task::JoinHandle<Result<T, Report>>>,
     attached: bool,
     address: Address<R>,
 }
@@ -17,7 +17,7 @@ pub type DynChild<T = (), R = Set![]> = Child<T, Dyn<R>>;
 
 impl<T, R: InboxKind> Child<T, R> {
     pub(crate) fn new(
-        handle: tokio::task::JoinHandle<Result<T, anyhow::Error>>,
+        handle: tokio::task::JoinHandle<Result<T, Report>>,
         address: Address<R>,
     ) -> Self {
         Self {
@@ -51,24 +51,19 @@ impl<T, R: InboxKind> Child<T, R> {
         self.address.exit_mut()
     }
 
-    pub fn into_handle(mut self) -> tokio::task::JoinHandle<Result<T, anyhow::Error>> {
+    pub fn into_handle(mut self) -> tokio::task::JoinHandle<Result<T, Report>> {
         self.handle.take().unwrap()
     }
 
-    pub fn into_parts(
-        mut self,
-    ) -> (
-        tokio::task::JoinHandle<Result<T, anyhow::Error>>,
-        Address<R>,
-    ) {
+    pub fn into_parts(mut self) -> (tokio::task::JoinHandle<Result<T, Report>>, Address<R>) {
         (self.handle.take().unwrap(), self.address.clone())
     }
 
-    pub fn handle(&self) -> &tokio::task::JoinHandle<Result<T, anyhow::Error>> {
+    pub fn handle(&self) -> &tokio::task::JoinHandle<Result<T, Report>> {
         self.handle.as_ref().unwrap()
     }
 
-    pub fn handle_mut(&mut self) -> &mut tokio::task::JoinHandle<Result<T, anyhow::Error>> {
+    pub fn handle_mut(&mut self) -> &mut tokio::task::JoinHandle<Result<T, Report>> {
         self.handle.as_mut().unwrap()
     }
 
@@ -191,7 +186,7 @@ pub enum JoinError {
 
     /// The actor exited with an unhandled error.
     #[error("task returned an error: {0}")]
-    UnhandledError(anyhow::Error),
+    UnhandledError(Report),
 }
 
 impl From<tokio::task::JoinError> for JoinError {

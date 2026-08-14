@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
-members = ["crates/api-client",
+members = [
+    "crates/api-client",
     "crates/polybox-codegen",
     "crates/type-sets",
     "crates/zestors",
@@ -12,6 +13,7 @@ members = ["crates/api-client",
 polybox-codegen = { path = "crates/polybox-codegen", version = "0.0.2" }
 zestors = { path = "crates/zestors", version = "0.1.0" }
 type-sets = { path = "crates/type-sets" }
+zestors-api-client = { path = "crates/api-client" }
 
 
 tokio = { version = "1", features = ["full"] }
@@ -21,7 +23,7 @@ thiserror = "2"
 derive_more = { version = "2", features = ["full"] }
 flume = "0.12"
 tracing = "0.1"
-anyhow = "1"
+rootcause = "0.13"
 indexmap = "2"
 async-channel = "2"
 smol_str = { version = "0.3", features = ["serde"] }
@@ -37,3 +39,6 @@ utoipa-axum = { version = "0.2" }
 utoipa-swagger-ui = { version = "9", features = ["axum"] }
 axum-autoroute = { version = "0.2", features = [] }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+iced = { version = "0.14" }
+iced_test = { version = "0.14", features = [] }

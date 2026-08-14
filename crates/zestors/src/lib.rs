@@ -13,7 +13,7 @@ pub fn spawn<T, R, F>(pid: Pid, f: impl FnOnce(ActorState<T>) -> F) -> Child<R, 
 where
     T: Interface,
     R: Send + 'static,
-    F: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
+    F: Future<Output = Result<R, Report>> + Send + 'static,
     F::Output: Send + 'static,
 {
     SpawnData::new(pid).spawn(f)
@@ -44,7 +44,7 @@ impl<T: Interface> SpawnData<T> {
     where
         T: Interface,
         R: Send + 'static,
-        F: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
+        F: Future<Output = Result<R, Report>> + Send + 'static,
         F::Output: Send + 'static,
     {
         let SpawnData {
@@ -188,4 +188,6 @@ pub(crate) mod _prelude {
         fmt::{Debug, Display},
         time::Duration,
     };
+
+    pub(crate) use rootcause::Report;
 }

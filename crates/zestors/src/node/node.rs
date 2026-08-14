@@ -1,5 +1,6 @@
+use rootcause::prelude::ResultExt;
+
 use crate::{_prelude::*, node::ApiServer};
-use anyhow::Context;
 use std::time::Duration;
 
 pub struct Node {
@@ -33,7 +34,7 @@ impl Node {
         self
     }
 
-    pub fn start(self) -> Result<Address<SupervisorInterface>, anyhow::Error> {
+    pub fn start(self) -> Result<Address<SupervisorInterface>, Report> {
         let Self {
             restart_intensity,
             mut supervisor_spec,
@@ -52,7 +53,7 @@ impl Node {
 
         Registry::local()
             .register(supervisor_spec.data.clone())
-            .context("Root Supervisor failed to register")?;
+            .attach("Root Supervisor failed to register")?;
 
         tokio::spawn(
             NodeActor {

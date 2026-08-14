@@ -106,13 +106,13 @@ pub trait Actor: Send + Sized + 'static {
     fn run(
         self,
         state: ActorState<Self::Interface>,
-    ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static;
+    ) -> impl Future<Output = Result<Self::Exit, Report>> + Send + 'static;
 }
 
 pub trait ActorRunnerExt: Actor {
     fn map<F, R>(self, map_exit: F) -> MapRun<Self, F>
     where
-        F: FnOnce(Result<Self::Exit, anyhow::Error>) -> Result<R, anyhow::Error> + Send + 'static,
+        F: FnOnce(Result<Self::Exit, Report>) -> Result<R, Report> + Send + 'static,
         R: Send + 'static,
     {
         MapRun::new(self, map_exit)
@@ -123,12 +123,12 @@ pub trait ActorRunnerExt: Actor {
         map_err: F,
     ) -> MapRun<
         Self,
-        impl FnOnce(Result<Self::Exit, anyhow::Error>) -> Result<Self::Exit, anyhow::Error>
+        impl FnOnce(Result<Self::Exit, Report>) -> Result<Self::Exit, Report>
         + Send
         + 'static,
     >
     where
-        F: FnOnce(&mut anyhow::Error) + Send + 'static,
+        F: FnOnce(&mut Report) + Send + 'static,
     {
         self.map(move |exit| match exit {
             Ok(value) => Ok(value),
@@ -142,7 +142,7 @@ pub trait ActorRunnerExt: Actor {
     fn wrap<F, Fut, E>(self, mapper: F) -> WrapRun<Self, F>
     where
         F: FnOnce(Self, ActorState<Self::Interface>) -> Fut + Send + 'static,
-        Fut: Future<Output = Result<E, anyhow::Error>> + Send + 'static,
+        Fut: Future<Output = Result<E, Report>> + Send + 'static,
         E: Send + 'static,
     {
         WrapRun::new(self, mapper)
@@ -175,7 +175,7 @@ impl<T, F> MapRun<T, F> {
     pub fn new<R>(inner: T, map_exit: F) -> Self
     where
         T: Actor,
-        F: FnOnce(Result<T::Exit, anyhow::Error>) -> Result<R, anyhow::Error> + Send + 'static,
+        F: FnOnce(Result<T::Exit, Report>) -> Result<R, Report> + Send + 'static,
         R: Send + 'static,
     {
         Self { inner, map_exit }
@@ -185,7 +185,7 @@ impl<T, F> MapRun<T, F> {
 impl<T, F, R> Actor for MapRun<T, F>
 where
     T: Actor + Send + 'static,
-    F: FnOnce(Result<T::Exit, anyhow::Error>) -> Result<R, anyhow::Error> + Send + 'static,
+    F: FnOnce(Result<T::Exit, Report>) -> Result<R, Report> + Send + 'static,
     R: Send + 'static,
 {
     type Interface = T::Interface;
@@ -194,7 +194,7 @@ where
     fn run(
         self,
         state: ActorState<Self::Interface>,
-    ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static {
+    ) -> impl Future<Output = Result<Self::Exit, Report>> + Send + 'static {
         let Self { inner, map_exit } = self;
 
         async move { map_exit(inner.run(state).await) }
@@ -223,7 +223,7 @@ impl<T, F> WrapRun<T, F> {
     where
         T: Actor,
         F: FnOnce(T, ActorState<T::Interface>) -> Fut + Send + 'static,
-        Fut: Future<Output = Result<R, anyhow::Error>> + Send + 'static,
+        Fut: Future<Output = Result<R, Report>> + Send + 'static,
         R: Send + 'static,
     {
         Self { inner, mapper }
@@ -234,7 +234,7 @@ impl<T, F, Fut, E> Actor for WrapRun<T, F>
 where
     T: Actor + Send + 'static,
     F: FnOnce(T, ActorState<T::Interface>) -> Fut + Send + 'static,
-    Fut: Future<Output = Result<E, anyhow::Error>> + Send + 'static,
+    Fut: Future<Output = Result<E, Report>> + Send + 'static,
     E: Send + 'static,
 {
     type Interface = T::Interface;
@@ -243,7 +243,7 @@ where
     fn run(
         self,
         state: ActorState<Self::Interface>,
-    ) -> impl Future<Output = Result<Self::Exit, anyhow::Error>> + Send + 'static {
+    ) -> impl Future<Output = Result<Self::Exit, Report>> + Send + 'static {
         let Self { inner, mapper } = self;
 
         async move { mapper(inner, state).await }

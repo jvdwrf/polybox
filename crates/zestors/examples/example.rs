@@ -1,3 +1,4 @@
+use rootcause::Report;
 use std::time::Duration;
 use zestors::{
     HandlerInterface, Interface, Message,
@@ -66,7 +67,7 @@ struct IntervalTick;
 
 impl Handler for MyActor {
     type Interface = MyInterface;
-    type Error = anyhow::Error;
+    type Error = Report;
     type Exit = u32;
 
     async fn exit(&mut self, reason: handler::ExitReason) -> Result<Self::Exit, Self::Error> {

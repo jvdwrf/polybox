@@ -7,7 +7,7 @@ use std::{
 
 pub trait Handler: Debug + Sized + Send + Sync + 'static {
     type Interface: Interface + HandlerInterface<Self>;
-    type Error: Debug + Display + Send + 'static + Into<anyhow::Error>;
+    type Error: Debug + Display + Send + 'static + Into<Report>;
     type Exit: Send + 'static;
 
     /// Called when the actor is exiting, after all messages have been processed.
@@ -69,7 +69,7 @@ impl<H: Handler> Actor for H {
     async fn run(
         mut self,
         state: ActorState<Self::Interface>,
-    ) -> Result<Self::Exit, anyhow::Error> {
+    ) -> Result<Self::Exit, Report> {
         HandlerState::new(state)
             .run(&mut self)
             .await

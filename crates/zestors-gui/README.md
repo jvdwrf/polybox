@@ -1,44 +1,27 @@
-# Zestors Gui
+## Todos
 
-An application for the COSMIC™ desktop
+A todos tracker inspired by [TodoMVC]. It showcases dynamic layout, text input, checkboxes, scrollables, icons, and async actions! It automatically saves your tasks in the background, even if you did not finish typing them.
 
-## Installation
+All the example code is located in the __[`main`]__ file.
 
-A [justfile](./justfile) is included by default for the [casey/just][just] command runner.
+<div align="center">
+  <a href="https://iced.rs/examples/todos.mp4">
+    <img src="https://iced.rs/examples/todos.gif">
+  </a>
+</div>
 
-- `just` builds the application with the default `just build-release` recipe
-- `just run` builds and runs the application
-- `just install` installs the project into the system
-- `just vendor` creates a vendored tarball
-- `just build-vendored` compiles with vendored dependencies from that tarball
-- `just check` runs clippy on the project to check for linter warnings
-- `just check-json` can be used by IDEs that support LSP
-
-## Translators
-
-[Fluent][fluent] is used for localization of the software. Fluent's translation files are found in the [i18n directory](./i18n). New translations may copy the [English (en) localization](./i18n/en) of the project, rename `en` to the desired [ISO 639-1 language code][iso-codes], and then translations can be provided for each [message identifier][fluent-guide]. If no translation is necessary, the message may be omitted.
-
-## Packaging
-
-If packaging for a Linux distribution, vendor dependencies locally with the `vendor` rule, and build with the vendored sources using the `build-vendored` rule. When installing files, use the `rootdir` and `prefix` variables to change installation paths.
-
-```sh
-just vendor
-just build-vendored
-just rootdir=debian/zestors-gui prefix=/usr install
+You can run the native version with `cargo run`:
+```
+cargo run --package todos
 ```
 
-It is recommended to build a source tarball with the vendored dependencies, which can typically be done by running `just vendor` on the host system before it enters the build environment.
+The web version can be run with [`trunk`]:
 
-## Developers
+```
+cd examples/todos
+trunk serve
+```
 
-Developers should install [rustup][rustup] and configure their editor to use [rust-analyzer][rust-analyzer]. To improve compilation times, disable LTO in the release profile, install the [mold][mold] linker, and configure [sccache][sccache] for use with Rust. The [mold][mold] linker will only improve link times if LTO is disabled.
-
-[fluent]: https://projectfluent.org/
-[fluent-guide]: https://projectfluent.org/fluent/guide/hello.html
-[iso-codes]: https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes
-[just]: https://github.com/casey/just
-[rustup]: https://rustup.rs/
-[rust-analyzer]: https://rust-analyzer.github.io/
-[mold]: https://github.com/rui314/mold
-[sccache]: https://github.com/mozilla/sccache
+[`main`]: src/main.rs
+[TodoMVC]: http://todomvc.com/
+[`trunk`]: https://trunkrs.dev/

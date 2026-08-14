@@ -347,7 +347,7 @@ impl Actor for Supervisor {
     async fn run(
         mut self,
         mut state: ActorState<Self::Interface>,
-    ) -> Result<Self::Exit, anyhow::Error> {
+    ) -> Result<Self::Exit, Report> {
         for supervisee in self.supervisees.values_mut() {
             Self::spawn_supervisee(supervisee, &self.registry)?;
         }

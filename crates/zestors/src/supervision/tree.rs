@@ -28,16 +28,16 @@ impl SupervisionTree {
         }
     }
 
-    pub async fn new_populated(child: ChildDescription) -> Result<Self, anyhow::Error> {
+    pub async fn new_populated(child: ChildDescription) -> Result<Self, Report> {
         let mut tree = Self::new(child);
         tree.populate_tree().await?;
         Ok(tree)
     }
 
-    async fn populate_children(&mut self) -> Result<(), anyhow::Error> {
+    async fn populate_children(&mut self) -> Result<(), Report> {
         let address = Registry::local()
             .get(&self.pid)
-            .ok_or_else(|| anyhow::anyhow!("Failed to get address from Registry"))?;
+            .ok_or_else(|| rootcause::report!("Failed to get address from Registry"))?;
 
         let children = match address.get_children().await {
             Ok(children) => children,
@@ -54,7 +54,7 @@ impl SupervisionTree {
         Ok(())
     }
 
-    pub async fn populate_tree(&mut self) -> Result<(), anyhow::Error> {
+    pub async fn populate_tree(&mut self) -> Result<(), Report> {
         let mut queue = VecDeque::new();
         queue.push_back(self);
 
@@ -69,14 +69,14 @@ impl SupervisionTree {
         Ok(())
     }
 
-    pub async fn populate_debug_state(&mut self) -> Result<(), anyhow::Error> {
+    pub async fn populate_debug_state(&mut self) -> Result<(), Report> {
         let mut queue = VecDeque::new();
         queue.push_back(self);
 
         while let Some(node) = queue.pop_front() {
             let entry = Registry::local()
                 .get_entry(&node.pid)
-                .ok_or_else(|| anyhow::anyhow!("Failed to get address from Registry"))?;
+                .ok_or_else(|| rootcause::report!("Failed to get address from Registry"))?;
 
             let address = entry.address();
 
@@ -91,7 +91,7 @@ impl SupervisionTree {
         Ok(())
     }
 
-    pub async fn with_debug_state(mut self) -> Result<Self, anyhow::Error> {
+    pub async fn with_debug_state(mut self) -> Result<Self, Report> {
         self.populate_debug_state().await?;
         Ok(self)
     }

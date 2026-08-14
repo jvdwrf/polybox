@@ -115,7 +115,7 @@ mod tests {
 
     impl Handler for MyActor {
         type Interface = MyInterface;
-        type Error = anyhow::Error;
+        type Error = Report;
         type Exit = ();
 
         async fn exit(&mut self, _reason: ExitReason) -> Result<Self::Exit, Self::Error> {

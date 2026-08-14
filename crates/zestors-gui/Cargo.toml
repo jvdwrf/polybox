@@ -1,35 +1,42 @@
 [package]
-name = "zestors-gui"
+name = "todos"
 version = "0.1.0"
+authors = ["Héctor Ramón Jiménez <hector0193@gmail.com>"]
 edition = "2024"
-license = "MPL-2.0"
-description = "An application for the COSMIC™ desktop"
-repository = "https://github.com/pop-os/cosmic-app-template"
-
-[dependencies]
-i18n-embed = { version = "0.16", features = [
-    "fluent-system",
-    "desktop-requester",
-] }
-i18n-embed-fl = "0.10"
-open = "5.3.2"
-rust-embed = "8.8.0"
-tokio = { workspace = true, features = ["full"] }
-
-
-[dependencies.libcosmic]
-git = "https://github.com/pop-os/libcosmic.git"
-features = [
-    "about",
-    "single-instance",
-    "markdown",
-    "qr_code",
-    "wgpu",
-    "xdg-portal",
-]
-
-[build-dependencies]
-xdgen = "0.1"
+publish = false
 
 [features]
+tester = ["iced/tester"]
 _ra = []
+
+[dependencies]
+iced.workspace = true
+iced.features = ["tokio", "debug", "time-travel"]
+zestors-api-client.workspace = true
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.0", features = ["v4", "fast-rng", "serde"] }
+
+tokio.workspace = true
+tokio.features = ["fs", "time"]
+directories = "6.0"
+tracing-subscriber = "0.3"
+
+
+[dev-dependencies]
+iced_test.workspace = true
+
+[package.metadata.deb]
+assets = [
+    [
+        "target/release-opt/todos",
+        "usr/bin/iced-todos",
+        "755",
+    ],
+    [
+        "iced-todos.desktop",
+        "usr/share/applications/",
+        "644",
+    ],
+]

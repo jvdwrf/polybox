@@ -42,10 +42,7 @@ impl Actor for ApiServer {
     type Interface = Infallible;
     type Exit = ();
 
-    async fn run(
-        self,
-        mut state: ActorState<Self::Interface>,
-    ) -> Result<Self::Exit, anyhow::Error> {
+    async fn run(self, mut state: ActorState<Self::Interface>) -> Result<Self::Exit, Report> {
         let mut run_api = pin!(self.clone().run());
 
         loop {
@@ -64,7 +61,7 @@ impl Actor for ApiServer {
 
                 event = state.next() => match event {
                     Some(event) => event,
-                    None => break Err(anyhow::anyhow!("Actor event stream closed unexpectedly")),
+                    None => break Err(rootcause::report!("Actor event stream closed unexpectedly")),
                 }
             };
 
@@ -102,7 +99,7 @@ impl ApiServer {
             .with_state(self.clone())
     }
 
-    pub async fn run(self) -> Result<(), anyhow::Error> {
+    pub async fn run(self) -> Result<(), Report> {
         let (router, api) = self.create_router().split_for_parts();
 
         let router = match self.cfg.swagger_ui {

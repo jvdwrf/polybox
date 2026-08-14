@@ -77,11 +77,11 @@ impl Registry {
             .flatten()
     }
 
-    pub fn get_typed<T: Interface>(&self, pid: &Pid) -> Result<Address<T>, anyhow::Error> {
+    pub fn get_typed<T: Interface>(&self, pid: &Pid) -> Result<Address<T>, Report> {
         self.get(pid)
-            .ok_or_else(|| anyhow::anyhow!("Address not found for pid: {}", pid))?
+            .ok_or_else(|| rootcause::report!("Address not found for pid: {}", pid))?
             .downcast_ref::<T>()
-            .ok_or_else(|| anyhow::anyhow!("Address found for pid: {} but type mismatch", pid))
+            .ok_or_else(|| rootcause::report!("Address found for pid: {} but type mismatch", pid))
     }
 
     pub fn remove(&self, pid: &Pid) -> Option<RegistryEntry> {
