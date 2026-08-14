@@ -162,7 +162,7 @@ impl<T: Send, R: SenderKind> SendsBoxedPayload for Child<T, R> {
     }
 }
 
-impl<T: Send, R: SenderKind> IntoDynVariant for Child<T, R> {
+impl<T: Send + 'static, R: SenderKind> IntoDynVariant for Child<T, R> {
     type DynVariant<S: DynSenderKind> = Child<T, S>;
 
     fn into_dyn_unchecked<S: DynSenderKind>(self) -> Child<T, S> {
@@ -170,8 +170,15 @@ impl<T: Send, R: SenderKind> IntoDynVariant for Child<T, R> {
         Child::new(handle, address.into_dyn_unchecked())
     }
 }
-impl<T: Send, R: SenderKind> AsTypeSet for Child<T, R> {
-    type Set = <R::Sender as AsTypeSet>::Set;
+impl<T: Send, R: SenderKind> TypeSet for Child<T, R> {
+    type Set = <R::Sender as TypeSet>::Set;
+
+    fn members() -> &'static [std::any::TypeId]
+    where
+        Self: 'static,
+    {
+        <R::Sender as TypeSet>::members()
+    }
 }
 
 #[derive(thiserror::Error, Debug)]

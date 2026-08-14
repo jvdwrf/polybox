@@ -42,8 +42,16 @@ impl<T: Interface> IntoDynVariant for Sender<T> {
         DynSender::new_unchecked(Arc::new(self))
     }
 }
-impl<T: Interface> AsTypeSet for Sender<T> {
+
+impl<T: Interface> TypeSet for Sender<T> {
     type Set = T::Set;
+
+    fn members() -> &'static [std::any::TypeId]
+    where
+        Self: 'static,
+    {
+        <T::Set as TypeSet>::members()
+    }
 }
 
 impl<T: Interface> SendsBoxedPayload for Sender<T> {

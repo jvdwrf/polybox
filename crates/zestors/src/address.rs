@@ -43,7 +43,10 @@ impl<T: SenderKind> SendsBoxedPayload for Address<T> {
     }
 }
 
-impl<T: SenderKind> IntoDynVariant for Address<T> {
+impl<T: SenderKind> IntoDynVariant for Address<T>
+where
+    <T::Sender as TypeSet>::Set: 'static,
+{
     type DynVariant<R: DynSenderKind> = Address<R>;
 
     fn into_dyn_unchecked<R: DynSenderKind>(self) -> Self::DynVariant<R> {
@@ -56,8 +59,15 @@ impl<T: SenderKind> IntoDynVariant for Address<T> {
     }
 }
 
-impl<T: SenderKind> AsTypeSet for Address<T> {
-    type Set = <T::Sender as AsTypeSet>::Set;
+impl<T: SenderKind> TypeSet for Address<T> {
+    type Set = <T::Sender as TypeSet>::Set;
+
+    fn members() -> &'static [std::any::TypeId]
+    where
+        Self: 'static,
+    {
+        <T::Sender as TypeSet>::members()
+    }
 }
 
 impl<T: SenderKind> Clone for Address<T> {
@@ -145,7 +155,7 @@ impl<T: SenderKind> Debug for Address<T> {
     }
 }
 
-pub trait SenderKind {
+pub trait SenderKind: 'static {
     type Sender: PolySender + Clone + Debug + Unpin;
     type Receiver: Clone + Send + Sync + 'static;
 

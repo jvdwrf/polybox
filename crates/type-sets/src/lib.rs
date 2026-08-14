@@ -47,19 +47,34 @@ pub trait TypeSet {
         Self: 'static;
 }
 
-pub trait AsTypeSet {
-    type Set: TypeSet + 'static;
+// pub trait AsTypeSet {
+//     type Set: TypeSet + 'static;
 
-    fn members() -> &'static [TypeId]
-    where
-        Self: 'static,
-    {
-        <Self::Set as TypeSet>::members()
-    }
-}
-impl<T: TypeSet + 'static> AsTypeSet for T {
-    type Set = T;
-}
+//     fn members() -> &'static [TypeId]
+//     where
+//         Self: 'static,
+//     {
+//         <Self::Set as TypeSet>::members()
+//     }
+
+//     fn contains(id: TypeId) -> bool
+//     where
+//         Self: 'static,
+//     {
+//         <Self::Set as TypeSet>::members().contains(&id)
+//     }
+
+//     fn contains_all(ids: &[TypeId]) -> bool
+//     where
+//         Self: 'static,
+//     {
+//         ids.iter()
+//             .all(|id| <Self::Set as TypeSet>::members().contains(id))
+//     }
+// }
+// impl<T: TypeSet + 'static> AsTypeSet for T {
+//     type Set = T;
+// }
 
 #[diagnostic::on_unimplemented(
     message = "`{Self}` and `{R}` do not represent the same set",
@@ -72,6 +87,6 @@ pub trait SetEqual<R: ?Sized> {}
 impl<T: TypeSet, R: TypeSet> SetEqual<R> for T where T: SubsetOf<R> + SupersetOf<R> {}
 
 mod generate_sets;
-pub use generate_sets::*;
+use generate_sets::*;
 
 mod set_macro;

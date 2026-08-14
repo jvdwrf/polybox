@@ -10,11 +10,11 @@ use std::{
 use type_sets::SubsetOf;
 
 /// A trait that allows for conversions to [`DynInbox`].
-pub trait PolySender: IntoDynVariant + SendsBoxedPayload + AsTypeSet<Set: DynSenderKind> {}
+pub trait PolySender: IntoDynVariant + SendsBoxedPayload {}
 
-impl<T: IntoDynVariant + SendsBoxedPayload + AsTypeSet<Set: DynSenderKind>> PolySender for T {}
+impl<T: IntoDynVariant + SendsBoxedPayload + TypeSet<Set: DynSenderKind>> PolySender for T {}
 
-pub trait IntoDynVariant {
+pub trait IntoDynVariant: TypeSet<Set: DynSenderKind> + Sized {
     type DynVariant<T: DynSenderKind>;
 
     /// Converts into a dynamic inbox without checking if the types are compatible.
@@ -25,6 +25,43 @@ pub trait IntoDynVariant {
     /// This method is not marked as unsafe, because violating the type system can
     /// only lead to runtime errors, not undefined behavior.
     fn into_dyn_unchecked<T: DynSenderKind>(self) -> Self::DynVariant<T>;
+
+    /// Converts into a dynamic inbox with a subset of the original types.
+    ///
+    /// This conversion is type-safe, and entirely at compile-time.
+    fn into_dyn<T: DynSenderKind>(self) -> Self::DynVariant<T>
+    where
+        T: SubsetOf<Self::Set>,
+    {
+        self.into_dyn_unchecked()
+    }
+
+    /// Converts into a dynamic inbox with the full set of original types.
+    fn into_dyn_full(self) -> Self::DynVariant<Self::Set> {
+        self.into_dyn_unchecked()
+    }
+
+    /// Converts into a dynamic inbox, checking at runtime if the types are compatible.
+    fn into_dyn_checked<T: DynSenderKind>(self) -> Result<Self::DynVariant<T>, Self> {
+        if self.accepts_msgs(&<T as TypeSet>::members()) {
+            Ok(self.into_dyn_unchecked())
+        } else {
+            Err(self)
+        }
+    }
+
+    /// Checks if the inbox accepts a message of the given type.
+    #[must_use]
+    fn accepts_msg(&self, id: TypeId) -> bool {
+        <Self::Set as TypeSet>::members().contains(&id)
+    }
+
+    /// Checks if the inbox accepts messages of the given types.
+    #[must_use]
+    fn accepts_msgs(&self, ids: &[TypeId]) -> bool {
+        ids.iter()
+            .all(|id| <Self::Set as TypeSet>::members().contains(id))
+    }
 }
 
 /// Object-safe sub-trait of [`PolyBox`], allowing for dynamic dispatch.
@@ -109,8 +146,15 @@ impl<T: DynSenderKind> IntoDynVariant for DynSender<T> {
     }
 }
 
-impl<T: TypeSet + 'static> AsTypeSet for DynSender<T> {
+impl<T: TypeSet + 'static> TypeSet for DynSender<T> {
     type Set = T;
+
+    fn members() -> &'static [std::any::TypeId]
+    where
+        Self: 'static,
+    {
+        <T as TypeSet>::members()
+    }
 }
 
 impl<M, R> Sends<M> for DynSender<R>
@@ -141,43 +185,6 @@ impl<T> SendsBoxedPayload for DynSender<T> {
 
 /// A trait that extends [`PolyBox`] with some helper methods.
 pub trait PolySendExt: PolySender + Sized {
-    /// Converts into a dynamic inbox with a subset of the original types.
-    ///
-    /// This conversion is type-safe, and entirely at compile-time.
-    fn into_dyn<T: DynSenderKind>(self) -> Self::DynVariant<T>
-    where
-        T: SubsetOf<Self::Set>,
-    {
-        self.into_dyn_unchecked()
-    }
-
-    /// Converts into a dynamic inbox with the full set of original types.
-    fn into_dyn_full(self) -> Self::DynVariant<Self::Set> {
-        self.into_dyn_unchecked()
-    }
-
-    /// Converts into a dynamic inbox, checking at runtime if the types are compatible.
-    fn into_dyn_checked<T: DynSenderKind>(self) -> Result<Self::DynVariant<T>, Self> {
-        if self.accepts_msgs(&<T as AsTypeSet>::members()) {
-            Ok(self.into_dyn_unchecked())
-        } else {
-            Err(self)
-        }
-    }
-
-    /// Checks if the inbox accepts a message of the given type.
-    #[must_use]
-    fn accepts_msg(&self, id: TypeId) -> bool {
-        <Self::Set as TypeSet>::members().contains(&id)
-    }
-
-    /// Checks if the inbox accepts messages of the given types.
-    #[must_use]
-    fn accepts_msgs(&self, ids: &[TypeId]) -> bool {
-        ids.iter()
-            .all(|id| <Self::Set as TypeSet>::members().contains(id))
-    }
-
     /// Send any message, checking at runtime if the message is accepted or not.
     fn send_checked<M: Message>(
         &self,
