@@ -7,3 +7,16 @@ supervise-example:
 
 generate-openapi:
     @cargo run --package zestors-gen-oapi
+
+generate-api-client: generate-openapi
+    docker run --rm \
+        -v "$PWD:/local" \
+        openapitools/openapi-generator-cli generate \
+        -i /local/openapi.json \
+        -g rust \
+        -o /local/crates/api-client \
+        --library reqwest \
+        --additional-properties=packageName=zestors-api-client \
+        --additional-properties=packageVersion=0.1.0
+
+mod gui "crates/zestors-gui"

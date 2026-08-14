@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Zestors Gui
+Comment=An application for the COSMIC™ desktop
+Type=Application
+Icon=io.github.pop_os.cosmic-app-template
+Exec=zestors-gui %F
+Terminal=false
+StartupNotify=true
+Categories=COSMIC
+Keywords=COSMIC
+MimeType=
