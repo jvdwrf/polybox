@@ -43,7 +43,7 @@ impl<T: SenderKind> SendsBoxedPayload for Address<T> {
     }
 }
 
-impl<T: SenderKind> IntoDynVariant for Address<T>
+impl<T: SenderKind> DynConversions for Address<T>
 where
     <T::Sender as TypeSet>::Set: 'static,
 {

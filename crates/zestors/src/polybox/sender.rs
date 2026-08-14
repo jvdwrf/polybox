@@ -10,11 +10,11 @@ use std::{
 use type_sets::SubsetOf;
 
 /// A trait that allows for conversions to [`DynInbox`].
-pub trait PolySender: IntoDynVariant + SendsBoxedPayload {}
+pub trait PolySender: DynConversions + SendsBoxedPayload {}
 
-impl<T: IntoDynVariant + SendsBoxedPayload + TypeSet<Set: DynSenderKind>> PolySender for T {}
+impl<T: DynConversions + SendsBoxedPayload> PolySender for T {}
 
-pub trait IntoDynVariant: TypeSet<Set: DynSenderKind> + Sized {
+pub trait DynConversions: TypeSet<Set: DynSenderKind> + Sized {
     type DynVariant<T: DynSenderKind>;
 
     /// Converts into a dynamic inbox without checking if the types are compatible.
@@ -65,7 +65,7 @@ pub trait IntoDynVariant: TypeSet<Set: DynSenderKind> + Sized {
 }
 
 /// Object-safe sub-trait of [`PolyBox`], allowing for dynamic dispatch.
-pub trait SendsBoxedPayload: Send + Sync {
+pub trait SendsBoxedPayload: Any + Send + Sync {
     /// Send a boxed payload.
     fn _send_boxed_payload_checked(
         &self,
@@ -81,9 +81,6 @@ pub trait SendsBoxedPayload: Send + Sync {
     }
 }
 
-pub(crate) trait AnySendsBoxedPayload: Any + SendsBoxedPayload {}
-impl<T: Any + SendsBoxedPayload> AnySendsBoxedPayload for T {}
-
 /// A dynamic inbox that can accept messages of any type, as long as they are part of the specified set.
 ///
 /// An inbox is typed as: `DynInbox<Set![Msg1, Msg2, ...]>`.
@@ -92,7 +89,7 @@ impl<T: Any + SendsBoxedPayload> AnySendsBoxedPayload for T {}
 /// - Into more specific subsets -> [`PolyboxExt::into_dyn_subset`].
 /// - Into more general supersets -> [`PolyboxExt::into_dyn_checked`] or [`PolyBox::into_dyn_unchecked`].
 pub struct DynSender<T> {
-    inbox: Arc<dyn AnySendsBoxedPayload>,
+    inbox: Arc<dyn SendsBoxedPayload>,
     _t: PhantomData<fn() -> T>,
 }
 
@@ -114,7 +111,7 @@ impl<T> Debug for DynSender<T> {
 }
 
 impl<T> DynSender<T> {
-    pub(crate) fn new_unchecked(inbox: Arc<dyn AnySendsBoxedPayload>) -> Self {
+    pub(crate) fn new_unchecked(inbox: Arc<dyn SendsBoxedPayload>) -> Self {
         Self {
             inbox,
             _t: PhantomData,
@@ -138,7 +135,7 @@ impl<T> DynSender<T> {
     }
 }
 
-impl<T: DynSenderKind> IntoDynVariant for DynSender<T> {
+impl<T: DynSenderKind> DynConversions for DynSender<T> {
     type DynVariant<R: DynSenderKind> = DynSender<R>;
 
     fn into_dyn_unchecked<R: DynSenderKind>(self) -> DynSender<R> {
@@ -174,7 +171,7 @@ where
     }
 }
 
-impl<T> SendsBoxedPayload for DynSender<T> {
+impl<T: 'static> SendsBoxedPayload for DynSender<T> {
     fn _send_boxed_payload_checked(
         &self,
         msg: BoxedPayload,

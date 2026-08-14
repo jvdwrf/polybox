@@ -153,7 +153,7 @@ impl<T, R: SenderKind> Observable for Child<T, R> {
     }
 }
 
-impl<T: Send, R: SenderKind> SendsBoxedPayload for Child<T, R> {
+impl<T: Send + 'static, R: SenderKind> SendsBoxedPayload for Child<T, R> {
     fn _send_boxed_payload_checked(
         &self,
         msg: BoxedPayload,
@@ -162,7 +162,7 @@ impl<T: Send, R: SenderKind> SendsBoxedPayload for Child<T, R> {
     }
 }
 
-impl<T: Send + 'static, R: SenderKind> IntoDynVariant for Child<T, R> {
+impl<T: Send + 'static, R: SenderKind> DynConversions for Child<T, R> {
     type DynVariant<S: DynSenderKind> = Child<T, S>;
 
     fn into_dyn_unchecked<S: DynSenderKind>(self) -> Child<T, S> {
