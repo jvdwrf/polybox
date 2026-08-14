@@ -1,13 +1,22 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
-
-use std::sync::LazyLock;
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use eframe::egui;
+use egui::{Color32, CornerRadius, Margin, RichText, Stroke, collapsing_header::CollapsingState};
+use std::sync::LazyLock;
 use tokio::sync::mpsc::{self};
 use zestors_api_client::{
     apis::{configuration, default_api},
     models,
 };
+
+// --- Palette Definition ---
+const BG_DARK: Color32 = Color32::from_rgb(18, 20, 26);
+const CARD_BG: Color32 = Color32::from_rgb(26, 29, 38);
+const INNER_CARD_BG: Color32 = Color32::from_rgb(20, 22, 30);
+const BORDER_COLOR: Color32 = Color32::from_rgb(45, 50, 66);
+const PID_BLUE: Color32 = Color32::from_rgb(97, 175, 239);
+const LABEL_MUTED: Color32 = Color32::from_rgb(140, 148, 170);
+const VALUE_PURPLE: Color32 = Color32::from_rgb(198, 120, 221);
 
 static CFG: LazyLock<configuration::Configuration> =
     LazyLock::new(|| configuration::Configuration {
@@ -20,13 +29,12 @@ fn main() -> eframe::Result {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let _guard = rt.enter();
 
-    // Execute the runtime in its own thread. // The future doesn't have to do anything. In this example, it just sleeps forever.
     std::thread::spawn(move || {
         rt.block_on(futures::future::pending::<()>());
     });
 
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([320.0, 240.0]),
+        viewport: egui::ViewportBuilder::default().with_inner_size([500.0, 600.0]),
         ..Default::default()
     };
 
@@ -36,6 +44,12 @@ fn main() -> eframe::Result {
         "Zestors Inspector",
         options,
         Box::new(|cc| {
+            let mut visuals = egui::Visuals::dark();
+            visuals.panel_fill = BG_DARK;
+            visuals.window_fill = BG_DARK;
+            visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, BORDER_COLOR);
+            cc.egui_ctx.set_visuals(visuals);
+
             egui_extras::install_image_loaders(&cc.egui_ctx);
             tokio::spawn(update_supervision_tree_background_process(
                 app.sender.clone(),
@@ -69,7 +83,6 @@ impl Default for MyApp {
 
 impl eframe::App for MyApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        // On each frame, handle messages from the channel.
         while let Ok(msg) = self.receiver.try_recv() {
             match msg {
                 MyMessage::NewTree(supervision_tree) => {
@@ -79,13 +92,19 @@ impl eframe::App for MyApp {
         }
 
         egui::CentralPanel::default().show(ui, |ui| {
-            ui.heading("Zestors Inspector");
+            ui.add_space(4.0);
+            ui.heading(
+                RichText::new("⚡ Zestors Inspector")
+                    .strong()
+                    .color(Color32::from_rgb(220, 225, 240)),
+            );
+            ui.add_space(4.0);
             ui.separator();
+            ui.add_space(4.0);
 
             if let Some(tree_result) = &self.tree {
                 match tree_result {
                     Ok(tree) => {
-                        // Scrollable in both directions to prevent window overflow
                         egui::ScrollArea::both()
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
@@ -94,13 +113,13 @@ impl eframe::App for MyApp {
                     }
                     Err(e) => {
                         ui.colored_label(
-                            egui::Color32::RED,
+                            Color32::from_rgb(224, 108, 117),
                             format!("Error loading tree: {:#?}", e),
                         );
                     }
                 }
             } else {
-                ui.label("No tree data yet.");
+                ui.label(RichText::new("No tree data yet...").color(LABEL_MUTED));
             }
         });
     }
@@ -121,62 +140,79 @@ async fn update_supervision_tree_background_process(
     }
 }
 
-use egui::{Color32, CornerRadius, Margin, Stroke};
-
-/// Recursively renders a single SupervisionTree node and its children.
+/// Recursively renders a single SupervisionTree node with modern card styling.
 fn render_supervision_node(ui: &mut egui::Ui, node: &models::SupervisionTree, default_open: bool) {
-    let status_badge = match &node.debug_state {
-        Some(Some(debug)) => format!(" [{:?}]", debug.status),
-        _ => String::new(),
-    };
+    let node_id = ui.make_persistent_id(&node.pid);
 
-    let title = format!("PID: {}{}", node.pid, status_badge);
-
-    // Frame wrapper to draw explicit visual borders around each tree node
     egui::Frame::group(ui.style())
-        .fill(ui.visuals().window_fill().linear_multiply(0.3)) // Subtle card fill
-        .stroke(Stroke::new(
-            1.0,
-            ui.visuals().widgets.noninteractive.bg_stroke.color,
-        ))
+        .fill(CARD_BG)
+        .stroke(Stroke::new(1.0, BORDER_COLOR))
         .corner_radius(CornerRadius::same(6))
         .inner_margin(Margin::same(8))
         .show(ui, |ui| {
-            egui::CollapsingHeader::new(title)
-                .id_salt(ui.make_persistent_id(&node.pid))
-                .default_open(default_open)
-                .show(ui, |ui| {
+            // CollapsingState allows custom interactive UI in the header row
+            CollapsingState::load_with_default_open(ui.ctx(), node_id, default_open)
+                .show_header(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new("PID:").small().color(LABEL_MUTED));
+                        ui.label(RichText::new(&node.pid).strong().color(PID_BLUE));
+
+                        if let Some(Some(debug)) = &node.debug_state {
+                            let status_str = format!("{:?}", debug.status);
+                            let (badge_bg, badge_fg) = get_status_colors(&status_str);
+
+                            egui::Frame::canvas(ui.style())
+                                .fill(badge_bg)
+                                .corner_radius(CornerRadius::same(4))
+                                .inner_margin(Margin::symmetric(6, 2))
+                                .show(ui, |ui| {
+                                    ui.label(
+                                        RichText::new(status_str).small().strong().color(badge_fg),
+                                    );
+                                });
+                        }
+                    });
+                })
+                .body(|ui| {
                     ui.add_space(4.0);
 
-                    // Structured Key-Value Grid for Node Metadata
+                    // Structured Key-Value Grid
                     egui::Grid::new(ui.make_persistent_id(&format!("{}_grid", node.pid)))
                         .num_columns(2)
-                        .spacing([12.0, 4.0])
+                        .spacing([12.0, 6.0])
                         .show(ui, |ui| {
-                            ui.label("Restart Mode:");
-                            ui.code(format!("{:?}", node.restart_mode));
+                            ui.label(RichText::new("Restart Mode:").color(LABEL_MUTED));
+                            ui.label(
+                                RichText::new(format!("{:?}", node.restart_mode))
+                                    .color(VALUE_PURPLE),
+                            );
                             ui.end_row();
 
-                            ui.label("Abort Timeout:");
-                            ui.code(format_duration(&node.abort_timeout));
+                            ui.label(RichText::new("Abort Timeout:").color(LABEL_MUTED));
+                            ui.label(
+                                RichText::new(format_duration(&node.abort_timeout))
+                                    .color(Color32::WHITE),
+                            );
                             ui.end_row();
                         });
 
-                    // Debug State Section
+                    // Debug State Container
                     if let Some(Some(debug)) = &node.debug_state {
                         ui.add_space(6.0);
 
-                        // Distinct inner frame for Debug State to isolate it visually
                         egui::Frame::canvas(ui.style())
-                            .stroke(Stroke::new(
-                                1.0,
-                                ui.visuals().widgets.noninteractive.bg_stroke.color,
-                            ))
+                            .fill(INNER_CARD_BG)
+                            .stroke(Stroke::new(1.0, BORDER_COLOR))
                             .corner_radius(CornerRadius::same(4))
-                            .inner_margin(Margin::same(6))
+                            .inner_margin(Margin::same(8))
                             .show(ui, |ui| {
-                                ui.label(egui::RichText::new("Debug State").strong().small());
-                                ui.add_space(2.0);
+                                ui.label(
+                                    RichText::new("DEBUG STATE")
+                                        .small()
+                                        .strong()
+                                        .color(LABEL_MUTED),
+                                );
+                                ui.add_space(4.0);
 
                                 egui::Grid::new(
                                     ui.make_persistent_id(&format!("{}_debug_grid", node.pid)),
@@ -184,23 +220,27 @@ fn render_supervision_node(ui: &mut egui::Ui, node: &models::SupervisionTree, de
                                 .num_columns(2)
                                 .spacing([12.0, 4.0])
                                 .show(ui, |ui| {
-                                    ui.label("Status:");
-                                    ui.code(format!("{:?}", debug.status));
+                                    ui.label(RichText::new("Uptime:").color(LABEL_MUTED));
+                                    ui.label(
+                                        RichText::new(format_duration(&debug.uptime))
+                                            .color(Color32::WHITE),
+                                    );
                                     ui.end_row();
 
-                                    ui.label("Uptime:");
-                                    ui.code(format_duration(&debug.uptime));
-                                    ui.end_row();
-
-                                    ui.label("Description:");
-                                    // Label wrapping prevents horizontal overflow out of parent container
-                                    ui.add(egui::Label::new(&debug.description).wrap());
+                                    ui.label(RichText::new("Description:").color(LABEL_MUTED));
+                                    ui.add(
+                                        egui::Label::new(
+                                            RichText::new(&debug.description)
+                                                .color(Color32::LIGHT_GRAY),
+                                        )
+                                        .wrap(),
+                                    );
                                     ui.end_row();
                                 });
                             });
                     }
 
-                    // Recursive Children
+                    // Render Children
                     if let Some(children) = &node.children {
                         if !children.is_empty() {
                             ui.add_space(8.0);
@@ -216,7 +256,33 @@ fn render_supervision_node(ui: &mut egui::Ui, node: &models::SupervisionTree, de
         });
 }
 
-/// Human-readable duration formatter that dynamically handles fractional units.
+/// Dynamic Status Badge Colors (Background, Foreground Text)
+fn get_status_colors(status: &str) -> (Color32, Color32) {
+    let s = status.to_lowercase();
+    if s.contains("running") || s.contains("active") || s.contains("ok") {
+        (
+            Color32::from_rgb(34, 60, 45),
+            Color32::from_rgb(152, 195, 121),
+        )
+    } else if s.contains("stop") || s.contains("fail") || s.contains("error") {
+        (
+            Color32::from_rgb(65, 35, 40),
+            Color32::from_rgb(224, 108, 117),
+        )
+    } else if s.contains("restart") || s.contains("init") {
+        (
+            Color32::from_rgb(60, 50, 30),
+            Color32::from_rgb(229, 192, 123),
+        )
+    } else {
+        (
+            Color32::from_rgb(38, 45, 60),
+            Color32::from_rgb(97, 175, 239),
+        )
+    }
+}
+
+/// Human-readable duration formatter
 fn format_duration(d: &models::DurationSchema) -> String {
     let total_secs = d.secs;
     let nanos = d.nanos;
@@ -232,12 +298,7 @@ fn format_duration(d: &models::DurationSchema) -> String {
     } else if total_secs >= 60 {
         format!("{}m {}s", total_secs / 60, total_secs % 60)
     } else if total_secs > 0 {
-        let ms = nanos as f64 / 1_000_000.0;
-        if ms > 0.0 {
-            format!("{}.{:03}s", total_secs, (nanos / 1_000_000))
-        } else {
-            format!("{}s", total_secs)
-        }
+        format!("{}.{:03}s", total_secs, nanos / 1_000_000)
     } else if nanos >= 1_000_000 {
         format!("{:.2}ms", nanos as f64 / 1_000_000.0)
     } else if nanos >= 1_000 {
