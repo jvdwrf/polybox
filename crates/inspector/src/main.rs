@@ -32,15 +32,15 @@ fn main() -> eframe::Result {
 
     let app = MyApp::default();
 
-    tokio::spawn(update_supervision_tree_background_process(
-        app.sender.clone(),
-    ));
-
     eframe::run_native(
         "Zestors Inspector",
         options,
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
+            tokio::spawn(update_supervision_tree_background_process(
+                app.sender.clone(),
+                cc.egui_ctx.clone(),
+            ));
             Ok(Box::new(app))
         }),
     )
@@ -106,13 +106,17 @@ impl eframe::App for MyApp {
     }
 }
 
-async fn update_supervision_tree_background_process(sender: mpsc::Sender<MyMessage>) {
+async fn update_supervision_tree_background_process(
+    sender: mpsc::Sender<MyMessage>,
+    ctx: egui::Context,
+) {
     loop {
         let tree = default_api::get_tree(&CFG, Some(true), None).await;
         sender
             .send(MyMessage::NewTree(tree.map_err(Into::into)))
             .await
             .ok();
+        ctx.request_repaint();
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
     }
 }
