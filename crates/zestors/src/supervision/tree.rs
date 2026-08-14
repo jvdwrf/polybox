@@ -7,11 +7,8 @@ pub struct SupervisionTree {
 
     restart_mode: RestartMode,
 
-    #[schema(value_type = DurationSchema, example = "{\"secs\": 5, \"nanos\": 0}")]
-    #[serde(
-        deserialize_with = "DurationSchema::deserializer",
-        serialize_with = "DurationSchema::serializer"
-    )]
+    #[schema(value_type = DurationSchema)]
+    #[serde(with = "DurationSchema")]
     abort_timeout: Duration,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]

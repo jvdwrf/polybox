@@ -61,11 +61,8 @@ pub struct GetState;
 pub struct DebugState {
     pub status: ActorStatus,
 
-    #[schema(value_type = DurationSchema, example = "{\"secs\": 5, \"nanos\": 0}")]
-    #[serde(
-        deserialize_with = "DurationSchema::deserializer",
-        serialize_with = "DurationSchema::serializer"
-    )]
+    #[schema(value_type = DurationSchema)]
+    #[serde(with = "DurationSchema")]
     pub uptime: std::time::Duration,
 
     pub description: String,
