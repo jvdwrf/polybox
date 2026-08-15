@@ -1,5 +1,10 @@
-use crate::Message;
-use type_sets::Set;
+use std::{
+    any::{Any, TypeId},
+    marker::PhantomData,
+};
+
+use crate::{FromPayload, Message, MessageExt, TryIntoPayload};
+use type_sets::{Contains, Set, SubsetOf};
 
 use super::*;
 
@@ -7,19 +12,23 @@ const SIGNAL_QUEUE_CAPACITY: usize = 1_000_000;
 const MSG_QUEUE_CAPACITY: usize = 1_000_000;
 const BACKPRESSURE_LIMIT: usize = 100;
 
-pub trait QueueType {
-    type Queue: Queue + ?Sized;
+pub trait QueueType: 'static {
+    type Set: 'static;
 }
 
 impl<I: Interface> QueueType for I {
-    type Queue = ConcurrentQueue<I>;
+    type Set = <I as Interface>::Set;
 }
 
-impl<S> QueueType for Set<S> {
-    type Queue = DynQueue<Set<S>>;
+impl<S: 'static> QueueType for Set<S> {
+    type Set = Set<S>;
 }
 
-struct Channel<Q: QueueType = Set!()>(Arc<ChannelInner<Q::Queue>>);
+#[repr(transparent)]
+struct Channel<Q: QueueType = Set!()> {
+    inner: Arc<ChannelInner<dyn IsDynQueue>>,
+    _marker: PhantomData<fn() -> Q>,
+}
 
 struct ChannelInner<Q: ?Sized> {
     pid: Pid,
@@ -31,22 +40,90 @@ struct ChannelInner<Q: ?Sized> {
     msg_queue: Q,
 }
 
-impl<Q: QueueType> Channel<Q> {
+impl<S: QueueType> Channel<S> {
     pub fn new(pid: Pid, status: ActorStatus2) -> Self
     where
-        Q::Queue: Sized,
+        S: Interface,
     {
-        let channel = ChannelInner {
+        let inner: Arc<ChannelInner<dyn IsDynQueue>> = Arc::new(ChannelInner {
             pid,
             msg_notifier: Notify::new(),
             msg_backpressure_limit: BACKPRESSURE_LIMIT,
             signal_queue: ConcurrentQueue::bounded(SIGNAL_QUEUE_CAPACITY),
             signal_notifier: Notify::new(),
             status: eyeball::SharedObservable::new(status),
-            msg_queue: <Q::Queue as Queue>::new(MSG_QUEUE_CAPACITY),
-        };
+            msg_queue: ConcurrentQueue::<S>::new(MSG_QUEUE_CAPACITY),
+        });
 
-        Channel(Arc::new(channel))
+        Channel {
+            inner,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn into_dyn<S2>(self) -> Channel<S2>
+    where
+        S2: QueueType + SubsetOf<S>,
+    {
+        self.into_dyn_unchecked()
+    }
+
+    pub fn into_dyn_unchecked<S2>(self) -> Channel<S2>
+    where
+        S2: QueueType,
+    {
+        Channel {
+            inner: self.inner,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn as_dyn<S2>(&self) -> &Channel<S2>
+    where
+        S2: QueueType + SubsetOf<S>,
+    {
+        self.as_dyn_unchecked()
+    }
+
+    pub fn as_dyn_unchecked<S2>(&self) -> &Channel<S2>
+    where
+        S2: QueueType,
+    {
+        // Sound because #[repr(transparent)] guarantees Channel<S>
+        // and Channel<S2> share the exact layout of Arc<...>.
+        unsafe { &*(self as *const Channel<S> as *const Channel<S2>) }
+    }
+
+    pub fn downcast<I>(self) -> Result<Channel<I>, Self>
+    where
+        I: Interface,
+    {
+        if self.is_interface::<I>() {
+            Ok(self.into_dyn_unchecked())
+        } else {
+            Err(self)
+        }
+    }
+
+    pub fn raw_queue(&self) -> Option<&ConcurrentQueue<S>> {
+        (&self.msg_queue as &dyn Any).downcast_ref::<ConcurrentQueue<S>>()
+    }
+
+    pub fn downcast_ref<I>(&self) -> Option<&Channel<I>>
+    where
+        I: Interface,
+    {
+        if self.is_interface::<I>() {
+            // Sound because #[repr(transparent)] guarantees Channel<S>
+            // and Channel<I> share the exact layout of Arc<...>.
+            Some(unsafe { &*(self as *const Channel<S> as *const Channel<I>) })
+        } else {
+            None
+        }
+    }
+
+    pub fn is_interface<I: Interface>(&self) -> bool {
+        self.msg_queue.type_id() == TypeId::of::<ConcurrentQueue<I>>()
     }
 
     pub fn set_status(&self, status: ActorStatus2) {
@@ -108,7 +185,7 @@ impl<Q: QueueType> Channel<Q> {
         }
     }
 
-    pub fn pop_msg(&self) -> Option<<Q::Queue as Queue>::Item> {
+    pub fn pop_msg(&self) -> Option<<dyn IsDynQueue as Queue>::Item> {
         match self.msg_queue.pop_item() {
             Ok(msg) => Some(msg),
             Err(e) => match e {
@@ -118,7 +195,7 @@ impl<Q: QueueType> Channel<Q> {
         }
     }
 
-    pub async fn recv_msg(&self) -> Option<<Q::Queue as Queue>::Item> {
+    pub async fn recv_msg(&self) -> Option<<dyn IsDynQueue as Queue>::Item> {
         let mut notify = pin!(self.msg_notifier.notified());
 
         loop {
@@ -161,10 +238,11 @@ impl<Q: QueueType> Channel<Q> {
     }
 }
 
-impl<M, Q: QueueType> Sends<M> for Channel<Q>
+impl<M, T> Sends<M> for Channel<Set<T>>
 where
     M: Message,
-    Q::Queue: Queue + Pushes<M>,
+    T: 'static,
+    Set<T>: Contains<M>,
 {
     async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
         self.delay_for_backpressure().await;
@@ -188,32 +266,89 @@ where
     }
 
     fn force_send(&self, msg: M) -> M::Output {
-        match self.msg_queue.push_msg(msg) {
+        match self.msg_queue.try_push_msg(msg) {
             Ok(output) => {
                 self.msg_notifier.notify_one();
                 output
             }
-            Err(_msg) => {
+            Err(NotAccepted(_)) => {
                 panic!(
-                    "Message queue for {} contains more than {} messages. The message has been lost.",
+                    "Message type {} not accepted by channel {}",
+                    std::any::type_name::<M>(),
                     std::any::type_name::<Self>(),
-                    MSG_QUEUE_CAPACITY
                 );
             }
         }
     }
 }
 
+impl<M, I> Sends<M> for Channel<I>
+where
+    M: Message,
+    I: Interface + TryIntoPayload<M> + FromPayload<M> + Send + 'static,
+{
+    async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
+        self.delay_for_backpressure().await;
+        self.send_now(msg)
+    }
+
+    fn try_send(&self, msg: M) -> Result<M::Output, TrySendError<M>> {
+        if self.reached_backpressure() {
+            return Err(TrySendError::Full(msg));
+        }
+
+        self.send_now(msg).map_err(Into::into)
+    }
+
+    fn send_now(&self, msg: M) -> Result<M::Output, SendError<M>> {
+        if !self.is_open() {
+            return Err(SendError(msg));
+        }
+
+        Ok(self.force_send(msg))
+    }
+
+    fn force_send(&self, msg: M) -> M::Output {
+        if let Some(queue) = self.raw_queue() {
+            let (payload, output) = <M as MessageExt>::build_payload(msg);
+            let interface = <I as FromPayload<M>>::from_payload(payload);
+
+            if let Err(_e) = queue.push_item(interface) {
+                panic!("Queue was full or empty {}", std::any::type_name::<Self>());
+            }
+
+            output
+        } else {
+            match self.msg_queue.try_push_msg(msg) {
+                Ok(output) => {
+                    self.msg_notifier.notify_one();
+                    output
+                }
+                Err(NotAccepted(_)) => {
+                    panic!(
+                        "Message type {} not accepted by channel {}",
+                        std::any::type_name::<M>(),
+                        std::any::type_name::<Self>(),
+                    );
+                }
+            }
+        }
+    }
+}
+
 impl<Q: QueueType> Deref for Channel<Q> {
-    type Target = ChannelInner<Q::Queue>;
+    type Target = ChannelInner<dyn IsDynQueue>;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.inner
     }
 }
 
 impl<Q: QueueType> Clone for Channel<Q> {
     fn clone(&self) -> Self {
-        Channel(self.0.clone())
+        Channel {
+            inner: self.inner.clone(),
+            _marker: PhantomData,
+        }
     }
 }

@@ -52,6 +52,10 @@ pub enum TrySendCheckedError<T> {
     NotAccepted(T),
 }
 
+#[derive(Debug, thiserror::Error, Clone, PartialEq, Eq, Hash)]
+#[error("Message type not accepted by channel")]
+pub struct NotAccepted<T>(pub T);
+
 impl<T> TrySendCheckedError<T> {
     pub fn into_inner(self) -> T {
         match self {
