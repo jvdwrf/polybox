@@ -1,7 +1,7 @@
 use super::*;
 
 pub trait RepeatSpawn {
-    type Inbox: QueueType;
+    type Inbox: ChannelKind;
     type Exit: Send + 'static;
 
     fn spawn_with_data(&self, data: Channel<Self::Inbox>) -> Child<Self::Exit, Self::Inbox>;

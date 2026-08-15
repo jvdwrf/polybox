@@ -58,7 +58,7 @@ pub trait Sends<M: Message>: Sync {
 }
 
 pub trait ActorRef {
-    type QueueType: QueueType<Set = Self::Set>;
+    type QueueType: ChannelKind<Set = Self::Set>;
     type Set: 'static;
 
     /// Same as [`Sends::send`], but checks whether the message type is accepted by the channel.
@@ -113,13 +113,13 @@ pub trait ActorRef {
 }
 
 pub trait AsActorRef {
-    type QueueType: QueueType;
+    type QueueType: ChannelKind;
 
     fn as_channel(&self) -> &Channel<Self::QueueType>;
 }
 
 impl<T: AsActorRef> ActorRef for T {
-    type Set = <T::QueueType as QueueType>::Set;
+    type Set = <T::QueueType as ChannelKind>::Set;
     type QueueType = T::QueueType;
 
     fn send_checked<M: Message>(
@@ -230,22 +230,22 @@ where
 }
 
 pub trait IntoDyn: ActorRef + Sized {
-    type Ref<T: QueueType>;
+    type Ref<T: ChannelKind>;
 
     fn into_dyn_unchecked<S>(self) -> Self::Ref<S>
     where
-        S: QueueType;
+        S: ChannelKind;
 
     fn into_dyn<S>(self) -> Self::Ref<S>
     where
-        S: QueueType + SubsetOf<Self::Set>,
+        S: ChannelKind + SubsetOf<Self::Set>,
     {
         self.into_dyn_unchecked()
     }
 
     fn into_dyn_checked<S>(self) -> Result<Self::Ref<S>, Self>
     where
-        S: TypeSet + QueueType,
+        S: TypeSet + ChannelKind,
     {
         if self.is_superset_of(S::members()) {
             Ok(self.into_dyn_unchecked())
@@ -269,18 +269,18 @@ pub trait IntoDyn: ActorRef + Sized {
 pub trait AsDyn: IntoDyn {
     fn as_dyn_unchecked<S>(&self) -> &Self::Ref<S>
     where
-        S: QueueType;
+        S: ChannelKind;
 
     fn as_dyn<S>(&self) -> &Self::Ref<S>
     where
-        S: QueueType + SubsetOf<Self::Set>,
+        S: ChannelKind + SubsetOf<Self::Set>,
     {
         self.as_dyn_unchecked()
     }
 
     fn as_dyn_checked<S>(&self) -> Option<&Self::Ref<S>>
     where
-        S: TypeSet + QueueType,
+        S: TypeSet + ChannelKind,
     {
         if self.is_superset_of(S::members()) {
             Some(self.as_dyn_unchecked())

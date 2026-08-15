@@ -3,11 +3,11 @@ use polybox::type_sets::Set;
 use std::fmt::Debug;
 
 #[repr(transparent)]
-pub struct Address<T: QueueType = Set!()> {
+pub struct Address<T: ChannelKind = Set!()> {
     channel: Channel<T>,
 }
 
-impl<T: QueueType> AsActorRef for Address<T> {
+impl<T: ChannelKind> AsActorRef for Address<T> {
     type QueueType = T;
 
     fn as_channel(&self) -> &Channel<Self::QueueType> {
@@ -15,12 +15,12 @@ impl<T: QueueType> AsActorRef for Address<T> {
     }
 }
 
-impl<T: QueueType> IntoDyn for Address<T> {
-    type Ref<R: QueueType> = Address<R>;
+impl<T: ChannelKind> IntoDyn for Address<T> {
+    type Ref<R: ChannelKind> = Address<R>;
 
     fn into_dyn_unchecked<S>(self) -> Address<S>
     where
-        S: QueueType,
+        S: ChannelKind,
     {
         Address {
             channel: self.channel.into_dyn_unchecked(),
@@ -28,7 +28,7 @@ impl<T: QueueType> IntoDyn for Address<T> {
     }
 }
 
-impl<T: QueueType> Clone for Address<T> {
+impl<T: ChannelKind> Clone for Address<T> {
     fn clone(&self) -> Self {
         Self {
             channel: self.channel.clone(),
@@ -36,7 +36,7 @@ impl<T: QueueType> Clone for Address<T> {
     }
 }
 
-impl<T: QueueType> Address<T> {
+impl<T: ChannelKind> Address<T> {
     pub(super) fn new(channel: Channel<T>) -> Self {
         Self { channel }
     }
@@ -47,7 +47,7 @@ impl<T: QueueType> Address<T> {
     }
 }
 
-impl<T: QueueType> Debug for Address<T> {
+impl<T: ChannelKind> Debug for Address<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Address")
             .field("channel", &self.channel)

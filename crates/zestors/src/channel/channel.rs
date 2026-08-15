@@ -15,15 +15,15 @@ const SIGNAL_QUEUE_CAPACITY: usize = 1_000_000;
 const MSG_QUEUE_CAPACITY: usize = 1_000_000;
 pub(super) const BACKPRESSURE_LIMIT: usize = 100;
 
-pub trait QueueType: 'static {
+pub trait ChannelKind: 'static {
     type Set: TypeSet + 'static;
 }
 
-impl<I: Interface> QueueType for I {
+impl<I: Interface> ChannelKind for I {
     type Set = <I as Interface>::Set;
 }
 
-impl<S: 'static> QueueType for Set<S>
+impl<S: 'static> ChannelKind for Set<S>
 where
     Set<S>: TypeSet,
 {
@@ -31,7 +31,7 @@ where
 }
 
 #[repr(transparent)]
-pub struct Channel<Q: QueueType = Set!()> {
+pub struct Channel<Q: ChannelKind = Set!()> {
     pub(super) inner: Arc<ChannelInner<dyn IsDynQueue>>,
     _marker: PhantomData<fn() -> Q>,
 }
@@ -46,7 +46,7 @@ pub(crate) struct ChannelInner<Q: ?Sized> {
     msg_queue: Q,
 }
 
-impl<T: QueueType> Channel<T> {
+impl<T: ChannelKind> Channel<T> {
     pub(crate) fn clone(&self) -> Self {
         Channel {
             inner: self.inner.clone(),
@@ -303,7 +303,7 @@ where
     }
 }
 
-impl<Q: QueueType> ActorRef for Channel<Q> {
+impl<Q: ChannelKind> ActorRef for Channel<Q> {
     type QueueType = Q;
     type Set = Q::Set;
 
@@ -440,12 +440,12 @@ impl<Q: QueueType> ActorRef for Channel<Q> {
     }
 }
 
-impl<Q: QueueType> IntoDyn for Channel<Q> {
-    type Ref<T: QueueType> = Channel<T>;
+impl<Q: ChannelKind> IntoDyn for Channel<Q> {
+    type Ref<T: ChannelKind> = Channel<T>;
 
     fn into_dyn_unchecked<S>(self) -> Channel<S>
     where
-        S: QueueType,
+        S: ChannelKind,
     {
         Channel {
             inner: self.inner,
@@ -454,10 +454,10 @@ impl<Q: QueueType> IntoDyn for Channel<Q> {
     }
 }
 
-impl<Q: QueueType> AsDyn for Channel<Q> {
+impl<Q: ChannelKind> AsDyn for Channel<Q> {
     fn as_dyn_unchecked<S>(&self) -> &Channel<S>
     where
-        S: QueueType,
+        S: ChannelKind,
     {
         // Sound because #[repr(transparent)] guarantees Channel<S>
         // and Channel<S2> share the exact layout of Arc<...>.
@@ -534,7 +534,7 @@ impl<I: Interface> Channel<I> {
     }
 }
 
-impl<T: QueueType> std::fmt::Debug for Channel<T> {
+impl<T: ChannelKind> std::fmt::Debug for Channel<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Channel")
             .field("pid", &self.inner.pid)

@@ -3,13 +3,13 @@ use crate::_prelude::*;
 use polybox::type_sets::Set;
 use std::{fmt::Debug, task::Poll, time::Duration};
 
-pub struct Child<T = (), R: QueueType = Set!()> {
+pub struct Child<T = (), R: ChannelKind = Set!()> {
     handle: Option<tokio::task::JoinHandle<Result<T, Report>>>,
     attached: bool,
     address: Address<R>,
 }
 
-impl<T, R: QueueType> Child<T, R> {
+impl<T, R: ChannelKind> Child<T, R> {
     pub(crate) fn new(
         handle: tokio::task::JoinHandle<Result<T, Report>>,
         address: Address<R>,
@@ -97,7 +97,7 @@ impl<T, R: QueueType> Child<T, R> {
     }
 }
 
-impl<T, R: QueueType> AsActorRef for Child<T, R> {
+impl<T, R: ChannelKind> AsActorRef for Child<T, R> {
     type QueueType = R;
 
     fn as_channel(&self) -> &Channel<Self::QueueType> {
@@ -105,19 +105,19 @@ impl<T, R: QueueType> AsActorRef for Child<T, R> {
     }
 }
 
-impl<T, R: QueueType> IntoDyn for Child<T, R> {
-    type Ref<S: QueueType> = Child<T, S>;
+impl<T, R: ChannelKind> IntoDyn for Child<T, R> {
+    type Ref<S: ChannelKind> = Child<T, S>;
 
     fn into_dyn_unchecked<S>(self) -> Self::Ref<S>
     where
-        S: QueueType,
+        S: ChannelKind,
     {
         let (handle, address) = self.into_parts();
         Child::new(handle, address.into_dyn_unchecked())
     }
 }
 
-impl<T, R: QueueType> Future for Child<T, R> {
+impl<T, R: ChannelKind> Future for Child<T, R> {
     type Output = Result<T, JoinError>;
 
     fn poll(
@@ -163,7 +163,7 @@ impl From<tokio::task::JoinError> for JoinError {
     }
 }
 
-impl<T, R: QueueType> Drop for Child<T, R> {
+impl<T, R: ChannelKind> Drop for Child<T, R> {
     fn drop(&mut self) {
         if self.attached && self.handle.is_some() {
             self.abort();
@@ -171,7 +171,7 @@ impl<T, R: QueueType> Drop for Child<T, R> {
     }
 }
 
-impl<T, R: QueueType> Debug for Child<T, R> {
+impl<T, R: ChannelKind> Debug for Child<T, R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Child")
             .field("handle", &std::any::type_name::<T>())

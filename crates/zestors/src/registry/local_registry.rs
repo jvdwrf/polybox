@@ -25,7 +25,7 @@ impl Registry {
     }
 
     /// Add a process to the registry if not already present.
-    pub fn register<T: QueueType>(
+    pub fn register<T: ChannelKind>(
         &self,
         entry: impl Into<Channel<T>>,
     ) -> Result<(), RegistryAddError<T>> {
@@ -93,12 +93,12 @@ impl Registry {
 
 #[derive(thiserror::Error)]
 #[error("Failed to add entry for pid {pid}")]
-pub struct RegistryAddError<T: QueueType = Set!()> {
+pub struct RegistryAddError<T: ChannelKind = Set!()> {
     pid: Pid,
     entry: Channel<T>,
 }
 
-impl<T: QueueType> std::fmt::Debug for RegistryAddError<T> {
+impl<T: ChannelKind> std::fmt::Debug for RegistryAddError<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RegistryAddError")
             .field("pid", &self.pid)

@@ -31,7 +31,7 @@ enum TestInterface {
 #[interface(crate = "crate")]
 enum UnrelatedInterface {}
 
-fn create_test_channel<S: QueueType + Interface>() -> Channel<S> {
+fn create_test_channel<S: ChannelKind + Interface>() -> Channel<S> {
     let pid = Pid::default();
     Channel::<S>::new(pid)
 }
