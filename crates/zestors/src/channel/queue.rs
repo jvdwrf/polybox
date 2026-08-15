@@ -37,6 +37,8 @@ pub(super) trait IsDynQueue: Any + Send + Sync + 'static {
     fn pop_boxed_payload(&self) -> Result<BoxedPayload, PopError>;
 
     fn members(&self) -> &'static [TypeId];
+
+    fn as_any(&self) -> &dyn Any;
 }
 
 impl<I: Send + 'static> Queue for ConcurrentQueue<I> {
@@ -90,6 +92,10 @@ impl<I: Interface> IsDynQueue for ConcurrentQueue<I> {
 
     fn members(&self) -> &'static [TypeId] {
         <I::Set as TypeSet>::members()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

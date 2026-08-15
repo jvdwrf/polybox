@@ -1,12 +1,8 @@
-use std::{
-    any::{Any, TypeId},
-    marker::PhantomData,
-};
-
-use crate::{FromPayload, Message, MessageExt, TryIntoPayload};
-use type_sets::{Contains, Set, SubsetOf};
+use std::{any::TypeId, marker::PhantomData};
 
 use super::*;
+use crate::{FromPayload, Message, MessageExt, TryIntoPayload};
+use type_sets::{Contains, Set, SubsetOf};
 
 const SIGNAL_QUEUE_CAPACITY: usize = 1_000_000;
 const MSG_QUEUE_CAPACITY: usize = 1_000_000;
@@ -106,7 +102,7 @@ impl<S: QueueType> Channel<S> {
     }
 
     pub fn raw_queue(&self) -> Option<&ConcurrentQueue<S>> {
-        (&self.msg_queue as &dyn Any).downcast_ref::<ConcurrentQueue<S>>()
+        self.msg_queue.as_any().downcast_ref::<ConcurrentQueue<S>>()
     }
 
     pub fn downcast_ref<I>(&self) -> Option<&Channel<I>>
@@ -309,6 +305,9 @@ where
     }
 
     fn force_send(&self, msg: M) -> M::Output {
+        // Raw-queue could just be a raw pointer cast, but that requires that a
+        // Channel<I: Interface> always has a ConcurrentQueue<I> as its msg_queue,
+        // This is currently not guaranteed by the type system.
         if let Some(queue) = self.raw_queue() {
             let (payload, output) = <M as MessageExt>::build_payload(msg);
             let interface = <I as FromPayload<M>>::from_payload(payload);
