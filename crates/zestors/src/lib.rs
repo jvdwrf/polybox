@@ -190,3 +190,5 @@ pub(crate) mod _prelude {
 }
 
 pub(crate) mod schemas;
+
+mod channel;

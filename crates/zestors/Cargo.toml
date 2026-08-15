@@ -25,6 +25,8 @@ utoipa-axum.workspace = true
 utoipa-swagger-ui.workspace = true
 utoipa.workspace = true
 axum-autoroute.workspace = true
+concurrent-queue.workspace = true
+eyeball.workspace = true
 
 [dev-dependencies]
 tracing-subscriber.workspace = true

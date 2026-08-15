@@ -53,12 +53,12 @@ impl<I: Interface> ActorState<I> {
                 Event::Message(msg) => break Some(ActorEvent::Message(msg)),
                 Event::Signal(signal) => match signal {
                     SignalInterface::Shutdown(_) => {
-                        self.status = ActorStatus::ShuttingDown;
+                        self.status = ActorStatus::Exiting;
                         if self.shutdown_at.is_none() {
                             self.shutdown_at = Some(tokio::time::Instant::now());
                         }
                         break Some(ActorEvent::Signal(SignalEvent::StatusUpdate(
-                            ActorStatus::ShuttingDown,
+                            ActorStatus::Exiting,
                         )));
                     }
                     SignalInterface::Suspend(_) => {
@@ -123,9 +123,7 @@ pub trait ActorRunnerExt: Actor {
         map_err: F,
     ) -> MapRun<
         Self,
-        impl FnOnce(Result<Self::Exit, Report>) -> Result<Self::Exit, Report>
-        + Send
-        + 'static,
+        impl FnOnce(Result<Self::Exit, Report>) -> Result<Self::Exit, Report> + Send + 'static,
     >
     where
         F: FnOnce(&mut Report) + Send + 'static,

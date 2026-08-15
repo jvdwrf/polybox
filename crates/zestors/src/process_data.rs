@@ -1,5 +1,22 @@
 use crate::_prelude::*;
 
+// pub struct TestProcessDataWrapper<T: SenderKind> {
+//     inner: Arc<TestProcessData<T>>,
+// }
+
+// impl<T: Interface> TestProcessDataWrapper<T> {
+//     pub fn into_any(self) -> TestProcessDataWrapper<Set!()> {
+//         TestProcessDataWrapper {
+//             inner: self.inner as Arc<TestProcessData<Set!()>>,
+//         }
+//     }
+// }
+
+pub struct TestProcessData<T: SenderKind> {
+    data: SharedProcessDataInner,
+    sender: T::Sender,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct SharedProcessData {
     inner: Arc<SharedProcessDataInner>,

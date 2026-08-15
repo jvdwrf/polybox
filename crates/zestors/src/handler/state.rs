@@ -92,7 +92,7 @@ impl<H: Handler> HandlerState<H> {
                     ActorStatus::Suspended => {
                         handler.on_suspend().await?;
                     }
-                    ActorStatus::ShuttingDown => {
+                    ActorStatus::Exiting => {
                         handler.on_shutdown().await?;
                     }
                 },

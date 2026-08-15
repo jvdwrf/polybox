@@ -344,10 +344,7 @@ impl Actor for Supervisor {
     type Interface = SupervisorInterface;
     type Exit = ();
 
-    async fn run(
-        mut self,
-        mut state: ActorState<Self::Interface>,
-    ) -> Result<Self::Exit, Report> {
+    async fn run(mut self, mut state: ActorState<Self::Interface>) -> Result<Self::Exit, Report> {
         for supervisee in self.supervisees.values_mut() {
             Self::spawn_supervisee(supervisee, &self.registry)?;
         }
@@ -391,7 +388,7 @@ impl Actor for Supervisor {
                         tx.send(children).ok();
                     }
                     SignalEvent::StatusUpdate(status) => match status {
-                        ActorStatus::ShuttingDown => {
+                        ActorStatus::Exiting => {
                             self.shutdown().await;
                             break;
                         }

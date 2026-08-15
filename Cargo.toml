@@ -39,6 +39,9 @@ utoipa-axum = { version = "0.2" }
 utoipa-swagger-ui = { version = "9", features = ["axum"] }
 axum-autoroute = { version = "0.2", features = [] }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+vtable = "0.4"
+concurrent-queue = "2"
+eyeball = "0.8"
 
 iced = { version = "0.14" }
 iced_test = { version = "0.14", features = [] }

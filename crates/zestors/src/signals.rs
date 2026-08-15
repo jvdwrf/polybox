@@ -27,12 +27,12 @@ pub struct GetStatus;
 pub enum ActorStatus {
     Running,
     Suspended,
-    ShuttingDown,
+    Exiting,
 }
 
 impl ActorStatus {
     pub fn should_exit(&self) -> bool {
-        matches!(self, ActorStatus::ShuttingDown)
+        matches!(self, ActorStatus::Exiting)
     }
 
     pub fn should_accept_messages(&self) -> bool {
@@ -48,7 +48,7 @@ impl ActorStatus {
     }
 
     pub fn shutting_down(&self) -> bool {
-        matches!(self, ActorStatus::ShuttingDown)
+        matches!(self, ActorStatus::Exiting)
     }
 }
 
