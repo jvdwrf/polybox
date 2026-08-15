@@ -1,7 +1,7 @@
 use std::any::{Any, TypeId};
 
 use super::*;
-use crate::{BoxedPayload, FromPayload, Message, MessageExt, TryIntoPayload};
+use crate::{BoxedPayload, Message, MessageExt};
 use type_sets::TypeSet;
 
 pub trait Queue: Send + 'static {
@@ -22,10 +22,6 @@ pub trait Queue: Send + 'static {
     fn push_item(&self, msg: Self::Item) -> Result<(), TrySendError<Self::Item>>;
 }
 
-// pub(super) trait Pushes<M: Message>: Sync {
-//     fn push_msg(&self, msg: M) -> Result<M::Output, TrySendError<M>>;
-// }
-
 pub(crate) trait IsDynQueue: Any + Send + Sync + 'static {
     fn len(&self) -> usize;
 
@@ -37,8 +33,6 @@ pub(crate) trait IsDynQueue: Any + Send + Sync + 'static {
     fn pop_boxed_payload(&self) -> Result<BoxedPayload, PopError>;
 
     fn members(&self) -> &'static [TypeId];
-
-    fn as_any(&self) -> &dyn Any;
 }
 
 impl<I: Send + 'static> Queue for ConcurrentQueue<I> {
@@ -92,10 +86,6 @@ impl<I: Interface> IsDynQueue for ConcurrentQueue<I> {
 
     fn members(&self) -> &'static [TypeId] {
         <I::Set as TypeSet>::members()
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 

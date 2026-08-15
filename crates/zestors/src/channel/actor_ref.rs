@@ -1,11 +1,10 @@
+use super::*;
 use crate::{
     Message, Rx,
     signals::{ActorStatus, ChildDescription, DebugState},
 };
-
-use super::*;
-
-use std::future::Future;
+use std::{any::TypeId, future::Future};
+use type_sets::{SubsetOf, TypeSet};
 
 /// Provides message-sending operations for a channel.
 ///
@@ -58,6 +57,8 @@ pub trait Sends<M: Message>: Sync {
 }
 
 pub trait ActorRef {
+    type Set: 'static;
+
     /// Same as [`Sends::send`], but checks whether the message type is accepted by the channel.
     fn send_checked<M: Message>(
         &self,
@@ -77,6 +78,17 @@ pub trait ActorRef {
 
     fn status(&self) -> ActorStatus;
 
+    fn members(&self) -> &'static [TypeId];
+
+    fn can_send(&self, type_id: TypeId) -> bool {
+        self.members().contains(&type_id)
+    }
+
+    fn is_superset_of(&self, type_ids: &[TypeId]) -> bool {
+        type_ids.iter().all(|id| self.can_send(*id))
+    }
+    fn is_interface<I: Interface>(&self) -> bool;
+
     fn reached_backpressure(&self) -> bool;
 
     fn signal_shutdown(&self);
@@ -88,13 +100,15 @@ pub trait ActorRef {
     fn get_children(&self) -> Rx<Vec<ChildDescription>>;
 }
 
-pub trait AsChannel {
+pub trait AsActorRef {
     type QueueType: QueueType;
 
     fn as_channel(&self) -> &Channel<Self::QueueType>;
 }
 
-impl<T: AsChannel> ActorRef for T {
+impl<T: AsActorRef> ActorRef for T {
+    type Set = <T::QueueType as QueueType>::Set;
+
     fn send_checked<M: Message>(
         &self,
         msg: M,
@@ -153,11 +167,19 @@ impl<T: AsChannel> ActorRef for T {
     fn get_children(&self) -> Rx<Vec<ChildDescription>> {
         self.as_channel().get_children()
     }
+
+    fn members(&self) -> &'static [TypeId] {
+        self.as_channel().members()
+    }
+
+    fn is_interface<I: Interface>(&self) -> bool {
+        self.as_channel().is_interface::<I>()
+    }
 }
 
 impl<M, T> Sends<M> for T
 where
-    T: AsChannel + Sync,
+    T: AsActorRef + Sync,
     M: Message,
     Channel<T::QueueType>: Sends<M>,
 {
@@ -175,5 +197,77 @@ where
 
     fn force_send(&self, msg: M) -> <M as Message>::Output {
         self.as_channel().force_send(msg)
+    }
+}
+
+pub trait IntoDyn: ActorRef + Sized {
+    type Ref<T: QueueType>;
+
+    fn into_dyn_unchecked<S>(self) -> Channel<S>
+    where
+        S: QueueType;
+
+    fn into_dyn<S>(self) -> Channel<S>
+    where
+        S: QueueType + SubsetOf<Self::Set>,
+    {
+        self.into_dyn_unchecked()
+    }
+
+    fn into_dyn_checked<S>(self) -> Result<Channel<S>, Self>
+    where
+        S: TypeSet + QueueType,
+    {
+        if self.is_superset_of(S::members()) {
+            Ok(self.into_dyn_unchecked())
+        } else {
+            Err(self)
+        }
+    }
+
+    fn downcast<I>(self) -> Result<Channel<I>, Self>
+    where
+        I: Interface,
+    {
+        if self.is_interface::<I>() {
+            Ok(self.into_dyn_unchecked())
+        } else {
+            Err(self)
+        }
+    }
+}
+
+pub trait AsDyn: IntoDyn {
+    fn as_dyn_unchecked<S>(&self) -> &Channel<S>
+    where
+        S: QueueType;
+
+    fn as_dyn<S>(&self) -> &Channel<S>
+    where
+        S: QueueType + SubsetOf<Self::Set>,
+    {
+        self.as_dyn_unchecked()
+    }
+
+    fn as_dyn_checked<S>(&self) -> Option<&Channel<S>>
+    where
+        S: TypeSet + QueueType,
+    {
+        if self.is_superset_of(S::members()) {
+            Some(self.as_dyn_unchecked())
+        } else {
+            None
+        }
+    }
+
+    fn downcast_ref<I>(&self) -> Option<&Channel<I>>
+    where
+        I: Interface,
+    {
+        if self.is_interface::<I>() {
+            Some(self.as_dyn_unchecked())
+        } else {
+            None
+        }
     }
 }

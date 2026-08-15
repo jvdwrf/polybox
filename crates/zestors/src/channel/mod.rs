@@ -16,11 +16,14 @@ pub use errors::*;
 mod backpressure;
 pub use backpressure::*;
 
-mod sends;
-pub use sends::*;
+mod actor_ref;
+pub use actor_ref::*;
 
 mod queue;
 pub use queue::*;
+
+mod recv;
+pub use recv::*;
 
 #[cfg(test)]
 mod tests;

@@ -3,7 +3,7 @@ use std::{any::TypeId, marker::PhantomData};
 use super::*;
 use crate::{
     FromPayload, Message, MessageExt, Rx, TryIntoPayload, new_request,
-    signals::{self, ActorStatus, Shutdown},
+    signals::{self, ActorStatus},
 };
 use type_sets::{Contains, Set, SubsetOf};
 
@@ -67,63 +67,6 @@ impl<T: QueueType> Channel<T> {
         }
     }
 
-    pub(super) fn into_dyn<S>(self) -> Channel<S>
-    where
-        S: QueueType + SubsetOf<T>,
-    {
-        self.into_dyn_unchecked()
-    }
-
-    pub(super) fn into_dyn_unchecked<S>(self) -> Channel<S>
-    where
-        S: QueueType,
-    {
-        Channel {
-            inner: self.inner,
-            _marker: PhantomData,
-        }
-    }
-
-    pub(super) fn as_dyn<S>(&self) -> &Channel<S>
-    where
-        S: QueueType + SubsetOf<T>,
-    {
-        self.as_dyn_unchecked()
-    }
-
-    pub(super) fn as_dyn_unchecked<S>(&self) -> &Channel<S>
-    where
-        S: QueueType,
-    {
-        // Sound because #[repr(transparent)] guarantees Channel<S>
-        // and Channel<S2> share the exact layout of Arc<...>.
-        unsafe { &*(self as *const Channel<T> as *const Channel<S>) }
-    }
-
-    pub(super) fn downcast<I>(self) -> Result<Channel<I>, Self>
-    where
-        I: Interface,
-    {
-        if self.is_interface::<I>() {
-            Ok(self.into_dyn_unchecked())
-        } else {
-            Err(self)
-        }
-    }
-
-    pub(super) fn downcast_ref<I>(&self) -> Option<&Channel<I>>
-    where
-        I: Interface,
-    {
-        if self.is_interface::<I>() {
-            // Sound because #[repr(transparent)] guarantees Channel<S>
-            // and Channel<I> share the exact layout of Arc<...>.
-            Some(unsafe { &*(self as *const Channel<T> as *const Channel<I>) })
-        } else {
-            None
-        }
-    }
-
     pub(super) fn raw_queue(&self) -> Option<&ConcurrentQueue<T>>
     where
         T: Interface,
@@ -135,10 +78,6 @@ impl<T: QueueType> Channel<T> {
         } else {
             None
         }
-    }
-
-    pub(super) fn is_interface<I: Interface>(&self) -> bool {
-        self.msg_queue.type_id() == TypeId::of::<ConcurrentQueue<I>>()
     }
 
     pub(super) fn set_status(&self, status: ActorStatus) {
@@ -174,7 +113,7 @@ impl<T: QueueType> Channel<T> {
         }
     }
 
-    pub(super) fn signal(&self, signal: SignalInterface) {
+    fn signal(&self, signal: SignalInterface) {
         match self.signal_queue.push(signal) {
             Ok(_) => {
                 self.signal_notifier.notify_one();
@@ -187,58 +126,6 @@ impl<T: QueueType> Channel<T> {
                     e
                 );
             }
-        }
-    }
-
-    pub(super) fn pop_msg(&self) -> Option<<dyn IsDynQueue as Queue>::Item> {
-        match self.msg_queue.pop_item() {
-            Ok(msg) => Some(msg),
-            Err(e) => match e {
-                PopError::Empty => None,
-                PopError::Closed => unreachable!("Queue should never be closed"),
-            },
-        }
-    }
-
-    pub(super) async fn recv_msg(&self) -> Option<<dyn IsDynQueue as Queue>::Item> {
-        let mut notify = pin!(self.msg_notifier.notified());
-
-        loop {
-            notify.as_mut().enable();
-
-            if let Some(msg) = self.pop_msg() {
-                return Some(msg);
-            }
-
-            notify.as_mut().await;
-
-            notify.set(self.msg_notifier.notified());
-        }
-    }
-
-    pub(super) fn pop_signal(&self) -> Option<SignalInterface> {
-        match self.signal_queue.pop() {
-            Ok(signal) => Some(signal),
-            Err(e) => match e {
-                PopError::Empty => None,
-                PopError::Closed => unreachable!("Queue should never be closed"),
-            },
-        }
-    }
-
-    pub(super) async fn recv_signal(&self) -> Option<SignalInterface> {
-        let mut notify = pin!(self.signal_notifier.notified());
-
-        loop {
-            notify.as_mut().enable();
-
-            if let Some(signal) = self.pop_signal() {
-                return Some(signal);
-            }
-
-            notify.as_mut().await;
-
-            notify.set(self.signal_notifier.notified());
         }
     }
 }
@@ -364,6 +251,8 @@ where
 }
 
 impl<Q: QueueType> ActorRef for Channel<Q> {
+    type Set = Q::Set;
+
     async fn send_checked<M: Message>(&self, msg: M) -> Result<M::Output, SendCheckedError<M>> {
         self.delay_for_backpressure().await;
         self.send_now_checked(msg)
@@ -401,6 +290,10 @@ impl<Q: QueueType> ActorRef for Channel<Q> {
 
     fn status(&self) -> ActorStatus {
         self.status.get()
+    }
+
+    fn members(&self) -> &'static [TypeId] {
+        self.msg_queue.members()
     }
 
     fn reached_backpressure(&self) -> bool {
@@ -443,6 +336,90 @@ impl<Q: QueueType> ActorRef for Channel<Q> {
         let (tx, rx) = new_request();
         self.signal(SignalInterface::GetChildren((signals::GetChildren, tx)));
         rx
+    }
+
+    fn is_interface<I: Interface>(&self) -> bool {
+        self.msg_queue.type_id() == TypeId::of::<ConcurrentQueue<I>>()
+    }
+}
+
+impl<Q: QueueType> IntoDyn for Channel<Q> {
+    type Ref<T: QueueType> = Channel<T>;
+
+    fn into_dyn_unchecked<S>(self) -> Channel<S>
+    where
+        S: QueueType,
+    {
+        Channel {
+            inner: self.inner,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<Q: QueueType> AsDyn for Channel<Q> {
+    fn as_dyn_unchecked<S>(&self) -> &Channel<S>
+    where
+        S: QueueType,
+    {
+        // Sound because #[repr(transparent)] guarantees Channel<S>
+        // and Channel<S2> share the exact layout of Arc<...>.
+        unsafe { &*(self as *const Channel<Q> as *const Channel<S>) }
+    }
+}
+
+impl<I: Interface> Channel<I> {
+    pub(super) async fn recv_msg(&self) -> Option<I> {
+        let raw_queue = self
+            .raw_queue()
+            .expect("Channel is not of the expected interface type");
+
+        let mut notify = pin!(self.msg_notifier.notified());
+
+        loop {
+            notify.as_mut().enable();
+
+            if let Ok(msg) = raw_queue.pop() {
+                return Some(msg);
+            }
+
+            notify.as_mut().await;
+            notify.set(self.msg_notifier.notified());
+        }
+    }
+
+    pub(super) fn pop_msg(&self) -> Option<I> {
+        let raw_queue = self
+            .raw_queue()
+            .expect("Channel is not of the expected interface type");
+
+        raw_queue.pop().ok()
+    }
+
+    pub(super) async fn recv_signal(&self) -> Option<SignalInterface> {
+        let mut notify = pin!(self.signal_notifier.notified());
+
+        loop {
+            notify.as_mut().enable();
+
+            if let Some(signal) = self.pop_signal() {
+                return Some(signal);
+            }
+
+            notify.as_mut().await;
+
+            notify.set(self.signal_notifier.notified());
+        }
+    }
+
+    pub(super) fn pop_signal(&self) -> Option<SignalInterface> {
+        match self.signal_queue.pop() {
+            Ok(signal) => Some(signal),
+            Err(e) => match e {
+                PopError::Empty => None,
+                PopError::Closed => unreachable!("Queue should never be closed"),
+            },
+        }
     }
 }
 
