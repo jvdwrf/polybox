@@ -36,7 +36,7 @@ impl ActorStatus {
     }
 
     pub fn should_accept_messages(&self) -> bool {
-        !matches!(self, ActorStatus::Suspended)
+        !matches!(self, ActorStatus::Suspended | ActorStatus::Exiting)
     }
 
     pub fn running(&self) -> bool {

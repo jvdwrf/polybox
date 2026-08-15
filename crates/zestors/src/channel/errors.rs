@@ -107,3 +107,15 @@ impl<T> From<TrySendError<T>> for TrySendCheckedError<T> {
         }
     }
 }
+
+impl<T> From<NotAccepted<T>> for TrySendCheckedError<T> {
+    fn from(err: NotAccepted<T>) -> Self {
+        TrySendCheckedError::NotAccepted(err.0)
+    }
+}
+
+impl<T> From<NotAccepted<T>> for SendCheckedError<T> {
+    fn from(err: NotAccepted<T>) -> Self {
+        SendCheckedError::NotAccepted(err.0)
+    }
+}

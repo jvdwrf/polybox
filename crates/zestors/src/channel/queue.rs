@@ -26,7 +26,7 @@ pub trait Queue: Send + 'static {
 //     fn push_msg(&self, msg: M) -> Result<M::Output, TrySendError<M>>;
 // }
 
-pub(super) trait IsDynQueue: Any + Send + Sync + 'static {
+pub(crate) trait IsDynQueue: Any + Send + Sync + 'static {
     fn len(&self) -> usize;
 
     fn push_boxed_payload_checked(

@@ -4,7 +4,7 @@ use axum_autoroute::{AutorouteApiRouter, autoroute, method_routers};
 use std::{convert::Infallible, net::SocketAddr, pin::pin};
 use tokio::net::TcpListener;
 use utoipa::IntoParams;
-use utoipa_swagger_ui::SwaggerUi;
+// use utoipa_swagger_ui::SwaggerUi;
 
 #[derive(Clone, Debug)]
 pub struct ApiConfig {
@@ -102,11 +102,11 @@ impl ApiServer {
     pub async fn run(self) -> Result<(), Report> {
         let (router, api) = self.create_router().split_for_parts();
 
-        let router = match self.cfg.swagger_ui {
-            true => router
-                .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api.clone())),
-            false => router,
-        };
+        // let router = match self.cfg.swagger_ui {
+        //     true => router
+        //         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api.clone())),
+        //     false => router,
+        // };
 
         let listener = TcpListener::bind(self.cfg.addr).await?;
 

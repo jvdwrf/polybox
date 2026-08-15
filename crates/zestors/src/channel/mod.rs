@@ -1,6 +1,5 @@
 use crate::{Interface, registry::Pid, signals::SignalInterface};
 use concurrent_queue::{ConcurrentQueue, PopError, PushError};
-use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use std::{ops::Deref, pin::pin, sync::Arc};
 use tokio::sync::Notify;
@@ -22,3 +21,6 @@ pub use sends::*;
 
 mod queue;
 pub use queue::*;
+
+#[cfg(test)]
+mod tests;
