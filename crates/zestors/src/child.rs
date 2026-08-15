@@ -41,12 +41,8 @@ impl<T, R: SenderKind> Child<T, R> {
         self.handle().is_finished()
     }
 
-    pub fn exit_watcher(&self) -> &ProcessWatcher {
-        self.address.exit()
-    }
-
-    pub fn exit_watcher_mut(&mut self) -> &mut ProcessWatcher {
-        self.address.exit_mut()
+    pub fn exit_watcher(&self) -> &StatusStream {
+        self.address.status_stream()
     }
 
     pub fn into_handle(mut self) -> tokio::task::JoinHandle<Result<T, Report>> {

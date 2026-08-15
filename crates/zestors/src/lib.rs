@@ -22,21 +22,18 @@ where
 pub struct SpawnData<T: SenderKind = Set!()> {
     address: Address<T>,
     receiver: T::Receiver,
-    signal_receiver: SignalReceiver,
-    exit_alerter: ProcessAlerter,
+    data: SharedProcessData,
 }
 
 impl<T: Interface> SpawnData<T> {
     pub fn new(pid: Pid) -> Self {
         let (inbox, receiver) = Sender::new();
-        let (signal_sender, signal_receiver) = SignalSender::new();
-        let (exit_watcher, exit_alerter) = ProcessWatcher::new();
+        let data = SharedProcessData::new(pid);
 
         Self {
-            address: Address::new(inbox, signal_sender, exit_watcher, pid),
+            address: Address::new(inbox, data.clone()),
             receiver,
-            signal_receiver,
-            exit_alerter,
+            data,
         }
     }
 
@@ -50,18 +47,22 @@ impl<T: Interface> SpawnData<T> {
         let SpawnData {
             address,
             receiver,
-            signal_receiver,
-            mut exit_alerter,
+            data,
         } = self;
 
-        let state = ActorState::new(EventStream::new(receiver, signal_receiver), address.clone());
+        let mut status_updater = data.status_updater.clone();
+
+        let state = ActorState::new(
+            EventStream::new(receiver, data.signal_receiver.clone()),
+            address.clone(),
+        );
         let spawned_future = AssertUnwindSafe(f(state)).catch_unwind();
         let pid = address.pid().clone();
 
         let handle = tokio::spawn(async move {
             // Notify that the process is alive
             tracing::debug!(pid = ?pid, "Process started");
-            exit_alerter.alert(ProcessStatus::Alive);
+            status_updater.alert(ProcessStatus::Alive);
 
             // Run the future and catch any panics that occur
             let exit_value = spawned_future.await;
@@ -72,18 +73,18 @@ impl<T: Interface> SpawnData<T> {
                     match &val {
                         Ok(_) => {
                             tracing::debug!(pid = ?pid, "Process exited normally");
-                            exit_alerter.alert(ExitStatus::Normal.into());
+                            status_updater.alert(ExitStatus::Normal.into());
                         }
                         Err(_) => {
                             tracing::error!(pid = ?pid, "Process exited with error");
-                            exit_alerter.alert(ExitStatus::Error.into());
+                            status_updater.alert(ExitStatus::Error.into());
                         }
                     };
                     val
                 }
                 Err(boxed) => {
                     tracing::error!(pid = ?pid, "Process panicked");
-                    exit_alerter.alert(ExitStatus::Panic.into());
+                    status_updater.alert(ExitStatus::Panic.into());
                     std::panic::resume_unwind(boxed);
                 }
             }
@@ -95,11 +96,10 @@ impl<T: Interface> SpawnData<T> {
 
 impl<T: SenderKind> std::fmt::Debug for SpawnData<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ProcessData")
+        f.debug_struct("SpawnData")
             .field("address", &self.address)
             .field("receiver", &"Receiver")
-            .field("signal_receiver", &self.signal_receiver)
-            .field("exit_alerter", &self.exit_alerter)
+            .field("data", &self.data)
             .finish()
     }
 }
@@ -113,15 +113,13 @@ impl<T: SenderKind> SpawnData<T> {
         let SpawnData {
             address,
             receiver,
-            signal_receiver,
-            exit_alerter,
+            data,
         } = self;
 
         SpawnData {
             address: address.into_dyn(),
             receiver: T::map_receiver_into_any(receiver),
-            signal_receiver,
-            exit_alerter,
+            data,
         }
     }
 }
@@ -143,8 +141,7 @@ impl SpawnData {
         Ok(SpawnData {
             address,
             receiver,
-            signal_receiver: self.signal_receiver,
-            exit_alerter: self.exit_alerter,
+            data: self.data,
         })
     }
 }
@@ -154,8 +151,7 @@ impl<T: SenderKind> Clone for SpawnData<T> {
         Self {
             address: self.address.clone(),
             receiver: self.receiver.clone(),
-            signal_receiver: self.signal_receiver.clone(),
-            exit_alerter: self.exit_alerter.clone(),
+            data: self.data.clone(),
         }
     }
 }
@@ -168,6 +164,7 @@ pub mod handler;
 pub mod inbox;
 pub mod node;
 pub mod polybox;
+pub mod process_data;
 pub mod registry;
 pub mod signals;
 pub mod supervision;
@@ -180,7 +177,7 @@ pub(crate) mod _prelude {
     #![allow(unused_imports)]
     pub(crate) use crate::{
         address::*, child::*, event_stream::*, exit_watcher::*, handler::*, inbox::*, node::*,
-        polybox::*, registry::*, signals::*, supervision::*, *,
+        polybox::*, process_data::*, registry::*, signals::*, supervision::*, *,
     };
 
     pub(crate) use serde::{Deserialize, Serialize};

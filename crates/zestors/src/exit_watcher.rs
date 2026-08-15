@@ -24,14 +24,14 @@ impl From<ExitStatus> for ProcessStatus {
 }
 
 #[derive(Clone, Debug)]
-pub struct ProcessWatcher {
+pub struct StatusStream {
     watcher: watch::Receiver<ProcessStatus>,
 }
 
-impl ProcessWatcher {
-    pub(crate) fn new() -> (Self, ProcessAlerter) {
+impl StatusStream {
+    pub(crate) fn new() -> (Self, StatusUpdater) {
         let (alerter, watcher) = watch::channel(ExitStatus::Normal.into());
-        (Self { watcher }, ProcessAlerter { alerter })
+        (Self { watcher }, StatusUpdater { alerter })
     }
 
     pub async fn watch(&mut self) -> ProcessStatus {
@@ -72,11 +72,11 @@ impl ProcessWatcher {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct ProcessAlerter {
+pub(crate) struct StatusUpdater {
     alerter: watch::Sender<ProcessStatus>,
 }
 
-impl ProcessAlerter {
+impl StatusUpdater {
     pub fn alert(&mut self, status: ProcessStatus) {
         let _ = self.alerter.send_if_modified(|current| {
             if *current != status {
