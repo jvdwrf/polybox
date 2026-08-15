@@ -1,4 +1,5 @@
-use crate::{FromPayload, Message, MessageExt, TryIntoPayload};
+use crate::Message;
+use type_sets::Set;
 
 use super::*;
 
@@ -6,39 +7,54 @@ const SIGNAL_QUEUE_CAPACITY: usize = 1_000_000;
 const MSG_QUEUE_CAPACITY: usize = 1_000_000;
 const BACKPRESSURE_LIMIT: usize = 100;
 
-struct Channel<T>(Arc<ChannelInner<T>>);
+pub trait QueueType {
+    type Queue: Queue + ?Sized;
+}
 
-struct ChannelInner<T> {
+impl<I: Interface> QueueType for I {
+    type Queue = ConcurrentQueue<I>;
+}
+
+impl<S> QueueType for Set<S> {
+    type Queue = DynQueue<Set<S>>;
+}
+
+struct Channel<Q: QueueType = Set!()>(Arc<ChannelInner<Q::Queue>>);
+
+struct ChannelInner<Q: ?Sized> {
     pid: Pid,
-    msg_queue: ConcurrentQueue<T>,
-    msg_notifier: Notify,
-    msg_backpressure_limit: usize,
     signal_queue: ConcurrentQueue<SignalInterface>,
     signal_notifier: Notify,
     status: eyeball::SharedObservable<ActorStatus2>,
+    msg_notifier: Notify,
+    msg_backpressure_limit: usize,
+    msg_queue: Q,
 }
 
-impl<T> Channel<T> {
+impl<Q: QueueType> Channel<Q> {
+    pub fn new(pid: Pid, status: ActorStatus2) -> Self
+    where
+        Q::Queue: Sized,
+    {
+        let channel = ChannelInner {
+            pid,
+            msg_notifier: Notify::new(),
+            msg_backpressure_limit: BACKPRESSURE_LIMIT,
+            signal_queue: ConcurrentQueue::bounded(SIGNAL_QUEUE_CAPACITY),
+            signal_notifier: Notify::new(),
+            status: eyeball::SharedObservable::new(status),
+            msg_queue: <Q::Queue as Queue>::new(MSG_QUEUE_CAPACITY),
+        };
+
+        Channel(Arc::new(channel))
+    }
+
     pub fn set_status(&self, status: ActorStatus2) {
         self.status.set(status);
 
         if !status.should_accept_messages() {
             self.msg_notifier.notify_waiters();
         }
-    }
-
-    pub fn new(pid: Pid, status: ActorStatus2) -> Self {
-        let channel = ChannelInner {
-            pid,
-            msg_queue: ConcurrentQueue::bounded(MSG_QUEUE_CAPACITY),
-            msg_notifier: Notify::new(),
-            msg_backpressure_limit: BACKPRESSURE_LIMIT,
-            signal_queue: ConcurrentQueue::bounded(SIGNAL_QUEUE_CAPACITY),
-            signal_notifier: Notify::new(),
-            status: eyeball::SharedObservable::new(status),
-        };
-
-        Channel(Arc::new(channel))
     }
 
     pub fn is_open(&self) -> bool {
@@ -92,8 +108,8 @@ impl<T> Channel<T> {
         }
     }
 
-    pub fn pop_msg(&self) -> Option<T> {
-        match self.msg_queue.pop() {
+    pub fn pop_msg(&self) -> Option<<Q::Queue as Queue>::Item> {
+        match self.msg_queue.pop_item() {
             Ok(msg) => Some(msg),
             Err(e) => match e {
                 PopError::Empty => None,
@@ -102,17 +118,7 @@ impl<T> Channel<T> {
         }
     }
 
-    pub fn pop_signal(&self) -> Option<SignalInterface> {
-        match self.signal_queue.pop() {
-            Ok(signal) => Some(signal),
-            Err(e) => match e {
-                PopError::Empty => None,
-                PopError::Closed => unreachable!("Queue should never be closed"),
-            },
-        }
-    }
-
-    pub async fn recv_msg(&self) -> Option<T> {
+    pub async fn recv_msg(&self) -> Option<<Q::Queue as Queue>::Item> {
         let mut notify = pin!(self.msg_notifier.notified());
 
         loop {
@@ -125,6 +131,16 @@ impl<T> Channel<T> {
             notify.as_mut().await;
 
             notify.set(self.msg_notifier.notified());
+        }
+    }
+
+    pub fn pop_signal(&self) -> Option<SignalInterface> {
+        match self.signal_queue.pop() {
+            Ok(signal) => Some(signal),
+            Err(e) => match e {
+                PopError::Empty => None,
+                PopError::Closed => unreachable!("Queue should never be closed"),
+            },
         }
     }
 
@@ -143,138 +159,60 @@ impl<T> Channel<T> {
             notify.set(self.signal_notifier.notified());
         }
     }
-
-    async fn send_interface(&self, msg: T) -> Result<(), Closed<T>> {
-        self.delay_for_backpressure().await;
-        self.send_interface_now(msg)?;
-        Ok(())
-    }
-
-    fn try_send_interface(&self, msg: T) -> Result<(), ClosedOrFull<T>> {
-        if self.reached_backpressure() {
-            return Err(ClosedOrFull::Full(msg));
-        }
-
-        self.send_interface_now(msg)?;
-
-        Ok(())
-    }
-
-    fn send_interface_now(&self, msg: T) -> Result<(), Closed<T>> {
-        if !self.is_open() {
-            return Err(Closed(msg));
-        }
-
-        self.force_send_interface(msg);
-
-        Ok(())
-    }
-
-    fn force_send_interface(&self, msg: T) {
-        match self.msg_queue.push(msg) {
-            Ok(_) => {
-                self.msg_notifier.notify_one();
-            }
-            Err(_msg) => {
-                tracing::error!(
-                    "Message queue for {} contains more than {} messages. The message has been lost.",
-                    std::any::type_name::<Self>(),
-                    MSG_QUEUE_CAPACITY,
-                );
-            }
-        }
-    }
 }
 
-impl<M, I> Sends<M> for Channel<I>
+impl<M, Q: QueueType> Sends<M> for Channel<Q>
 where
     M: Message,
-    I: TryIntoPayload<M> + FromPayload<M> + Send,
+    Q::Queue: Queue + Pushes<M>,
 {
-    async fn send(&self, msg: M) -> Result<M::Output, Closed<M>> {
-        let (payload, output) = <M as MessageExt>::build_payload(msg);
-        let interface = I::from_payload(payload);
-
-        match self.send_interface(interface).await {
-            Ok(()) => Ok(output),
-            Err(e) => {
-                let msg = <M as MessageExt>::destroy_payload(
-                    e.0.try_into_payload()
-                        .map_err(|_| ())
-                        .expect("Failed to convert payload back"),
-                );
-
-                Err(Closed(msg))
-            }
-        }
+    async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
+        self.delay_for_backpressure().await;
+        self.send_now(msg)
     }
 
-    fn try_send(&self, msg: M) -> Result<M::Output, ClosedOrFull<M>> {
-        let (payload, output) = <M as MessageExt>::build_payload(msg);
-        let interface = I::from_payload(payload);
-
-        match self.try_send_interface(interface) {
-            Ok(()) => Ok(output),
-            Err(e) => match e {
-                ClosedOrFull::Closed(interface) => {
-                    let msg = <M as MessageExt>::destroy_payload(
-                        interface
-                            .try_into_payload()
-                            .map_err(|_| ())
-                            .expect("Failed to convert payload back"),
-                    );
-
-                    Err(ClosedOrFull::Closed(msg))
-                }
-                ClosedOrFull::Full(interface) => {
-                    let msg = <M as MessageExt>::destroy_payload(
-                        interface
-                            .try_into_payload()
-                            .map_err(|_| ())
-                            .expect("Failed to convert payload back"),
-                    );
-
-                    Err(ClosedOrFull::Full(msg))
-                }
-            },
+    fn try_send(&self, msg: M) -> Result<M::Output, TrySendError<M>> {
+        if self.reached_backpressure() {
+            return Err(TrySendError::Full(msg));
         }
+
+        self.send_now(msg).map_err(Into::into)
     }
 
-    fn send_now(&self, msg: M) -> Result<M::Output, Closed<M>> {
-        let (payload, output) = <M as MessageExt>::build_payload(msg);
-        let interface = I::from_payload(payload);
-
-        match self.send_interface_now(interface) {
-            Ok(()) => Ok(output),
-            Err(e) => {
-                let msg = <M as MessageExt>::destroy_payload(
-                    e.0.try_into_payload()
-                        .map_err(|_| ())
-                        .expect("Failed to convert payload back"),
-                );
-
-                Err(Closed(msg))
-            }
+    fn send_now(&self, msg: M) -> Result<M::Output, SendError<M>> {
+        if !self.is_open() {
+            return Err(SendError(msg));
         }
+
+        Ok(self.force_send(msg))
     }
 
     fn force_send(&self, msg: M) -> M::Output {
-        let (payload, output) = <M as MessageExt>::build_payload(msg);
-        let interface = I::from_payload(payload);
-        self.force_send_interface(interface);
-        output
+        match self.msg_queue.push_msg(msg) {
+            Ok(output) => {
+                self.msg_notifier.notify_one();
+                output
+            }
+            Err(_msg) => {
+                panic!(
+                    "Message queue for {} contains more than {} messages. The message has been lost.",
+                    std::any::type_name::<Self>(),
+                    MSG_QUEUE_CAPACITY
+                );
+            }
+        }
     }
 }
 
-impl<T> Deref for Channel<T> {
-    type Target = ChannelInner<T>;
+impl<Q: QueueType> Deref for Channel<Q> {
+    type Target = ChannelInner<Q::Queue>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<T> Clone for Channel<T> {
+impl<Q: QueueType> Clone for Channel<Q> {
     fn clone(&self) -> Self {
         Channel(self.0.clone())
     }

@@ -23,7 +23,7 @@ pub trait Sends<M: Message>: Sync {
     ///
     /// Unlike [`Sends::try_send`], this method waits rather than returning
     /// immediately when backpressure is active.
-    fn send(&self, msg: M) -> impl Future<Output = Result<M::Output, Closed<M>>> + Send;
+    fn send(&self, msg: M) -> impl Future<Output = Result<M::Output, SendError<M>>> + Send;
 
     /// Attempts to send a message without waiting.
     ///
@@ -33,7 +33,7 @@ pub trait Sends<M: Message>: Sync {
     ///
     /// Unlike [`Sends::send`], this method never waits for backpressure to
     /// subside.
-    fn try_send(&self, msg: M) -> Result<M::Output, ClosedOrFull<M>>;
+    fn try_send(&self, msg: M) -> Result<M::Output, TrySendError<M>>;
 
     /// Sends a message immediately if the channel is open.
     ///
@@ -42,7 +42,7 @@ pub trait Sends<M: Message>: Sync {
     ///
     /// Use [`Sends::force_send`] when the channel status should also be
     /// ignored.
-    fn send_now(&self, msg: M) -> Result<M::Output, Closed<M>>;
+    fn send_now(&self, msg: M) -> Result<M::Output, SendError<M>>;
 
     /// Sends a message immediately, ignoring backpressure and channel status.
     ///
