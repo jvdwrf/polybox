@@ -14,10 +14,6 @@ impl<H: Handler> HandlerState<H> {
         Self { inner }
     }
 
-    pub fn address(&self) -> Address<H::Interface> {
-        self.inner.get_address()
-    }
-
     pub fn uptime(&self) -> std::time::Duration {
         self.inner.uptime()
     }

@@ -14,16 +14,12 @@ impl<T: Blueprint> ChildSpec<T> {
             restart_mode: RestartMode::OnError,
             abort_timeout: Duration::from_millis(5_000),
             blueprint: blueprint.into(),
-            channel: Channel::<<T::Actor as Actor>::Interface>::new(
-                id.into(),
-                ActorStatus::Exiting,
-            ),
+            channel: Channel::<<T::Actor as Actor>::Interface>::new(id.into()),
         }
     }
 
     pub fn new_uuid(spawner: T) -> Self {
-        let data =
-            Channel::<<T::Actor as Actor>::Interface>::new(Pid::rand(), ActorStatus::Exiting);
+        let data = Channel::<<T::Actor as Actor>::Interface>::new(Pid::rand());
 
         Self {
             restart_mode: RestartMode::OnError,
@@ -145,6 +141,6 @@ mod tests {
     #[test]
     fn test_childspec_doesnt_panic_on_address_retrieval() {
         let spec = ChildSpec::new("test", MyActor);
-        let _ = spec.get_address();
+        let _ = spec.address();
     }
 }

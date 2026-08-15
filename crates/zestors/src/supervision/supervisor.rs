@@ -65,7 +65,7 @@ impl SupervisorBlueprint {
     where
         T: Blueprint + Send + Sync + 'static,
     {
-        let address = spec.get_address();
+        let address = spec.address().clone();
 
         self.add_dyn_child(spec.into_dyn());
 
@@ -162,7 +162,7 @@ impl Supervisor {
     where
         T: Blueprint + Send + Sync + 'static,
     {
-        let address = spec.get_address();
+        let address = spec.address().clone();
 
         self.add_dyn_child(spec.into_dyn());
 

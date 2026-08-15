@@ -80,6 +80,9 @@ pub trait ActorRef {
 
     fn status(&self) -> ActorStatus;
 
+    fn watch_start(&self) -> impl Future<Output = ()> + Send;
+    fn watch_exit(&self) -> impl Future<Output = ()> + Send;
+
     fn members(&self) -> &'static [TypeId];
 
     fn len(&self) -> usize;
@@ -106,7 +109,7 @@ pub trait ActorRef {
     fn get_debug_state(&self) -> Rx<DebugState>;
     fn ping(&self) -> Rx<()>;
     fn get_children(&self) -> Rx<Vec<ChildDescription>>;
-    fn get_address(&self) -> Address<Self::QueueType>;
+    fn address(&self) -> &Address<Self::QueueType>;
 }
 
 pub trait AsActorRef {
@@ -186,12 +189,20 @@ impl<T: AsActorRef> ActorRef for T {
         self.as_channel().is_interface::<I>()
     }
 
-    fn get_address(&self) -> Address<Self::QueueType> {
-        Address::new(self.as_channel().clone())
+    fn address(&self) -> &Address<Self::QueueType> {
+        Address::from_ref(self.as_channel())
     }
 
     fn len(&self) -> usize {
         self.as_channel().len()
+    }
+
+    fn watch_start(&self) -> impl Future<Output = ()> + Send {
+        self.as_channel().watch_start()
+    }
+
+    fn watch_exit(&self) -> impl Future<Output = ()> + Send {
+        self.as_channel().watch_exit()
     }
 }
 

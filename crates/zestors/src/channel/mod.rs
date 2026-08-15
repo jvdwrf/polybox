@@ -1,7 +1,7 @@
 use crate::{Interface, registry::Pid, signals::SignalInterface};
 use concurrent_queue::{ConcurrentQueue, PopError, PushError};
 use std::time::Duration;
-use std::{ops::Deref, pin::pin, sync::Arc};
+use std::{pin::pin, sync::Arc};
 use tokio::sync::Notify;
 
 mod status;

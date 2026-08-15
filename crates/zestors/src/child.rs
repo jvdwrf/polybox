@@ -37,10 +37,6 @@ impl<T, R: QueueType> Child<T, R> {
         self.handle().is_finished()
     }
 
-    pub fn exit_watcher(&self) -> &StatusStream {
-        self.address.status_stream()
-    }
-
     pub fn into_handle(mut self) -> tokio::task::JoinHandle<Result<T, Report>> {
         self.handle.take().unwrap()
     }
@@ -80,7 +76,7 @@ impl<T, R: QueueType> Child<T, R> {
     }
 
     pub async fn shutdown_abort(mut self, timeout: Duration) -> Result<T, JoinError> {
-        let shutdown_signal_result = self.address.signal_shutdown();
+        self.address.signal_shutdown();
 
         let timeout = tokio::time::sleep(timeout);
 

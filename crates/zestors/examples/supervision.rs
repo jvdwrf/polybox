@@ -2,7 +2,7 @@ use futures::join;
 use rootcause::Report;
 use std::time::Duration;
 use zestors::{
-    HandlerInterface, Interface,
+    ActorRef as _, HandlerInterface, Interface,
     handler::{ExitReason, Handle, Handler, HandlerState},
     node::{ApiConfig, Node},
     polybox::Payload,
@@ -73,14 +73,14 @@ async fn main() -> Result<(), Report> {
 
     let mut supervisor_a = Supervisor::blueprint();
 
-    let mut actor_a = supervisor_a
+    let actor_a = supervisor_a
         .add_child(ChildSpec::new("HelloActor", MyActor::new("A")).mode(RestartMode::Never));
-    let mut actor_b = supervisor_a.add_child(ChildSpec::new("HelloActor2", MyActor::new("B")));
+    let actor_b = supervisor_a.add_child(ChildSpec::new("HelloActor2", MyActor::new("B")));
 
     let mut supervisor_b = Supervisor::blueprint();
 
-    let mut actor_c = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new("C")));
-    let mut actor_d = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new("D")));
+    let actor_c = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new("C")));
+    let actor_d = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new("D")));
 
     let _root = Node::new(ChildSpec::new(
         "RootSupervisor",

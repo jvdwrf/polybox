@@ -1,6 +1,5 @@
-use std::{any::TypeId, marker::PhantomData};
-
 use super::*;
+use crate::_prelude::*;
 use crate::{
     FromPayload, Message, MessageExt, Rx, TryIntoPayload,
     address::Address,
@@ -8,6 +7,7 @@ use crate::{
     signals::{self, ActorStatus, Event},
 };
 use eyeball::SharedObservable;
+use std::{any::TypeId, marker::PhantomData};
 use tokio::select;
 use type_sets::{Contains, Set, TypeSet};
 
@@ -40,7 +40,7 @@ pub(crate) struct ChannelInner<Q: ?Sized> {
     pid: Pid,
     signal_queue: ConcurrentQueue<SignalInterface>,
     signal_notifier: Notify,
-    status: SharedObservable<ActorStatus>,
+    status_observer: SharedObservable<ActorStatus>,
     msg_notifier: Notify,
     msg_backpressure_limit: usize,
     msg_queue: Q,
@@ -54,7 +54,7 @@ impl<T: QueueType> Channel<T> {
         }
     }
 
-    pub(crate) fn new(pid: Pid, status: ActorStatus) -> Self
+    pub(crate) fn new(pid: Pid) -> Self
     where
         T: Interface,
     {
@@ -64,7 +64,7 @@ impl<T: QueueType> Channel<T> {
             msg_backpressure_limit: BACKPRESSURE_LIMIT,
             signal_queue: ConcurrentQueue::bounded(SIGNAL_QUEUE_CAPACITY),
             signal_notifier: Notify::new(),
-            status: SharedObservable::new(status),
+            status_observer: SharedObservable::new(ActorStatus::Exiting),
             msg_queue: ConcurrentQueue::<T>::new(MSG_QUEUE_CAPACITY),
         });
 
@@ -72,6 +72,52 @@ impl<T: QueueType> Channel<T> {
             inner,
             _marker: PhantomData,
         }
+    }
+
+    pub fn spawn<R, F>(self, f: impl FnOnce(ActorState<T>) -> F) -> Child<R, T>
+    where
+        T: Interface,
+        R: Send + 'static,
+        F: Future<Output = Result<R, Report>> + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        let state = ActorState::new(EventStream::new(self.clone()));
+        let spawned_future = AssertUnwindSafe(f(state)).catch_unwind();
+        let pid = self.pid().clone();
+        let this = self.clone();
+
+        let handle = tokio::spawn(async move {
+            // Notify that the process is alive
+            tracing::debug!(pid = ?pid, "Process started");
+            self.alert(ActorStatus::Running);
+
+            // Run the future and catch any panics that occur
+            let exit_value = spawned_future.await;
+
+            // Depending on the exit_value, set the correct ExitSignal
+            match exit_value {
+                Ok(val) => {
+                    match &val {
+                        Ok(_) => {
+                            tracing::debug!(pid = ?pid, "Process exited normally");
+                            self.alert(ActorStatus::Exiting);
+                        }
+                        Err(_) => {
+                            tracing::error!(pid = ?pid, "Process exited with error");
+                            self.alert(ActorStatus::Exiting);
+                        }
+                    };
+                    val
+                }
+                Err(boxed) => {
+                    tracing::error!(pid = ?pid, "Process panicked");
+                    self.alert(ActorStatus::Exiting);
+                    std::panic::resume_unwind(boxed);
+                }
+            }
+        });
+
+        Child::new(handle, Address::new(this))
     }
 
     pub(super) fn raw_queue(&self) -> Option<&ConcurrentQueue<T>>
@@ -88,7 +134,7 @@ impl<T: QueueType> Channel<T> {
     }
 
     pub(crate) fn alert(&self, status: ActorStatus) {
-        self.inner.status.set(status);
+        self.inner.status_observer.set(status);
 
         if !status.should_accept_messages() {
             self.inner.msg_notifier.notify_waiters();
@@ -96,7 +142,7 @@ impl<T: QueueType> Channel<T> {
     }
 
     pub(super) fn is_open(&self) -> bool {
-        self.inner.status.read().should_accept_messages()
+        self.inner.status_observer.read().should_accept_messages()
     }
 
     pub(super) fn backpressure(&self) -> &BackPressure {
@@ -297,7 +343,7 @@ impl<Q: QueueType> ActorRef for Channel<Q> {
     }
 
     fn status(&self) -> ActorStatus {
-        self.inner.status.get()
+        self.inner.status_observer.get()
     }
 
     fn members(&self) -> &'static [TypeId] {
@@ -353,12 +399,44 @@ impl<Q: QueueType> ActorRef for Channel<Q> {
         self.inner.msg_queue.type_id() == TypeId::of::<ConcurrentQueue<I>>()
     }
 
-    fn get_address(&self) -> Address<Self::QueueType> {
-        Address::new(self.clone())
+    fn address(&self) -> &Address<Self::QueueType> {
+        Address::from_ref(self)
     }
 
     fn len(&self) -> usize {
         self.inner.msg_queue.len()
+    }
+
+    async fn watch_start(&self) {
+        loop {
+            let mut subscriber = self.inner.status_observer.subscribe();
+            let status = self.status();
+
+            if status == ActorStatus::Running {
+                return;
+            }
+
+            let status = subscriber.next().await;
+            if status != Some(ActorStatus::Exiting) {
+                return;
+            }
+        }
+    }
+
+    async fn watch_exit(&self) {
+        loop {
+            let mut subscriber = self.inner.status_observer.subscribe();
+            let status = self.status();
+
+            if status == ActorStatus::Running {
+                return;
+            }
+
+            let status = subscriber.next().await;
+            if status == Some(ActorStatus::Exiting) {
+                return;
+            }
+        }
     }
 }
 
@@ -460,7 +538,7 @@ impl<T: QueueType> std::fmt::Debug for Channel<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Channel")
             .field("pid", &self.inner.pid)
-            .field("status", &self.inner.status.get())
+            .field("status", &self.inner.status_observer.get())
             .finish()
     }
 }

@@ -33,8 +33,7 @@ enum UnrelatedInterface {}
 
 fn create_test_channel<S: QueueType + Interface>() -> Channel<S> {
     let pid = Pid::default();
-    let status = ActorStatus::Running;
-    Channel::<S>::new(pid, status)
+    Channel::<S>::new(pid)
 }
 
 // =========================================================================
@@ -66,7 +65,7 @@ fn test_channel_can_be_reopened() {
 #[test]
 fn test_pid_is_preserved() {
     let pid = Pid::default();
-    let channel = Channel::<TestInterface>::new(pid.clone(), ActorStatus::Running);
+    let channel = Channel::<TestInterface>::new(pid.clone());
 
     assert_eq!(channel.pid(), &pid);
 }

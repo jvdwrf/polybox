@@ -1,90 +1,90 @@
-use tokio::sync::watch;
+// use tokio::sync::watch;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum ProcessStatus {
-    Alive,
-    Dead(ExitStatus),
-}
+// #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+// pub enum ProcessStatus {
+//     Alive,
+//     Dead(ExitStatus),
+// }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum ExitStatus {
-    Normal,
-    Error,
-    Panic,
-}
+// #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+// pub enum ExitStatus {
+//     Normal,
+//     Error,
+//     Panic,
+// }
 
-impl From<ExitStatus> for ProcessStatus {
-    fn from(status: ExitStatus) -> Self {
-        match status {
-            ExitStatus::Normal => ProcessStatus::Dead(ExitStatus::Normal),
-            ExitStatus::Error => ProcessStatus::Dead(ExitStatus::Error),
-            ExitStatus::Panic => ProcessStatus::Dead(ExitStatus::Panic),
-        }
-    }
-}
+// impl From<ExitStatus> for ProcessStatus {
+//     fn from(status: ExitStatus) -> Self {
+//         match status {
+//             ExitStatus::Normal => ProcessStatus::Dead(ExitStatus::Normal),
+//             ExitStatus::Error => ProcessStatus::Dead(ExitStatus::Error),
+//             ExitStatus::Panic => ProcessStatus::Dead(ExitStatus::Panic),
+//         }
+//     }
+// }
 
-#[derive(Clone, Debug)]
-pub struct StatusStream {
-    watcher: watch::Receiver<ProcessStatus>,
-}
+// #[derive(Clone, Debug)]
+// pub struct StatusStream {
+//     watcher: watch::Receiver<ProcessStatus>,
+// }
 
-impl StatusStream {
-    pub(crate) fn new() -> (Self, StatusUpdater) {
-        let (alerter, watcher) = watch::channel(ExitStatus::Normal.into());
-        (Self { watcher }, StatusUpdater { alerter })
-    }
+// impl StatusStream {
+//     pub(crate) fn new() -> (Self, StatusUpdater) {
+//         let (alerter, watcher) = watch::channel(ExitStatus::Normal.into());
+//         (Self { watcher }, StatusUpdater { alerter })
+//     }
 
-    pub async fn watch(&mut self) -> ProcessStatus {
-        self.watcher.changed().await.ok();
-        *self.watcher.borrow_and_update()
-    }
+//     pub async fn watch(&mut self) -> ProcessStatus {
+//         self.watcher.changed().await.ok();
+//         *self.watcher.borrow_and_update()
+//     }
 
-    pub async fn watch_exit(&mut self) {
-        self.watcher
-            .wait_for(|status| matches!(status, ProcessStatus::Dead(_)))
-            .await
-            .ok();
+//     pub async fn watch_exit(&mut self) {
+//         self.watcher
+//             .wait_for(|status| matches!(status, ProcessStatus::Dead(_)))
+//             .await
+//             .ok();
 
-        self.watcher.borrow_and_update();
-    }
+//         self.watcher.borrow_and_update();
+//     }
 
-    pub async fn watch_start(&mut self) {
-        self.watcher
-            .wait_for(|status| matches!(status, ProcessStatus::Alive))
-            .await
-            .ok();
+//     pub async fn watch_start(&mut self) {
+//         self.watcher
+//             .wait_for(|status| matches!(status, ProcessStatus::Alive))
+//             .await
+//             .ok();
 
-        self.watcher.borrow_and_update();
-    }
+//         self.watcher.borrow_and_update();
+//     }
 
-    pub fn get(&mut self) -> ProcessStatus {
-        *self.watcher.borrow_and_update()
-    }
+//     pub fn get(&mut self) -> ProcessStatus {
+//         *self.watcher.borrow_and_update()
+//     }
 
-    /// Returns a reference to the current process status without consuming it.
-    pub fn peek(&self) -> ProcessStatus {
-        *self.watcher.borrow()
-    }
+//     /// Returns a reference to the current process status without consuming it.
+//     pub fn peek(&self) -> ProcessStatus {
+//         *self.watcher.borrow()
+//     }
 
-    pub fn is_alive(&self) -> bool {
-        matches!(self.peek(), ProcessStatus::Alive)
-    }
-}
+//     pub fn is_alive(&self) -> bool {
+//         matches!(self.peek(), ProcessStatus::Alive)
+//     }
+// }
 
-#[derive(Clone, Debug)]
-pub(crate) struct StatusUpdater {
-    alerter: watch::Sender<ProcessStatus>,
-}
+// #[derive(Clone, Debug)]
+// pub(crate) struct StatusUpdater {
+//     alerter: watch::Sender<ProcessStatus>,
+// }
 
-impl StatusUpdater {
-    pub fn alert(&mut self, status: ProcessStatus) {
-        let _ = self.alerter.send_if_modified(|current| {
-            if *current != status {
-                *current = status;
-                true
-            } else {
-                false
-            }
-        });
-    }
-}
+// impl StatusUpdater {
+//     pub fn alert(&mut self, status: ProcessStatus) {
+//         let _ = self.alerter.send_if_modified(|current| {
+//             if *current != status {
+//                 *current = status;
+//                 true
+//             } else {
+//                 false
+//             }
+//         });
+//     }
+// }

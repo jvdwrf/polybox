@@ -41,28 +41,9 @@ impl<T: QueueType> Address<T> {
         Self { channel }
     }
 
-    pub fn into_dyn_unchecked_test(self) -> Address {
-        todo!()
-    }
-
-    pub fn status_stream(&self) -> &StatusStream {
-        todo!()
-    }
-
-    pub fn is_alive(&self) -> bool {
-        todo!()
-    }
-
-    pub fn is_same_process<R: QueueType>(&self, other: &Address<R>) -> bool {
-        todo!()
-    }
-
-    pub async fn watch_exit(&mut self) {
-        todo!()
-    }
-
-    pub async fn watch_start(&mut self) {
-        todo!()
+    pub(super) fn from_ref(channel: &Channel<T>) -> &Self {
+        // SAFETY: This is safe because Address<T> is a transparent wrapper around Channel<T>
+        unsafe { &*(channel as *const Channel<T> as *const Self) }
     }
 }
 
