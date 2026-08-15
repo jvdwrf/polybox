@@ -1,6 +1,7 @@
 use super::*;
 use crate::{
     Message, Rx,
+    address::Address,
     signals::{ActorStatus, ChildDescription, DebugState},
 };
 use std::{any::TypeId, future::Future};
@@ -57,6 +58,7 @@ pub trait Sends<M: Message>: Sync {
 }
 
 pub trait ActorRef {
+    type QueueType: QueueType<Set = Self::Set>;
     type Set: 'static;
 
     /// Same as [`Sends::send`], but checks whether the message type is accepted by the channel.
@@ -80,6 +82,12 @@ pub trait ActorRef {
 
     fn members(&self) -> &'static [TypeId];
 
+    fn len(&self) -> usize;
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     fn can_send(&self, type_id: TypeId) -> bool {
         self.members().contains(&type_id)
     }
@@ -98,6 +106,7 @@ pub trait ActorRef {
     fn get_debug_state(&self) -> Rx<DebugState>;
     fn ping(&self) -> Rx<()>;
     fn get_children(&self) -> Rx<Vec<ChildDescription>>;
+    fn get_address(&self) -> Address<Self::QueueType>;
 }
 
 pub trait AsActorRef {
@@ -108,6 +117,7 @@ pub trait AsActorRef {
 
 impl<T: AsActorRef> ActorRef for T {
     type Set = <T::QueueType as QueueType>::Set;
+    type QueueType = T::QueueType;
 
     fn send_checked<M: Message>(
         &self,
@@ -175,6 +185,14 @@ impl<T: AsActorRef> ActorRef for T {
     fn is_interface<I: Interface>(&self) -> bool {
         self.as_channel().is_interface::<I>()
     }
+
+    fn get_address(&self) -> Address<Self::QueueType> {
+        Address::new(self.as_channel().clone())
+    }
+
+    fn len(&self) -> usize {
+        self.as_channel().len()
+    }
 }
 
 impl<M, T> Sends<M> for T
@@ -203,18 +221,18 @@ where
 pub trait IntoDyn: ActorRef + Sized {
     type Ref<T: QueueType>;
 
-    fn into_dyn_unchecked<S>(self) -> Channel<S>
+    fn into_dyn_unchecked<S>(self) -> Self::Ref<S>
     where
         S: QueueType;
 
-    fn into_dyn<S>(self) -> Channel<S>
+    fn into_dyn<S>(self) -> Self::Ref<S>
     where
         S: QueueType + SubsetOf<Self::Set>,
     {
         self.into_dyn_unchecked()
     }
 
-    fn into_dyn_checked<S>(self) -> Result<Channel<S>, Self>
+    fn into_dyn_checked<S>(self) -> Result<Self::Ref<S>, Self>
     where
         S: TypeSet + QueueType,
     {
@@ -225,7 +243,7 @@ pub trait IntoDyn: ActorRef + Sized {
         }
     }
 
-    fn downcast<I>(self) -> Result<Channel<I>, Self>
+    fn downcast<I>(self) -> Result<Self::Ref<I>, Self>
     where
         I: Interface,
     {
@@ -238,18 +256,18 @@ pub trait IntoDyn: ActorRef + Sized {
 }
 
 pub trait AsDyn: IntoDyn {
-    fn as_dyn_unchecked<S>(&self) -> &Channel<S>
+    fn as_dyn_unchecked<S>(&self) -> &Self::Ref<S>
     where
         S: QueueType;
 
-    fn as_dyn<S>(&self) -> &Channel<S>
+    fn as_dyn<S>(&self) -> &Self::Ref<S>
     where
         S: QueueType + SubsetOf<Self::Set>,
     {
         self.as_dyn_unchecked()
     }
 
-    fn as_dyn_checked<S>(&self) -> Option<&Channel<S>>
+    fn as_dyn_checked<S>(&self) -> Option<&Self::Ref<S>>
     where
         S: TypeSet + QueueType,
     {
@@ -260,7 +278,7 @@ pub trait AsDyn: IntoDyn {
         }
     }
 
-    fn downcast_ref<I>(&self) -> Option<&Channel<I>>
+    fn downcast_ref<I>(&self) -> Option<&Self::Ref<I>>
     where
         I: Interface,
     {

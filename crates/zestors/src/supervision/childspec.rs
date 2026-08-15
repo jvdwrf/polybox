@@ -4,7 +4,7 @@ pub struct ChildSpec<T: RepeatSpawn = DynRepeatSpawner> {
     pub(crate) restart_mode: RestartMode,
     pub(crate) abort_timeout: Duration,
     pub(crate) blueprint: T,
-    pub(crate) data: SpawnData<T::Inbox>,
+    pub(crate) channel: Channel<T::Inbox>,
 }
 
 // Implementations just when T is statically known
@@ -14,18 +14,22 @@ impl<T: Blueprint> ChildSpec<T> {
             restart_mode: RestartMode::OnError,
             abort_timeout: Duration::from_millis(5_000),
             blueprint: blueprint.into(),
-            data: SpawnData::<<T::Actor as Actor>::Interface>::new(id.into()),
+            channel: Channel::<<T::Actor as Actor>::Interface>::new(
+                id.into(),
+                ActorStatus::Exiting,
+            ),
         }
     }
 
     pub fn new_uuid(spawner: T) -> Self {
-        let data = SpawnData::<<T::Actor as Actor>::Interface>::new(Pid::rand());
+        let data =
+            Channel::<<T::Actor as Actor>::Interface>::new(Pid::rand(), ActorStatus::Exiting);
 
         Self {
             restart_mode: RestartMode::OnError,
             abort_timeout: Duration::from_millis(5_000),
             blueprint: spawner.into(),
-            data: data,
+            channel: data,
         }
     }
 
@@ -38,7 +42,7 @@ impl<T: Blueprint> ChildSpec<T> {
             restart_mode: self.restart_mode,
             abort_timeout: self.abort_timeout,
             blueprint: self.blueprint.into(),
-            data: self.data.into_any(),
+            channel: self.channel.into_dyn(),
         }
     }
 }
@@ -47,7 +51,7 @@ impl<T: Blueprint> ChildSpec<T> {
 // (including DynRepeatSpawner)
 impl<T: RepeatSpawn> ChildSpec<T> {
     pub fn pid(&self) -> &Pid {
-        self.data.pid()
+        self.channel.pid()
     }
 
     pub fn mode(mut self, restart_mode: RestartMode) -> Self {
@@ -64,11 +68,15 @@ impl<T: RepeatSpawn> ChildSpec<T> {
     where
         T: RepeatSpawn,
     {
-        self.blueprint.spawn_with_data(self.data.clone())
+        self.blueprint.spawn_with_data(self.channel.clone())
     }
+}
 
-    pub fn address(&self) -> &Address<T::Inbox> {
-        &self.data.address
+impl<T: RepeatSpawn> AsActorRef for ChildSpec<T> {
+    type QueueType = T::Inbox;
+
+    fn as_channel(&self) -> &Channel<Self::QueueType> {
+        &self.channel
     }
 }
 
@@ -78,7 +86,7 @@ impl<T: RepeatSpawn + Clone> Clone for ChildSpec<T> {
             restart_mode: self.restart_mode,
             abort_timeout: self.abort_timeout,
             blueprint: self.blueprint.clone(),
-            data: self.data.clone(),
+            channel: self.channel.clone(),
         }
     }
 }
@@ -89,7 +97,7 @@ impl<T: RepeatSpawn + Debug> Debug for ChildSpec<T> {
             .field("restart_mode", &self.restart_mode)
             .field("abort_timeout", &self.abort_timeout)
             .field("spawner", &self.blueprint)
-            .field("data", &self.data)
+            .field("data", &self.channel)
             .finish()
     }
 }
@@ -137,6 +145,6 @@ mod tests {
     #[test]
     fn test_childspec_doesnt_panic_on_address_retrieval() {
         let spec = ChildSpec::new("test", MyActor);
-        let _ = spec.address();
+        let _ = spec.get_address();
     }
 }

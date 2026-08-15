@@ -1,12 +1,12 @@
 use rootcause::Report;
 use std::time::Duration;
 use zestors::{
-    HandlerInterface, Interface, Message,
+    ActorRef as _, HandlerInterface, Interface, Message, Sends as _,
     event_stream::EventStream,
     handler::{self, Handle, HandledBy, Handler, HandlerState},
-    polybox::{Payload, Sends as _},
+    polybox::Payload,
     registry::Pid,
-    signals::{self, ActorEvent, Event, Observable, Shutdown, SignalInterface},
+    signals::{self, ActorEvent, Event, Shutdown, SignalInterface},
     spawn,
     supervision::{ActorRunnerExt as _, ActorState},
 };
@@ -35,7 +35,7 @@ async fn main() {
     );
 
     child.address().send(10u32).await.unwrap();
-    child.address().signal_shutdown().await.unwrap();
+    child.address().signal_shutdown();
     child.await.unwrap();
 
     test().await;
@@ -92,7 +92,7 @@ impl Handle<u32> for MyActor {
         self.nr += msg;
 
         if msg == 301 {
-            state.signal_shutdown().await.ok();
+            state.signal_shutdown();
         }
 
         Ok(())
@@ -128,7 +128,7 @@ async fn test() {
     address.send(5u32).await.unwrap();
     child.send(15u32).await.unwrap();
     child.send("Hello, world!".to_string()).await.unwrap();
-    child.signal_shutdown().await.unwrap();
+    child.signal_shutdown();
     let exit_value = child.await.unwrap();
     assert_eq!(exit_value, 20 * 2);
 }

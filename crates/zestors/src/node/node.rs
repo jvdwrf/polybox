@@ -52,7 +52,7 @@ impl Node {
         let supervisor_address = supervisor_child.address().clone();
 
         Registry::local()
-            .register(supervisor_spec.data.clone())
+            .register(supervisor_spec.channel.clone())
             .attach("Root Supervisor failed to register")?;
 
         tokio::spawn(

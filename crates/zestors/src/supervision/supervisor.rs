@@ -65,7 +65,7 @@ impl SupervisorBlueprint {
     where
         T: Blueprint + Send + Sync + 'static,
     {
-        let address = spec.address().clone();
+        let address = spec.get_address();
 
         self.add_dyn_child(spec.into_dyn());
 
@@ -162,7 +162,7 @@ impl Supervisor {
     where
         T: Blueprint + Send + Sync + 'static,
     {
-        let address = spec.address().clone();
+        let address = spec.get_address();
 
         self.add_dyn_child(spec.into_dyn());
 
@@ -211,7 +211,7 @@ impl Supervisor {
         // since it will persist across restarts.
         let child = supervisee.spec.spawn();
         supervisee.child = Some(child);
-        registry.register(supervisee.spec.data.clone())
+        registry.register(supervisee.spec.channel.clone())
     }
 
     async fn shutdown(&mut self) {

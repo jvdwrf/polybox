@@ -1,9 +1,7 @@
 use crate::{
     handler::{Handler, HandlerInterface},
-    signals::Observable,
     *,
 };
-use polybox::errors::SendError;
 use std::fmt::Debug;
 use tokio::select;
 
@@ -16,8 +14,8 @@ impl<H: Handler> HandlerState<H> {
         Self { inner }
     }
 
-    pub fn address(&self) -> &Address<H::Interface> {
-        &self.inner.address()
+    pub fn address(&self) -> Address<H::Interface> {
+        self.inner.get_address()
     }
 
     pub fn uptime(&self) -> std::time::Duration {
@@ -119,20 +117,28 @@ impl<H: Handler> HandlerState<H> {
     }
 }
 
-impl<H: Handler> Observable for HandlerState<H> {
-    async fn send_signal(&self, signal: SignalInterface) -> Result<(), SendError<SignalInterface>> {
-        <Address<H::Interface> as Observable>::send_signal(&self.address(), signal).await
+impl<H: Handler> AsActorRef for HandlerState<H> {
+    type QueueType = H::Interface;
+
+    fn as_channel(&self) -> &Channel<Self::QueueType> {
+        self.inner.as_channel()
     }
 }
 
-impl<H: Handler, M: Message> Sends<M> for HandlerState<H>
-where
-    Address<H::Interface>: Sends<M>,
-{
-    async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
-        self.address().send(msg).await
-    }
-}
+// impl<H: Handler> Observable for HandlerState<H> {
+//     async fn send_signal(&self, signal: SignalInterface) -> Result<(), SendError<SignalInterface>> {
+//         <Address<H::Interface> as Observable>::send_signal(&self.address(), signal).await
+//     }
+// }
+
+// impl<H: Handler, M: Message> Sends<M> for HandlerState<H>
+// where
+//     Address<H::Interface>: Sends<M>,
+// {
+//     async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
+//         self.address().send(msg).await
+//     }
+// }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ExitReason {

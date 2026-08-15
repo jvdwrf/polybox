@@ -1,5 +1,3 @@
-use crate::address::DynSenderKind;
-
 use super::*;
 use std::{any::TypeId, convert::Infallible};
 use type_sets::TypeSet;
@@ -11,7 +9,7 @@ use type_sets::TypeSet;
 pub trait Interface:
     Message<Output = ()> + TryIntoPayload<Self> + FromPayload<Self> + Sized + Send + 'static
 {
-    type Set: DynSenderKind;
+    type Set: TypeSet;
 
     fn try_from_boxed_payload(payload: BoxedPayload) -> Result<Self, BoxedPayload>;
     fn into_boxed_payload(self) -> BoxedPayload;

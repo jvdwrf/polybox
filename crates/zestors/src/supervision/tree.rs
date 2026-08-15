@@ -76,11 +76,9 @@ impl SupervisionTree {
         queue.push_back(self);
 
         while let Some(node) = queue.pop_front() {
-            let entry = Registry::local()
-                .get_entry(&node.pid)
+            let address = Registry::local()
+                .get(&node.pid)
                 .ok_or_else(|| rootcause::report!("Failed to get address from Registry"))?;
-
-            let address = entry.address();
 
             let debug_state = address.get_debug_state().await?;
             node.debug_state = Some(debug_state);

@@ -4,16 +4,14 @@ pub struct ActorState<I: Interface> {
     status: ActorStatus,
     shutdown_at: Option<tokio::time::Instant>,
     start_time: tokio::time::Instant,
-    address: Address<I>,
     stream: EventStream<I>,
 }
 
 impl<I: Interface> ActorState<I> {
-    pub(crate) fn new(stream: EventStream<I>, address: Address<I>) -> Self {
+    pub(crate) fn new(stream: EventStream<I>) -> Self {
         Self {
             status: ActorStatus::Running,
             start_time: tokio::time::Instant::now(),
-            address,
             stream,
             shutdown_at: None,
         }
@@ -21,10 +19,6 @@ impl<I: Interface> ActorState<I> {
 
     pub fn status(&self) -> ActorStatus {
         self.status
-    }
-
-    pub fn address(&self) -> &Address<I> {
-        &self.address
     }
 
     pub fn uptime(&self) -> std::time::Duration {
@@ -39,17 +33,9 @@ impl<I: Interface> ActorState<I> {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.stream.is_empty()
-    }
-
     pub async fn next(&mut self) -> Option<ActorEvent<I>> {
         loop {
-            match self
-                .stream
-                .recv_enabled(self.status != ActorStatus::Suspended)
-                .await?
-            {
+            match self.stream.recv().await? {
                 Event::Message(msg) => break Some(ActorEvent::Message(msg)),
                 Event::Signal(signal) => match signal {
                     SignalInterface::Shutdown(_) => {
@@ -96,6 +82,14 @@ impl<I: Interface> ActorState<I> {
                 },
             }
         }
+    }
+}
+
+impl<I: Interface> AsActorRef for ActorState<I> {
+    type QueueType = I;
+
+    fn as_channel(&self) -> &Channel<Self::QueueType> {
+        self.stream.as_channel()
     }
 }
 

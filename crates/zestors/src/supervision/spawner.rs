@@ -1,17 +1,17 @@
 use super::*;
 
 pub trait RepeatSpawn {
-    type Inbox: SenderKind;
+    type Inbox: QueueType;
     type Exit: Send + 'static;
 
-    fn spawn_with_data(&self, data: SpawnData<Self::Inbox>) -> Child<Self::Exit, Self::Inbox>;
+    fn spawn_with_data(&self, data: Channel<Self::Inbox>) -> Child<Self::Exit, Self::Inbox>;
 }
 
 impl<T: Blueprint> RepeatSpawn for T {
     type Inbox = <T::Actor as Actor>::Interface;
     type Exit = <T::Actor as Actor>::Exit;
 
-    fn spawn_with_data(&self, data: SpawnData<Self::Inbox>) -> Child<Self::Exit, Self::Inbox> {
+    fn spawn_with_data(&self, data: Channel<Self::Inbox>) -> Child<Self::Exit, Self::Inbox> {
         let runner = self.instantiate();
 
         data.clone().spawn(|state| runner.run(state))
@@ -22,11 +22,11 @@ impl<T: Blueprint> RepeatSpawn for T {
 pub struct DynRepeatSpawner(Arc<dyn RepeatSpawnDyn + Send + Sync + 'static>);
 
 trait RepeatSpawnDyn: Debug {
-    fn spawn_dyn_with_data(&self, data: SpawnData) -> Child;
+    fn spawn_dyn_with_data(&self, data: Channel) -> Child;
 }
 
 impl<R: Blueprint> RepeatSpawnDyn for R {
-    fn spawn_dyn_with_data(&self, data: SpawnData) -> Child {
+    fn spawn_dyn_with_data(&self, data: Channel) -> Child {
         let runner = self.instantiate().map(|res| res.map(std::mem::forget));
 
         data.clone()
@@ -41,7 +41,7 @@ impl RepeatSpawn for DynRepeatSpawner {
     type Inbox = Set!();
     type Exit = ();
 
-    fn spawn_with_data(&self, data: SpawnData<Self::Inbox>) -> Child<Self::Exit, Self::Inbox> {
+    fn spawn_with_data(&self, data: Channel<Self::Inbox>) -> Child<Self::Exit, Self::Inbox> {
         self.0.spawn_dyn_with_data(data)
     }
 }

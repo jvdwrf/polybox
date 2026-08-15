@@ -2,29 +2,36 @@ use std::{any::TypeId, marker::PhantomData};
 
 use super::*;
 use crate::{
-    FromPayload, Message, MessageExt, Rx, TryIntoPayload, new_request,
-    signals::{self, ActorStatus},
+    FromPayload, Message, MessageExt, Rx, TryIntoPayload,
+    address::Address,
+    new_request,
+    signals::{self, ActorStatus, Event},
 };
-use type_sets::{Contains, Set, SubsetOf};
+use eyeball::SharedObservable;
+use tokio::select;
+use type_sets::{Contains, Set, TypeSet};
 
 const SIGNAL_QUEUE_CAPACITY: usize = 1_000_000;
 const MSG_QUEUE_CAPACITY: usize = 1_000_000;
 pub(super) const BACKPRESSURE_LIMIT: usize = 100;
 
 pub trait QueueType: 'static {
-    type Set: 'static;
+    type Set: TypeSet + 'static;
 }
 
 impl<I: Interface> QueueType for I {
     type Set = <I as Interface>::Set;
 }
 
-impl<S: 'static> QueueType for Set<S> {
+impl<S: 'static> QueueType for Set<S>
+where
+    Set<S>: TypeSet,
+{
     type Set = Set<S>;
 }
 
 #[repr(transparent)]
-pub(crate) struct Channel<Q: QueueType = Set!()> {
+pub struct Channel<Q: QueueType = Set!()> {
     pub(super) inner: Arc<ChannelInner<dyn IsDynQueue>>,
     _marker: PhantomData<fn() -> Q>,
 }
@@ -33,21 +40,21 @@ pub(crate) struct ChannelInner<Q: ?Sized> {
     pid: Pid,
     signal_queue: ConcurrentQueue<SignalInterface>,
     signal_notifier: Notify,
-    status: eyeball::SharedObservable<ActorStatus>,
+    status: SharedObservable<ActorStatus>,
     msg_notifier: Notify,
     msg_backpressure_limit: usize,
     msg_queue: Q,
 }
 
 impl<T: QueueType> Channel<T> {
-    pub(super) fn clone(&self) -> Self {
+    pub(crate) fn clone(&self) -> Self {
         Channel {
             inner: self.inner.clone(),
             _marker: PhantomData,
         }
     }
 
-    pub(super) fn new(pid: Pid, status: ActorStatus) -> Self
+    pub(crate) fn new(pid: Pid, status: ActorStatus) -> Self
     where
         T: Interface,
     {
@@ -57,7 +64,7 @@ impl<T: QueueType> Channel<T> {
             msg_backpressure_limit: BACKPRESSURE_LIMIT,
             signal_queue: ConcurrentQueue::bounded(SIGNAL_QUEUE_CAPACITY),
             signal_notifier: Notify::new(),
-            status: eyeball::SharedObservable::new(status),
+            status: SharedObservable::new(status),
             msg_queue: ConcurrentQueue::<T>::new(MSG_QUEUE_CAPACITY),
         });
 
@@ -73,23 +80,23 @@ impl<T: QueueType> Channel<T> {
     {
         if self.is_interface::<T>() {
             Some(unsafe {
-                &*(&self.msg_queue as *const dyn IsDynQueue as *const ConcurrentQueue<T>)
+                &*(&self.inner.msg_queue as *const dyn IsDynQueue as *const ConcurrentQueue<T>)
             })
         } else {
             None
         }
     }
 
-    pub(super) fn set_status(&self, status: ActorStatus) {
-        self.status.set(status);
+    pub(crate) fn alert(&self, status: ActorStatus) {
+        self.inner.status.set(status);
 
         if !status.should_accept_messages() {
-            self.msg_notifier.notify_waiters();
+            self.inner.msg_notifier.notify_waiters();
         }
     }
 
     pub(super) fn is_open(&self) -> bool {
-        self.status.read().should_accept_messages()
+        self.inner.status.read().should_accept_messages()
     }
 
     pub(super) fn backpressure(&self) -> &BackPressure {
@@ -97,13 +104,13 @@ impl<T: QueueType> Channel<T> {
     }
 
     pub(super) async fn delay_for_backpressure(&self) {
-        let len = self.msg_queue.len();
-        let limit = self.msg_backpressure_limit;
+        let len = self.inner.msg_queue.len();
+        let limit = self.inner.msg_backpressure_limit;
 
-        if let Some(delay) = self
-            .backpressure()
-            .delay(self.msg_queue.len(), self.msg_backpressure_limit)
-        {
+        if let Some(delay) = self.backpressure().delay(
+            self.inner.msg_queue.len(),
+            self.inner.msg_backpressure_limit,
+        ) {
             tracing::warn!(
                 "Backpressure applied: queue occupancy = {:.2}%, delay = {:?}",
                 len as f32 / limit as f32 * 100.0,
@@ -114,9 +121,9 @@ impl<T: QueueType> Channel<T> {
     }
 
     fn signal(&self, signal: SignalInterface) {
-        match self.signal_queue.push(signal) {
+        match self.inner.signal_queue.push(signal) {
             Ok(_) => {
-                self.signal_notifier.notify_one();
+                self.inner.signal_notifier.notify_one();
             }
             Err(e) => {
                 tracing::error!(
@@ -134,7 +141,7 @@ impl<M, T> Sends<M> for Channel<Set<T>>
 where
     M: Message,
     T: 'static,
-    Set<T>: Contains<M>,
+    Set<T>: TypeSet + Contains<M>,
 {
     async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
         match self.send_checked(msg).await {
@@ -180,9 +187,9 @@ where
     }
 
     fn force_send(&self, msg: M) -> M::Output {
-        match self.msg_queue.try_push_msg(msg) {
+        match self.inner.msg_queue.try_push_msg(msg) {
             Ok(output) => {
-                self.msg_notifier.notify_one();
+                self.inner.msg_notifier.notify_one();
                 output
             }
             Err(NotAccepted(_)) => {
@@ -251,6 +258,7 @@ where
 }
 
 impl<Q: QueueType> ActorRef for Channel<Q> {
+    type QueueType = Q;
     type Set = Q::Set;
 
     async fn send_checked<M: Message>(&self, msg: M) -> Result<M::Output, SendCheckedError<M>> {
@@ -275,9 +283,9 @@ impl<Q: QueueType> ActorRef for Channel<Q> {
     }
 
     fn force_send_checked<M: Message>(&self, msg: M) -> Result<M::Output, NotAccepted<M>> {
-        match self.msg_queue.try_push_msg(msg) {
+        match self.inner.msg_queue.try_push_msg(msg) {
             Ok(output) => {
-                self.msg_notifier.notify_one();
+                self.inner.msg_notifier.notify_one();
                 Ok(output)
             }
             Err(e) => Err(e),
@@ -285,20 +293,23 @@ impl<Q: QueueType> ActorRef for Channel<Q> {
     }
 
     fn pid(&self) -> &Pid {
-        &self.pid
+        &self.inner.pid
     }
 
     fn status(&self) -> ActorStatus {
-        self.status.get()
+        self.inner.status.get()
     }
 
     fn members(&self) -> &'static [TypeId] {
-        self.msg_queue.members()
+        self.inner.msg_queue.members()
     }
 
     fn reached_backpressure(&self) -> bool {
         self.backpressure()
-            .delay(self.msg_queue.len(), self.msg_backpressure_limit)
+            .delay(
+                self.inner.msg_queue.len(),
+                self.inner.msg_backpressure_limit,
+            )
             .is_some()
     }
 
@@ -339,7 +350,15 @@ impl<Q: QueueType> ActorRef for Channel<Q> {
     }
 
     fn is_interface<I: Interface>(&self) -> bool {
-        self.msg_queue.type_id() == TypeId::of::<ConcurrentQueue<I>>()
+        self.inner.msg_queue.type_id() == TypeId::of::<ConcurrentQueue<I>>()
+    }
+
+    fn get_address(&self) -> Address<Self::QueueType> {
+        Address::new(self.clone())
+    }
+
+    fn len(&self) -> usize {
+        self.inner.msg_queue.len()
     }
 }
 
@@ -369,12 +388,12 @@ impl<Q: QueueType> AsDyn for Channel<Q> {
 }
 
 impl<I: Interface> Channel<I> {
-    pub(super) async fn recv_msg(&self) -> Option<I> {
+    pub(crate) async fn recv_msg(&self) -> Option<I> {
         let raw_queue = self
             .raw_queue()
             .expect("Channel is not of the expected interface type");
 
-        let mut notify = pin!(self.msg_notifier.notified());
+        let mut notify = pin!(self.inner.msg_notifier.notified());
 
         loop {
             notify.as_mut().enable();
@@ -384,11 +403,11 @@ impl<I: Interface> Channel<I> {
             }
 
             notify.as_mut().await;
-            notify.set(self.msg_notifier.notified());
+            notify.set(self.inner.msg_notifier.notified());
         }
     }
 
-    pub(super) fn pop_msg(&self) -> Option<I> {
+    pub(crate) fn pop_msg(&self) -> Option<I> {
         let raw_queue = self
             .raw_queue()
             .expect("Channel is not of the expected interface type");
@@ -396,8 +415,8 @@ impl<I: Interface> Channel<I> {
         raw_queue.pop().ok()
     }
 
-    pub(super) async fn recv_signal(&self) -> Option<SignalInterface> {
-        let mut notify = pin!(self.signal_notifier.notified());
+    pub(crate) async fn recv_signal(&self) -> Option<SignalInterface> {
+        let mut notify = pin!(self.inner.signal_notifier.notified());
 
         loop {
             notify.as_mut().enable();
@@ -408,12 +427,12 @@ impl<I: Interface> Channel<I> {
 
             notify.as_mut().await;
 
-            notify.set(self.signal_notifier.notified());
+            notify.set(self.inner.signal_notifier.notified());
         }
     }
 
-    pub(super) fn pop_signal(&self) -> Option<SignalInterface> {
-        match self.signal_queue.pop() {
+    pub(crate) fn pop_signal(&self) -> Option<SignalInterface> {
+        match self.inner.signal_queue.pop() {
             Ok(signal) => Some(signal),
             Err(e) => match e {
                 PopError::Empty => None,
@@ -421,12 +440,27 @@ impl<I: Interface> Channel<I> {
             },
         }
     }
+
+    pub(crate) async fn recv(&self) -> Option<Event<I>> {
+        if self.status() == ActorStatus::Suspended {
+            return self.recv_signal().await.map(Event::Signal);
+        }
+
+        select! {
+            biased;
+
+            Some(msg) = self.recv_msg() => Some(Event::Message(msg)),
+            Some(signal) = self.recv_signal() => Some(Event::Signal(signal)),
+            else => None,
+        }
+    }
 }
 
-impl<Q: QueueType> Deref for Channel<Q> {
-    type Target = ChannelInner<dyn IsDynQueue>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
+impl<T: QueueType> std::fmt::Debug for Channel<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Channel")
+            .field("pid", &self.inner.pid)
+            .field("status", &self.inner.status.get())
+            .finish()
     }
 }

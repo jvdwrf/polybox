@@ -1,19 +1,15 @@
 #[allow(unused_imports)]
 use crate::_prelude::*;
-use futures::prelude::future::BoxFuture;
-use polybox::{
-    errors::SendError,
-    type_sets::{Set, TypeSet},
-};
+use polybox::type_sets::Set;
 use std::{fmt::Debug, task::Poll, time::Duration};
 
-pub struct Child<T = (), R: SenderKind = Set!()> {
+pub struct Child<T = (), R: QueueType = Set!()> {
     handle: Option<tokio::task::JoinHandle<Result<T, Report>>>,
     attached: bool,
     address: Address<R>,
 }
 
-impl<T, R: SenderKind> Child<T, R> {
+impl<T, R: QueueType> Child<T, R> {
     pub(crate) fn new(
         handle: tokio::task::JoinHandle<Result<T, Report>>,
         address: Address<R>,
@@ -84,35 +80,48 @@ impl<T, R: SenderKind> Child<T, R> {
     }
 
     pub async fn shutdown_abort(mut self, timeout: Duration) -> Result<T, JoinError> {
-        let shutdown_signal_result = self.address.signal_shutdown().await;
+        let shutdown_signal_result = self.address.signal_shutdown();
 
-        if shutdown_signal_result.is_ok() {
-            let timeout = tokio::time::sleep(timeout);
+        let timeout = tokio::time::sleep(timeout);
 
-            tokio::select! {
-                biased;
+        tokio::select! {
+            biased;
 
-                exit_result = &mut self => {
-                    return exit_result;
-                }
+            exit_result = &mut self => {
+                return exit_result;
+            }
 
-                _ = timeout => {
-                    tracing::warn!("Child did not exit within timeout. Aborting child.");
-                }
-            };
-        } else {
-            tracing::debug!(
-                "Failed to send shutdown signal to child during `shutdown_abort`: {:?}. Aborting child.",
-                shutdown_signal_result
-            );
-        }
+            _ = timeout => {
+                tracing::warn!("Child did not exit within timeout. Aborting child.");
+            }
+        };
 
         self.abort();
         self.await
     }
 }
 
-impl<T, R: SenderKind> Future for Child<T, R> {
+impl<T, R: QueueType> AsActorRef for Child<T, R> {
+    type QueueType = R;
+
+    fn as_channel(&self) -> &Channel<Self::QueueType> {
+        self.address.as_channel()
+    }
+}
+
+impl<T, R: QueueType> IntoDyn for Child<T, R> {
+    type Ref<S: QueueType> = Child<T, S>;
+
+    fn into_dyn_unchecked<S>(self) -> Self::Ref<S>
+    where
+        S: QueueType,
+    {
+        let (handle, address) = self.into_parts();
+        Child::new(handle, address.into_dyn_unchecked())
+    }
+}
+
+impl<T, R: QueueType> Future for Child<T, R> {
     type Output = Result<T, JoinError>;
 
     fn poll(
@@ -128,59 +137,6 @@ impl<T, R: SenderKind> Future for Child<T, R> {
                 Ok(Err(err)) => Err(JoinError::UnhandledError(err)),
                 Err(join_err) => Err(join_err.into()),
             })
-    }
-}
-
-impl<T, R: SenderKind, M: Message> Sends<M> for Child<T, R>
-where
-    Address<R>: Sends<M>,
-{
-    fn send(&self, msg: M) -> impl Future<Output = Result<M::Output, SendError<M>>> {
-        self.address.send(msg)
-    }
-}
-
-impl<T, R: SenderKind> Observable for Child<T, R> {
-    fn send_signal(
-        &self,
-        signal: SignalInterface,
-    ) -> impl Future<Output = Result<(), SendError<SignalInterface>>> {
-        <Address<R> as Observable>::send_signal(&self.address, signal)
-    }
-}
-
-impl<T: Send + 'static, R: SenderKind> DynPolySender for Child<T, R> {
-    fn _send_boxed_payload_checked(
-        &self,
-        msg: BoxedPayload,
-    ) -> BoxFuture<'_, Result<(), errors::SendCheckedError<BoxedPayload>>> {
-        self.address._send_boxed_payload_checked(msg)
-    }
-
-    fn members(&self) -> &'static [std::any::TypeId]
-    where
-        Self: 'static,
-    {
-        R::members()
-    }
-}
-
-impl<T: Send + 'static, R: SenderKind> PolySender for Child<T, R> {
-    type DynVariant<S: DynSenderKind> = Child<T, S>;
-
-    fn into_dyn_unchecked<S: DynSenderKind>(self) -> Child<T, S> {
-        let (handle, address) = self.into_parts();
-        Child::new(handle, address.into_dyn_unchecked())
-    }
-}
-impl<T: Send, R: SenderKind> TypeSet for Child<T, R> {
-    type Set = <R::Sender as TypeSet>::Set;
-
-    fn members() -> &'static [std::any::TypeId]
-    where
-        Self: 'static,
-    {
-        <R::Sender as TypeSet>::members()
     }
 }
 
@@ -211,7 +167,7 @@ impl From<tokio::task::JoinError> for JoinError {
     }
 }
 
-impl<T, R: SenderKind> Drop for Child<T, R> {
+impl<T, R: QueueType> Drop for Child<T, R> {
     fn drop(&mut self) {
         if self.attached && self.handle.is_some() {
             self.abort();
@@ -219,7 +175,7 @@ impl<T, R: SenderKind> Drop for Child<T, R> {
     }
 }
 
-impl<T, R: SenderKind> Debug for Child<T, R> {
+impl<T, R: QueueType> Debug for Child<T, R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Child")
             .field("handle", &std::any::type_name::<T>())
@@ -228,178 +184,3 @@ impl<T, R: SenderKind> Debug for Child<T, R> {
             .finish()
     }
 }
-
-// #[derive(Debug)]
-// pub struct Child<()> {
-//     child: Box<dyn IsChild<()>>,
-//     address: DynAddress,
-// }
-
-// impl Child<()> {
-//     pub fn new<T, R>(child: Child<T, R>) -> Self
-//     where
-//         T: Send + 'static,
-//         R: InboxKind + 'static,
-//     {
-//         Self {
-//             address: child.address.clone().into_dyn_subset::<Set![]>(),
-//             child: Box::new(child),
-//         }
-//     }
-
-//     pub fn abort(&self) {
-//         self.child.abort();
-//     }
-
-//     pub async fn shutdown_abort(
-//         mut self,
-//         timeout: Duration,
-//     ) -> Result<Box<dyn Any + Send>, JoinError> {
-//         let signal_res = self.address.signal_shutdown().await;
-
-//         if signal_res.is_ok() {
-//             tokio::select! {
-//                 biased;
-
-//                 res = &mut self => {
-//                     return res;
-//                 }
-
-//                 _ = tokio::time::sleep(timeout) => {}
-//             };
-//         }
-
-//         self.abort();
-//         self.await
-//     }
-
-//     pub fn is_finished(&self) -> bool {
-//         self.child.is_finished()
-//     }
-
-//     pub fn as_any(&self) -> &dyn Any {
-//         self.child.as_any()
-//     }
-
-//     pub fn attach(&mut self) {
-//         self.child.attach();
-//     }
-
-//     pub fn detach(&mut self) {
-//         self.child.detach();
-//     }
-
-//     pub fn attached(mut self) -> Self {
-//         self.child.attach();
-//         self
-//     }
-
-//     pub fn detached(mut self) -> Self {
-//         self.child.detach();
-//         self
-//     }
-
-//     pub fn is_attached(&self) -> bool {
-//         self.child.is_attached()
-//     }
-
-//     pub fn downcast_ref<T: Send + 'static>(&self) -> Option<&Child<T>> {
-//         self.child.as_any().downcast_ref::<Child<T>>()
-//     }
-
-//     pub fn downcast<T: Send + 'static>(self) -> Result<Child<T>, Self> {
-//         if self.child.as_any().is::<Child<T>>() {
-//             let boxed = self.child.into_any();
-//             Ok(*boxed.downcast::<Child<T>>().unwrap())
-//         } else {
-//             Err(self)
-//         }
-//     }
-// }
-
-// trait IsChild<()>: Debug + Send + Sync {
-//     fn abort(&self);
-//     fn is_finished(&self) -> bool;
-//     fn as_any(&self) -> &dyn Any;
-//     fn into_any(self: Box<Self>) -> Box<dyn Any>;
-//     fn attach(&mut self);
-//     fn detach(&mut self);
-//     fn is_attached(&self) -> bool;
-//     fn poll_any_child(
-//         &mut self,
-//         cx: &mut std::task::Context<'_>,
-//     ) -> Poll<Result<Box<dyn Any + Send>, JoinError>>;
-// }
-
-// impl<T, R> IsChild<()> for Child<T, R>
-// where
-//     T: Send + 'static,
-//     R: InboxKind + 'static,
-// {
-//     fn abort(&self) {
-//         self.abort();
-//     }
-
-//     fn is_finished(&self) -> bool {
-//         self.is_finished()
-//     }
-
-//     fn as_any(&self) -> &dyn Any {
-//         self
-//     }
-
-//     fn into_any(self: Box<Self>) -> Box<dyn Any> {
-//         self
-//     }
-
-//     fn attach(&mut self) {
-//         self.attach();
-//     }
-
-//     fn detach(&mut self) {
-//         self.detach();
-//     }
-
-//     fn is_attached(&self) -> bool {
-//         self.is_attached()
-//     }
-
-//     fn poll_any_child(
-//         &mut self,
-//         cx: &mut std::task::Context<'_>,
-//     ) -> Poll<Result<Box<dyn Any + Send>, JoinError>> {
-//         self.poll_unpin(cx).map(|res| match res {
-//             Ok(value) => Ok(Box::new(value) as Box<dyn Any + Send>),
-//             Err(err) => Err(err),
-//         })
-//     }
-// }
-
-// impl Future for Child<()> {
-//     type Output = Result<Box<dyn Any + Send>, JoinError>;
-
-//     fn poll(
-//         mut self: std::pin::Pin<&mut Self>,
-//         cx: &mut std::task::Context<'_>,
-//     ) -> Poll<Self::Output> {
-//         self.child.poll_any_child(cx)
-//     }
-// }
-
-// impl Observable for Child<()> {
-//     fn send_signal_payload(
-//         this: &Self,
-//         signal: Signal,
-//     ) -> impl Future<Output = Result<(), SendError<Signal>>> {
-//         <DynAddress as Observable>::send_signal_payload(&this.address, signal)
-//     }
-// }
-
-// impl DynPolyBox for Child<()> {
-//     fn _send_boxed_payload_checked(
-//         &self,
-//         msg: BoxedPayload,
-//     ) -> BoxFuture<'_, Result<(), errors::SendCheckedError<BoxedPayload>>> {
-//         self.address._send_boxed_payload_checked(msg)
-//     }
-// }

@@ -47,35 +47,6 @@ pub trait TypeSet {
         Self: 'static;
 }
 
-// pub trait AsTypeSet {
-//     type Set: TypeSet + 'static;
-
-//     fn members() -> &'static [TypeId]
-//     where
-//         Self: 'static,
-//     {
-//         <Self::Set as TypeSet>::members()
-//     }
-
-//     fn contains(id: TypeId) -> bool
-//     where
-//         Self: 'static,
-//     {
-//         <Self::Set as TypeSet>::members().contains(&id)
-//     }
-
-//     fn contains_all(ids: &[TypeId]) -> bool
-//     where
-//         Self: 'static,
-//     {
-//         ids.iter()
-//             .all(|id| <Self::Set as TypeSet>::members().contains(id))
-//     }
-// }
-// impl<T: TypeSet + 'static> AsTypeSet for T {
-//     type Set = T;
-// }
-
 #[diagnostic::on_unimplemented(
     message = "`{Self}` and `{R}` do not represent the same set",
     label = "the sets contain different members",

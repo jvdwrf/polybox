@@ -1,10 +1,4 @@
-use crate::{
-    _prelude::*,
-    address::Address,
-    child::Child,
-    inbox::{Receiver, Sender},
-    signals::{SignalInterface, SignalSender},
-};
+use crate::{_prelude::*, address::Address, child::Child};
 use futures::FutureExt;
 pub(crate) use polybox::*;
 use std::{ops::Deref, panic::AssertUnwindSafe, sync::Arc};
@@ -16,27 +10,10 @@ where
     F: Future<Output = Result<R, Report>> + Send + 'static,
     F::Output: Send + 'static,
 {
-    SpawnData::new(pid).spawn(f)
+    Channel::new(pid, ActorStatus::Exiting).spawn(f)
 }
 
-pub struct SpawnData<T: SenderKind = Set!()> {
-    address: Address<T>,
-    receiver: T::Receiver,
-    data: SharedProcessData,
-}
-
-impl<T: Interface> SpawnData<T> {
-    pub fn new(pid: Pid) -> Self {
-        let (inbox, receiver) = Sender::new();
-        let data = SharedProcessData::new(pid);
-
-        Self {
-            address: Address::new(inbox, data.clone()),
-            receiver,
-            data,
-        }
-    }
-
+impl<T: Interface> Channel<T> {
     pub fn spawn<R, F>(self, f: impl FnOnce(ActorState<T>) -> F) -> Child<R, T>
     where
         T: Interface,
@@ -44,25 +21,15 @@ impl<T: Interface> SpawnData<T> {
         F: Future<Output = Result<R, Report>> + Send + 'static,
         F::Output: Send + 'static,
     {
-        let SpawnData {
-            address,
-            receiver,
-            data,
-        } = self;
-
-        let mut status_updater = data.status_updater.clone();
-
-        let state = ActorState::new(
-            EventStream::new(receiver, data.signal_receiver.clone()),
-            address.clone(),
-        );
+        let state = ActorState::new(EventStream::new(self.clone()));
         let spawned_future = AssertUnwindSafe(f(state)).catch_unwind();
-        let pid = address.pid().clone();
+        let pid = self.pid().clone();
+        let this = self.clone();
 
         let handle = tokio::spawn(async move {
             // Notify that the process is alive
             tracing::debug!(pid = ?pid, "Process started");
-            status_updater.alert(ProcessStatus::Alive);
+            self.alert(ActorStatus::Running);
 
             // Run the future and catch any panics that occur
             let exit_value = spawned_future.await;
@@ -73,86 +40,24 @@ impl<T: Interface> SpawnData<T> {
                     match &val {
                         Ok(_) => {
                             tracing::debug!(pid = ?pid, "Process exited normally");
-                            status_updater.alert(ExitStatus::Normal.into());
+                            self.alert(ActorStatus::Exiting);
                         }
                         Err(_) => {
                             tracing::error!(pid = ?pid, "Process exited with error");
-                            status_updater.alert(ExitStatus::Error.into());
+                            self.alert(ActorStatus::Exiting);
                         }
                     };
                     val
                 }
                 Err(boxed) => {
                     tracing::error!(pid = ?pid, "Process panicked");
-                    status_updater.alert(ExitStatus::Panic.into());
+                    self.alert(ActorStatus::Exiting);
                     std::panic::resume_unwind(boxed);
                 }
             }
         });
 
-        Child::new(handle, address)
-    }
-}
-
-impl<T: SenderKind> std::fmt::Debug for SpawnData<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SpawnData")
-            .field("address", &self.address)
-            .field("receiver", &"Receiver")
-            .field("data", &self.data)
-            .finish()
-    }
-}
-
-impl<T: SenderKind> SpawnData<T> {
-    pub fn pid(&self) -> &Pid {
-        self.address.pid()
-    }
-
-    pub fn into_any(self) -> SpawnData {
-        let SpawnData {
-            address,
-            receiver,
-            data,
-        } = self;
-
-        SpawnData {
-            address: address.into_dyn(),
-            receiver: T::map_receiver_into_any(receiver),
-            data,
-        }
-    }
-}
-
-impl SpawnData {
-    pub fn downcast<T: Interface>(self) -> Result<SpawnData<T>, Self> {
-        let address = match self.address.downcast_ref::<T>() {
-            Some(addr) => addr,
-            None => return Err(self),
-        };
-
-        let receiver = self
-            .receiver
-            .downcast::<Receiver<T>>()
-            .expect("Receiver should have the same type as the address")
-            .deref()
-            .clone();
-
-        Ok(SpawnData {
-            address,
-            receiver,
-            data: self.data,
-        })
-    }
-}
-
-impl<T: SenderKind> Clone for SpawnData<T> {
-    fn clone(&self) -> Self {
-        Self {
-            address: self.address.clone(),
-            receiver: self.receiver.clone(),
-            data: self.data.clone(),
-        }
+        Child::new(handle, Address::new(this))
     }
 }
 
@@ -192,3 +97,4 @@ pub(crate) mod _prelude {
 pub(crate) mod schemas;
 
 mod channel;
+pub use channel::*;

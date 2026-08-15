@@ -47,7 +47,7 @@ fn test_channel_initialization_and_status() {
 
     assert!(channel.is_open());
 
-    channel.set_status(ActorStatus::Exiting);
+    channel.alert(ActorStatus::Exiting);
 
     assert!(!channel.is_open());
 }
@@ -56,10 +56,10 @@ fn test_channel_initialization_and_status() {
 fn test_channel_can_be_reopened() {
     let channel = create_test_channel::<TestInterface>();
 
-    channel.set_status(ActorStatus::Exiting);
+    channel.alert(ActorStatus::Exiting);
     assert!(!channel.is_open());
 
-    channel.set_status(ActorStatus::Running);
+    channel.alert(ActorStatus::Running);
     assert!(channel.is_open());
 }
 
@@ -146,7 +146,7 @@ fn test_send_now_and_pop_msg() {
 fn test_send_when_channel_closed() {
     let channel = create_test_channel::<TestInterface>();
 
-    channel.set_status(ActorStatus::Exiting);
+    channel.alert(ActorStatus::Exiting);
 
     let msg = PingMessage("closed_test".into());
     let res = channel.try_send(msg.clone());
@@ -476,7 +476,7 @@ fn test_status_change_is_shared_between_clones() {
     let channel = create_test_channel::<TestInterface>();
     let clone = channel.clone();
 
-    channel.set_status(ActorStatus::Exiting);
+    channel.alert(ActorStatus::Exiting);
 
     assert!(!channel.is_open());
     assert!(!clone.is_open());
@@ -488,7 +488,7 @@ fn test_status_change_is_shared_through_erased_view() {
 
     let dyn_channel: &Channel<Set!()> = channel.as_dyn_unchecked::<Set!()>();
 
-    channel.set_status(ActorStatus::Exiting);
+    channel.alert(ActorStatus::Exiting);
 
     assert!(!dyn_channel.is_open());
 }
