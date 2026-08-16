@@ -1,4 +1,5 @@
 - [ ] Drain inboxes
-  - [ ] before starting process
-  - [ ] after process exit
+  - [ ] before starting process?
+  - [ ] after process exit?
 - [x] Fix that shutdown transfers through the whole supervision tree in the example
+- [ ] Supervisor is only ready after all it's children are

@@ -3,6 +3,7 @@ use super::*;
 pub struct ChildSpec<T: RepeatSpawn = DynRepeatSpawner> {
     pub(crate) restart_mode: RestartMode,
     pub(crate) abort_timeout: Duration,
+    pub(crate) init_timeout: Duration,
     pub(crate) blueprint: T,
     pub(crate) channel: Channel<T::Inbox>,
 }
@@ -13,6 +14,7 @@ impl<T: Blueprint> ChildSpec<T> {
         Self {
             restart_mode: RestartMode::OnError,
             abort_timeout: Duration::from_millis(5_000),
+            init_timeout: Duration::from_millis(5_000),
             blueprint: blueprint.into(),
             channel: Channel::<<T::Actor as Actor>::Interface>::new(id.into()),
         }
@@ -24,6 +26,7 @@ impl<T: Blueprint> ChildSpec<T> {
         Self {
             restart_mode: RestartMode::OnError,
             abort_timeout: Duration::from_millis(5_000),
+            init_timeout: Duration::from_millis(5_000),
             blueprint: spawner.into(),
             channel: data,
         }
@@ -37,6 +40,7 @@ impl<T: Blueprint> ChildSpec<T> {
         ChildSpec {
             restart_mode: self.restart_mode,
             abort_timeout: self.abort_timeout,
+            init_timeout: self.init_timeout,
             blueprint: self.blueprint.into(),
             channel: self.channel.into_dyn(),
         }
@@ -78,6 +82,7 @@ impl<T: RepeatSpawn + Clone> Clone for ChildSpec<T> {
         Self {
             restart_mode: self.restart_mode,
             abort_timeout: self.abort_timeout,
+            init_timeout: self.init_timeout,
             blueprint: self.blueprint.clone(),
             channel: self.channel.clone(),
         }
@@ -119,7 +124,11 @@ mod tests {
         type Error = Report;
         type Exit = ();
 
-        async fn exit(&mut self, _reason: ExitReason) -> Result<Self::Exit, Self::Error> {
+        async fn exit(
+            &mut self,
+            _address: &Address<Self::Interface>,
+            _reason: ExitReason,
+        ) -> Result<Self::Exit, Self::Error> {
             Ok(())
         }
     }

@@ -10,19 +10,28 @@ pub trait Handler: Debug + Sized + Send + Sync + 'static {
     type Error: Debug + Display + Send + 'static + Into<Report>;
     type Exit: Send + 'static;
 
+    fn init(
+        &mut self,
+        _address: &Address<Self::Interface>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
+        async { Ok(()) }
+    }
+
     /// Called when the actor is exiting, after all messages have been processed.
     fn exit(
         &mut self,
+        _address: &Address<Self::Interface>,
         reason: ExitReason,
-    ) -> impl Future<Output = Result<Self::Exit, Self::Error>> + Send + '_;
+    ) -> impl Future<Output = Result<Self::Exit, Self::Error>> + Send;
 
     /// Called when the actor encounters an error.
     ///
     /// Returning `Ok(())` will allow the actor to continue running, while returning `Err(e)` will cause the actor to exit with the error `e`.
     fn recover_error(
         &mut self,
+        _address: &Address<Self::Interface>,
         error: Self::Error,
-    ) -> impl Future<Output = Result<(), Self::Error>> + Send + '_ {
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
         async { Err(error) }
     }
 
@@ -32,19 +41,28 @@ pub trait Handler: Debug + Sized + Send + Sync + 'static {
     /// will still empty its message queue before exiting.
     ///
     /// The actor will exit using [`ExitReason::Shutdown`].
-    fn on_shutdown(&mut self) -> impl Future<Output = Result<(), Self::Error>> + Send + '_ {
+    fn on_shutdown(
+        &mut self,
+        _address: &Address<Self::Interface>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
         async { Ok(()) }
     }
 
-    fn on_suspend(&mut self) -> impl Future<Output = Result<(), Self::Error>> + Send + '_ {
+    fn on_suspend(
+        &mut self,
+        _address: &Address<Self::Interface>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
         async { Ok(()) }
     }
 
-    fn on_resume(&mut self) -> impl Future<Output = Result<(), Self::Error>> + Send + '_ {
+    fn on_resume(
+        &mut self,
+        _address: &Address<Self::Interface>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
         async { Ok(()) }
     }
 
-    fn debug_state(&self) -> String {
+    fn debug_state(&self, _address: &Address<Self::Interface>) -> String {
         format!("{self:?}")
     }
 
@@ -53,7 +71,7 @@ pub trait Handler: Debug + Sized + Send + Sync + 'static {
     /// When this returns a value, the actor will then call [`Handle::handle`]
     fn schedule_next(
         &mut self,
-    ) -> impl Future<Output = Result<impl HandledBy<Self>, Self::Error>> + Send + '_ {
+    ) -> impl Future<Output = Result<impl HandledBy<Self>, Self::Error>> + Send {
         pending::<Result<Infallible, _>>()
     }
 

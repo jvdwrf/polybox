@@ -1,9 +1,9 @@
 use rootcause::Report;
 use std::time::Duration;
 use zestors::{
-    self, ActorRef as _, DebugState, Event, EventStream, HandlerInterface, Interface, Message,
-    Payload, Pid, Sends as _, SignalEvent, StatusUpdateEvent,
-    handler::{self, Handle, HandledBy, Handler, HandlerState},
+    self, ActorRef as _, Address, DebugState, Event, EventStream, HandlerInterface, Interface,
+    Message, Payload, Pid, Sends as _, SignalEvent, StatusUpdateEvent,
+    handler::{self, ExitReason, Handle, HandledBy, Handler, HandlerState},
     spawn,
     supervision::ActorRunnerExt as _,
 };
@@ -85,7 +85,11 @@ impl Handler for MyActor {
     type Error = Report;
     type Exit = u32;
 
-    async fn exit(&mut self, reason: handler::ExitReason) -> Result<Self::Exit, Self::Error> {
+    async fn exit(
+        &mut self,
+        address: &Address<Self::Interface>,
+        reason: ExitReason,
+    ) -> Result<Self::Exit, Self::Error> {
         println!("Exiting with reason: {:?}", reason);
         Ok(self.nr)
     }

@@ -1,4 +1,8 @@
 use futures::future::join_all;
+use rootcause::{
+    prelude::{IteratorExt, ResultExt},
+    report,
+};
 
 use super::*;
 
@@ -282,6 +286,30 @@ impl Supervisor {
         }
     }
 
+    async fn wait_for_children(&mut self) -> Result<(), Report> {
+        let futures = self.supervisees.values().map(|supervisee| async move {
+            tokio::select! {
+                () = supervisee.watch_start() => {
+                    Ok(())
+                }
+                () = tokio::time::sleep(supervisee.spec.init_timeout) => {
+                    Err(report!(
+                        "Child {} failed to start within {:?}",
+                        supervisee.spec.pid(),
+                        supervisee.spec.init_timeout
+                    ))
+                }
+            }
+        });
+
+        join_all(futures)
+            .await
+            .into_iter()
+            .collect_reports()
+            .context("One or more children failed to start within the specified timeout")
+            .map_err(Into::into)
+    }
+
     fn allow_restart(&mut self) -> bool {
         self.restart_limiter.allow_restart()
     }
@@ -345,15 +373,18 @@ impl Actor for Supervisor {
     type Interface = SupervisorInterface;
     type Exit = ();
 
-    async fn run(mut self, mut state: EventStream<Self::Interface>) -> Result<Self::Exit, Report> {
+    async fn run(mut self, mut stream: EventStream<Self::Interface>) -> Result<Self::Exit, Report> {
         for supervisee in self.supervisees.values_mut() {
             Self::spawn_supervisee(supervisee, &self.registry)?;
         }
 
+        self.wait_for_children().await?;
+        tracing::debug!("All children started successfully");
+
         loop {
             let msg = tokio::select! {
                 biased;
-                Some(msg) = state.next() => {
+                Some(msg) = stream.next() => {
                     msg
                 }
                 Some(item) = self.next() => {
@@ -370,8 +401,8 @@ impl Actor for Supervisor {
                 Event::Signal(signal) => match signal {
                     SignalEvent::GetState(tx) => {
                         tx.send(DebugState {
-                            status: state.status(),
-                            uptime: state.uptime().unwrap_or_default(),
+                            status: stream.status(),
+                            uptime: stream.uptime().unwrap_or_default(),
                             description: "Supervisor".to_string(),
                         })
                         .ok();
@@ -425,34 +456,6 @@ async fn shutdown_supervisees<'a>(supervisees: &mut [&'a mut Supervisee]) {
     let _results = join_all(futures).await;
 }
 
-// struct ShutdownSupervisees<'a, 'b> {
-//     supervisees: &'a mut [&'b mut Supervisee],
-// }
-
-// impl<'a, 'b> Future for ShutdownSupervisees<'a, 'b> {
-//     type Output = Vec<Result<(), JoinError>>;
-
-//     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-//         let mut results = Vec::new();
-
-//         for supervisee in self.supervisees.iter_mut() {
-//             if let Some(child) = &mut supervisee.child
-//                 && let Poll::Ready(exit) = child.poll_unpin(cx)
-//             {
-//                 let _exited_child = supervisee.child.take().expect("child should be present");
-
-//                 results.push(exit);
-//             }
-//         }
-
-//         if results.len() == self.supervisees.len() {
-//             Poll::Ready(results)
-//         } else {
-//             Poll::Pending
-//         }
-//     }
-// }
-
 #[derive(Debug)]
 pub struct ChildTermination {
     pub id: Pid,
@@ -469,6 +472,14 @@ pub struct Supervisee {
 impl Supervisee {
     fn new(spec: ChildSpec) -> Self {
         Self { child: None, spec }
+    }
+}
+
+impl AsActorRef for Supervisee {
+    type QueueType = Set<()>;
+
+    fn as_channel(&self) -> &Channel<Self::QueueType> {
+        &self.spec.channel
     }
 }
 

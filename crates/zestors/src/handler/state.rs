@@ -19,6 +19,8 @@ impl<H: Handler> HandlerState<H> {
         H: Handler + Debug,
     {
         loop {
+            handler.init(self.address()).await?;
+
             match self._run_once(handler).await {
                 Ok(None) => {
                     tracing::trace!("Actor loop iteration completed, continuing...");
@@ -32,7 +34,7 @@ impl<H: Handler> HandlerState<H> {
                 Err(e) => {
                     tracing::warn!("Handler encountered an error: {e}. Attempting to recover...");
 
-                    match handler.recover_error(e).await {
+                    match handler.recover_error(self.address(), e).await {
                         Ok(()) => {
                             tracing::info!("Handler recovered from error");
                         }
@@ -51,7 +53,10 @@ impl<H: Handler> HandlerState<H> {
 
         if state.status().should_exit() && state.is_empty() {
             tracing::debug!("Actor is exiting due to status: {:?}", state.status());
-            return handler.exit(ExitReason::Shutdown).await.map(Some);
+            return handler
+                .exit(self.address(), ExitReason::Shutdown)
+                .await
+                .map(Some);
         }
 
         let msg = select! {
@@ -70,20 +75,20 @@ impl<H: Handler> HandlerState<H> {
                 }
             }
 
-            else => return handler.exit(ExitReason::Shutdown).await.map(Some),
+            else => return handler.exit(self.address(), ExitReason::Shutdown).await.map(Some),
         };
 
         match msg {
             Event::Signal(signal) => match signal {
                 SignalEvent::StatusUpdate(status) => match status {
                     StatusUpdateEvent::Resume => {
-                        handler.on_resume().await?;
+                        handler.on_resume(self.address()).await?;
                     }
                     StatusUpdateEvent::Suspend => {
-                        handler.on_suspend().await?;
+                        handler.on_suspend(self.address()).await?;
                     }
                     StatusUpdateEvent::Shutdown => {
-                        handler.on_shutdown().await?;
+                        handler.on_shutdown(self.address()).await?;
                     }
                 },
 
@@ -91,7 +96,7 @@ impl<H: Handler> HandlerState<H> {
                     let _ = tx.send(DebugState {
                         status: state.status(),
                         uptime: state.uptime().unwrap_or_default(),
-                        description: handler.debug_state(),
+                        description: handler.debug_state(self.address()),
                     });
                 }
 

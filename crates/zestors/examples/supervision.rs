@@ -2,7 +2,7 @@ use futures::join;
 use rootcause::Report;
 use std::time::Duration;
 use zestors::{
-    ActorRef as _, HandlerInterface, Interface, Payload, Pid, RestartMode,
+    ActorRef as _, Address, HandlerInterface, Interface, Payload, Pid, RestartMode,
     handler::{ExitReason, Handle, Handler, HandlerState},
     node::{ApiConfig, Node},
     supervision::{ChildSpec, RestartIntensity, Supervisor},
@@ -30,11 +30,18 @@ impl Handler for MyActor {
     type Error = Report;
     type Exit = ();
 
-    async fn exit(&mut self, _reason: ExitReason) -> Result<Self::Exit, Self::Error> {
+    async fn exit(
+        &mut self,
+        _address: &Address<Self::Interface>,
+        _reason: ExitReason,
+    ) -> Result<Self::Exit, Self::Error> {
         Ok(())
     }
 
-    async fn on_shutdown(&mut self) -> Result<(), Self::Error> {
+    async fn on_shutdown(
+        &mut self,
+        _address: &Address<Self::Interface>,
+    ) -> Result<(), Self::Error> {
         tracing::info!("Actor {} is shutting down", self.name);
 
         Ok(())
