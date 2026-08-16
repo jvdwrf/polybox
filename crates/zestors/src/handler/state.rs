@@ -14,13 +14,87 @@ impl<H: Handler> HandlerState<H> {
         Self { stream }
     }
 
+    pub async fn exit_while_receiving_signals(
+        &mut self,
+        handler: &mut H,
+        reason: ShutdownReason,
+    ) -> Result<H::Exit, H::Error> {
+        tracing::info!("Actor is exiting due to reason: {:?}", reason);
+        let address = self.address().clone();
+        let description = handler.debug_state(&address);
+        let children = handler.children();
+
+        tokio::select! {
+            res = handler.exit(&address, reason) => {
+                res
+            }
+
+            _ = async {
+                while let Some(signal) = self.stream.next_signal().await {
+                    match signal {
+                        SignalEvent::StatusUpdate(_) => {}
+                        SignalEvent::GetState(tx) => {
+                            tx.send(DebugState {
+                                status: self.status(),
+                                uptime: self.uptime().unwrap_or_default(),
+                                description: description.clone(),
+                            })
+                            .ok();
+                        }
+                        SignalEvent::GetChildren(tx) => {
+                            tx.send(children.clone()).ok();
+                        }
+                    }
+                }
+                futures::future::pending::<()>().await
+            } => {
+                unreachable!("");
+            }
+        }
+    }
+
     pub async fn run(&mut self, handler: &mut H) -> Result<H::Exit, H::Error>
     where
         H: Handler + Debug,
     {
-        loop {
-            handler.init(self.address()).await?;
+        let children = handler.children();
+        let debug_state = handler.debug_state(self.address());
 
+        tokio::select! {
+            res = handler.init() => {
+                res?;
+            }
+
+            _shutdown_signal_received = async {
+                while let Some(signal) = self.stream.next_signal().await {
+                    match signal {
+                        SignalEvent::StatusUpdate(status) => {
+                            if status.is_shutdown() {
+                                break;
+                            }
+                        }
+                        SignalEvent::GetState(tx) => {
+                            tx.send(DebugState {
+                                status: self.status(),
+                                uptime: self.uptime().unwrap_or_default(),
+                                description: debug_state.clone(),
+                            })
+                            .ok();
+                        }
+                        SignalEvent::GetChildren(tx) => {
+                            tx.send(children.clone()).ok();
+                        }
+                    }
+                }
+            } => {
+                tracing::debug!("Actor is exiting due to shutdown signal");
+                return self
+                    .exit_while_receiving_signals(handler, ShutdownReason::Shutdown)
+                    .await
+            }
+        }
+
+        loop {
             match self._run_once(handler).await {
                 Ok(None) => {
                     tracing::trace!("Actor loop iteration completed, continuing...");
@@ -49,18 +123,18 @@ impl<H: Handler> HandlerState<H> {
     }
 
     async fn _run_once(&mut self, handler: &mut H) -> Result<Option<H::Exit>, H::Error> {
-        let state = &mut self.stream;
+        let stream = &mut self.stream;
 
-        if state.status().should_exit() && state.is_empty() {
-            tracing::debug!("Actor is exiting due to status: {:?}", state.status());
-            return handler
-                .exit(self.address(), ShutdownReason::Shutdown)
+        if stream.status().should_exit() && stream.is_empty() {
+            tracing::debug!("Actor is exiting due to status: {:?}", stream.status());
+            return self
+                .exit_while_receiving_signals(handler, ShutdownReason::Shutdown)
                 .await
                 .map(Some);
         }
 
         let msg = select! {
-            Some(msg) = state.next() => msg,
+            Some(msg) = stream.next() => msg,
 
             next = handler.schedule_next() => {
                 match next {
@@ -75,7 +149,10 @@ impl<H: Handler> HandlerState<H> {
                 }
             }
 
-            else => return handler.exit(self.address(), ShutdownReason::Shutdown).await.map(Some),
+            else => return self
+                .exit_while_receiving_signals(handler, ShutdownReason::Shutdown)
+                .await
+                .map(Some),
         };
 
         match msg {
@@ -94,8 +171,8 @@ impl<H: Handler> HandlerState<H> {
 
                 SignalEvent::GetState(tx) => {
                     let _ = tx.send(DebugState {
-                        status: state.status(),
-                        uptime: state.uptime().unwrap_or_default(),
+                        status: stream.status(),
+                        uptime: stream.uptime().unwrap_or_default(),
                         description: handler.debug_state(self.address()),
                     });
                 }

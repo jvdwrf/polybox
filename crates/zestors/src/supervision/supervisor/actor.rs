@@ -103,13 +103,55 @@ impl Supervisor {
         Ok(())
     }
 
-    async fn shutdown(&mut self) {
-        shutdown_supervisees(&mut self.supervisees.values_mut().collect::<Vec<_>>()).await;
+    async fn shutdown(
+        &mut self,
+        pids: Option<&[Pid]>,
+        stream: &mut EventStream<SupervisorInterface>,
+    ) {
+        let child_descriptions = self.get_child_descriptions();
+
+        let mut supervisees = match pids {
+            Some(pids) => self
+                .supervisees
+                .iter_mut()
+                .filter(|(pid, _)| pids.contains(pid))
+                .map(|(_, supervisee)| supervisee)
+                .collect::<Vec<_>>(),
+            None => self.supervisees.values_mut().collect::<Vec<_>>(),
+        };
+
+        tokio::select! {
+            _ = shutdown_supervisees(&mut supervisees) => {
+                tracing::info!("All supervisees have been shut down");
+            }
+
+            _ = async {
+                while let Some(signal) = stream.next_signal().await {
+                    match signal {
+                        SignalEvent::StatusUpdate(_) => {}
+                        SignalEvent::GetState(tx) => {
+                            tx.send(DebugState {
+                                status: stream.status(),
+                                uptime: stream.uptime().unwrap_or_default(),
+                                description: "Supervisor".to_string(),
+                            })
+                            .ok();
+                        }
+                        SignalEvent::GetChildren(tx) => {
+                            tx.send(child_descriptions.clone()).ok();
+                        }
+                    }
+                }
+            } => {
+                tracing::info!("Shutdown signal received while shutting down supervisees");
+            }
+        }
     }
 
     async fn handle_child_termination(
         &mut self,
         termination: ChildTermination,
+        stream: &mut EventStream<SupervisorInterface>,
     ) -> Result<(), RestartLimitReached> {
         let ChildTermination { id, exit, .. } = &termination;
         let spec = &self
@@ -154,14 +196,26 @@ impl Supervisor {
         }
 
         // Restart the affected children
-        Self::restart_children(&mut self.affected_supervisees_mut(id)).await;
+        self.restart_affected_children(id, stream).await;
 
         Ok(())
     }
 
-    async fn restart_children<'a>(supervisees: &mut [&mut Supervisee]) {
-        // First, shutdown all affected children
-        shutdown_supervisees(supervisees).await;
+    async fn restart_affected_children<'a>(
+        &mut self,
+        pid: &Pid,
+        stream: &mut EventStream<SupervisorInterface>,
+    ) {
+        let affected_pids = self.affected_pids(pid);
+
+        self.shutdown(Some(&affected_pids), stream).await;
+
+        let supervisees = self
+            .supervisees
+            .iter_mut()
+            .filter(|(id, _)| affected_pids.contains(id))
+            .map(|(_, supervisee)| supervisee)
+            .collect::<Vec<_>>();
 
         // Now restart all affected children
         for supervisee in supervisees {
@@ -206,31 +260,38 @@ impl Supervisor {
         self.restart_limiter.allow_restart()
     }
 
-    fn affected_supervisees_mut<'a>(&'a mut self, id: &'a Pid) -> Vec<&'a mut Supervisee> {
+    fn affected_pids(&self, id: &Pid) -> Vec<Pid> {
         match self.strategy {
-            SupervisionStrategy::OneForOne => vec![
-                self.supervisees
-                    .get_mut(id)
-                    .expect("child should be present"),
-            ],
-            SupervisionStrategy::OneForAll => self.supervisees.values_mut().collect(),
+            SupervisionStrategy::OneForOne => vec![id.clone()],
+            SupervisionStrategy::OneForAll => self.supervisees.keys().cloned().collect(),
             SupervisionStrategy::RestForOne => {
                 let mut affected = Vec::new();
                 let mut found = false;
 
-                for (child_id, supervisee) in self.supervisees.iter_mut() {
+                for child_id in self.supervisees.keys() {
                     if child_id == id {
                         found = true;
                     }
 
                     if found {
-                        affected.push(supervisee);
+                        affected.push(child_id.clone());
                     }
                 }
 
                 affected
             }
         }
+    }
+
+    fn get_child_descriptions(&self) -> Vec<ChildDescription> {
+        self.supervisees
+            .iter()
+            .map(|(pid, supervisee)| ChildDescription {
+                pid: pid.clone(),
+                restart_mode: supervisee.spec.cfg().restart_mode,
+                abort_timeout: supervisee.spec.cfg().abort_timeout,
+            })
+            .collect()
     }
 }
 
@@ -239,27 +300,66 @@ impl Actor for Supervisor {
     type Exit = ();
 
     async fn run(mut self, mut stream: EventStream<Self::Interface>) -> Result<Self::Exit, Report> {
-        for supervisee in self.supervisees.values_mut() {
-            if let Err(e) = Self::spawn_supervisee(supervisee, &self.registry) {
-                tracing::error!(error = ?e, "Failed to spawn supervisee: {}", supervisee.spec.pid());
+        let child_descriptions = self.get_child_descriptions();
 
-                return Err(report!(
-                    "Supervisor failed to spawn supervisee: {}",
-                    supervisee.spec.pid()
-                ));
+        // Run the initialization and shutdown signal handling concurrently.
+        tokio::select! {
+            initialization_result = async {
+                // Spawn all supervisees
+                for supervisee in self.supervisees.values_mut() {
+                    if let Err(e) = Self::spawn_supervisee(supervisee, &self.registry) {
+                        tracing::error!(error = ?e, "Failed to spawn supervisee: {}", supervisee.spec.pid());
+
+                        return Err(report!(
+                            "Supervisor failed to spawn supervisee: {}",
+                            supervisee.spec.pid()
+                        ));
+                    }
+
+                    tracing::debug!("Spawned supervisee: {}", supervisee.spec.pid());
+                }
+
+                // Wait for all supervisees to initialize
+                if let Err(e) = self.wait_for_children().await {
+                    tracing::error!(error = ?e,"Failed to initialize all children. Supervisor will now shutdown all children and exit.");
+
+                    return Err(report!("Failed to initialize children."));
+                } else {
+                    Ok(())
+                }
+            } => {
+                if let Err(e) = initialization_result {
+                    self.shutdown(None, &mut stream).await;
+                    return Err(e);
+                }
             }
 
-            tracing::debug!("Spawned supervisee: {}", supervisee.spec.pid());
-        }
-
-        if let Err(e) = self.wait_for_children().await {
-            tracing::error!(error = ?e,"Failed to initialize all children. Supervisor will now shutdown all children and exit.");
-
-            self.shutdown().await;
-            tracing::debug!("Finished shutting down children after failed initialization.");
-
-            return Err(report!("Failed to initialize children."));
-        }
+            _shutdown_signal_received = async {
+                while let Some(signal) = stream.next_signal().await {
+                    match signal {
+                        SignalEvent::StatusUpdate(status) => {
+                            if status.is_shutdown() {
+                                break;
+                            }
+                        }
+                        SignalEvent::GetState(tx) => {
+                            tx.send(DebugState {
+                                status: stream.status(),
+                                uptime: stream.uptime().unwrap_or_default(),
+                                description: "Supervisor".to_string(),
+                            })
+                            .ok();
+                        }
+                        SignalEvent::GetChildren(tx) => {
+                            tx.send(child_descriptions.clone()).ok();
+                        }
+                    }
+                }
+            } => {
+                self.shutdown(None, &mut stream).await;
+                return Ok(());
+            }
+        };
 
         tracing::info!(
             "Supervisor started successfully with children: {}",
@@ -277,7 +377,7 @@ impl Actor for Supervisor {
                     msg
                 }
                 Some(item) = self.next() => {
-                    self.handle_child_termination(item).await?;
+                    self.handle_child_termination(item, &mut stream).await?;
                     continue;
                 }
 
@@ -297,20 +397,12 @@ impl Actor for Supervisor {
                         .ok();
                     }
                     SignalEvent::GetChildren(tx) => {
-                        let children = self
-                            .supervisees
-                            .iter()
-                            .map(|(pid, supervisee)| ChildDescription {
-                                pid: pid.clone(),
-                                restart_mode: supervisee.spec.cfg().restart_mode,
-                                abort_timeout: supervisee.spec.cfg().abort_timeout,
-                            })
-                            .collect::<Vec<_>>();
+                        let children = self.get_child_descriptions();
                         tx.send(children).ok();
                     }
                     SignalEvent::StatusUpdate(status) => match status {
                         StatusUpdateEvent::Shutdown => {
-                            self.shutdown().await;
+                            self.shutdown(None, &mut stream).await;
                             break;
                         }
                         StatusUpdateEvent::Resume => (),
@@ -363,6 +455,13 @@ impl Stream for Supervisor {
 
 impl Unpin for Supervisor {}
 
+#[derive(Debug)]
+pub struct ChildTermination {
+    pub id: Pid,
+    pub exit: Result<(), JoinError>,
+    pub reference: Child<()>,
+}
+
 async fn shutdown_supervisees<'a>(supervisees: &mut [&'a mut Supervisee]) {
     let futures = supervisees
         .iter_mut()
@@ -384,11 +483,4 @@ async fn shutdown_supervisees<'a>(supervisees: &mut [&'a mut Supervisee]) {
     if let Err(e) = res {
         tracing::error!(error = ?e, "Abnormal shutdown of children");
     }
-}
-
-#[derive(Debug)]
-pub struct ChildTermination {
-    pub id: Pid,
-    pub exit: Result<(), JoinError>,
-    pub reference: Child<()>,
 }

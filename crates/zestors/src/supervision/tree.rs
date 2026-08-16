@@ -30,16 +30,16 @@ impl SupervisionTree {
         }
     }
 
-    pub async fn new_populated(child: ChildDescription) -> Result<Self, Report> {
+    pub async fn new_populated(child: ChildDescription) -> Self {
         let mut tree = Self::new(child);
-        tree.populate_tree().await?;
-        Ok(tree)
+        tree.populate_tree().await;
+        tree
     }
 
-    async fn populate_children(&mut self) -> Result<(), Report> {
-        let address = Registry::local()
-            .get(&self.pid)
-            .ok_or_else(|| rootcause::report!("Failed to get address from Registry"))?;
+    async fn populate_children(&mut self) {
+        let Some(address) = Registry::local().get(&self.pid) else {
+            return;
+        };
 
         let children = match address.get_children().await {
             Ok(children) => children,
@@ -52,47 +52,46 @@ impl SupervisionTree {
         for child in children {
             self.children.push(SupervisionTree::new(child));
         }
-
-        Ok(())
     }
 
-    pub async fn populate_tree(&mut self) -> Result<(), Report> {
+    pub async fn populate_tree(&mut self) -> () {
         let mut queue = VecDeque::new();
         queue.push_back(self);
 
         while let Some(node) = queue.pop_front() {
-            node.populate_children().await?;
+            node.populate_children().await;
 
             for child in &mut node.children {
                 queue.push_back(child);
             }
         }
-
-        Ok(())
     }
 
-    pub async fn populate_debug_state(&mut self) -> Result<(), Report> {
+    pub async fn populate_debug_state(&mut self) {
         let mut queue = VecDeque::new();
         queue.push_back(self);
 
         while let Some(node) = queue.pop_front() {
-            let address = Registry::local()
-                .get(&node.pid)
-                .ok_or_else(|| rootcause::report!("Failed to get address from Registry"))?;
+            let address = match Registry::local().get(&node.pid) {
+                Some(address) => address,
+                None => {
+                    continue;
+                }
+            };
 
-            let debug_state = address.get_debug_state().await?;
+            let Ok(debug_state) = address.get_debug_state().await else {
+                continue;
+            };
             node.debug_state = Some(debug_state);
 
             for child in &mut node.children {
                 queue.push_back(child);
             }
         }
-
-        Ok(())
     }
 
-    pub async fn with_debug_state(mut self) -> Result<Self, Report> {
-        self.populate_debug_state().await?;
-        Ok(self)
+    pub async fn with_debug_state(mut self) -> Self {
+        self.populate_debug_state().await;
+        self
     }
 }

@@ -10,10 +10,7 @@ pub trait Handler: Debug + Sized + Send + Sync + 'static {
     type Error: Debug + Display + Send + 'static + Into<Report>;
     type Exit: Send + 'static;
 
-    fn init(
-        &mut self,
-        _address: &Address<Self::Interface>,
-    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
+    fn init(&mut self) -> impl Future<Output = Result<(), Self::Error>> + Send {
         async { Ok(()) }
     }
 

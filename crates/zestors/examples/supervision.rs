@@ -2,11 +2,12 @@ use futures::{future::join_all, join};
 use rootcause::{
     Report,
     prelude::{IteratorExt as _, ResultExt},
+    report,
 };
-use std::time::Duration;
+use std::{convert::Infallible, time::Duration};
 use zestors::{
     HandlerInterface,
-    handler::{Handle, Handler, HandlerState, ShutdownReason},
+    handler::{Handle, HandledBy, Handler, HandlerState, ShutdownReason},
     node::{ApiConfig, Node},
     prelude::*,
     signals::RestartMode,
@@ -35,8 +36,8 @@ impl Handler for MyActor {
     type Error = Report;
     type Exit = ();
 
-    async fn init(&mut self, _address: &Address<Self::Interface>) -> Result<(), Self::Error> {
-        // tokio::time::sleep(Duration::from_secs(100)).await;
+    async fn init(&mut self) -> Result<(), Self::Error> {
+        tokio::time::sleep(Duration::from_secs(3)).await;
         Ok(())
     }
 
@@ -45,6 +46,7 @@ impl Handler for MyActor {
         _address: &Address<Self::Interface>,
         _reason: ShutdownReason,
     ) -> Result<Self::Exit, Self::Error> {
+        tokio::time::sleep(Duration::from_secs(3)).await;
         Ok(())
     }
 
@@ -55,6 +57,12 @@ impl Handler for MyActor {
         tracing::info!("Actor {} is shutting down", self.name);
 
         Ok(())
+    }
+
+    async fn schedule_next(&mut self) -> Result<impl HandledBy<Self>, Self::Error> {
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        tracing::error!("Actor {} is idle for too long, shutting down", self.name);
+        Err::<Infallible, _>(report!("Idle timeout reached, shutting down"))
     }
 }
 
@@ -90,7 +98,8 @@ async fn main() -> Result<(), Report> {
 
     let actor_a = supervisor_a
         .add_child(ChildSpec::new("HelloActor", MyActor::new("A")).with_mode(RestartMode::Never));
-    let actor_b = supervisor_a.add_child(ChildSpec::new("HelloActor2", MyActor::new("B")));
+    let actor_b = supervisor_a
+        .add_child(ChildSpec::new("HelloActor2", MyActor::new("B")).with_mode(RestartMode::Always));
 
     let mut supervisor_b = Supervisor::blueprint();
 
@@ -119,6 +128,13 @@ async fn main() -> Result<(), Report> {
     .await;
 
     tracing::info!("All actors started, sending messages...");
+
+    loop {
+        tokio::time::sleep(Duration::from_secs(5)).await;
+
+        actor_a.signal_shutdown();
+        actor_b.signal_shutdown();
+    }
 
     futures::future::pending::<()>().await;
     Ok(())

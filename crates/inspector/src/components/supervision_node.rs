@@ -1,5 +1,5 @@
 use super::debug_card::render_debug_card;
-use super::status_badge::render_status_badge;
+use super::status_badge::render_actor_status_badge;
 use crate::theme::Theme;
 use crate::utils::format_duration;
 use egui::{CornerRadius, Frame, Margin, RichText, Stroke, Ui, collapsing_header::CollapsingState};
@@ -40,7 +40,7 @@ impl<'a> SupervisionNodeWidget<'a> {
             );
 
             if let AbsentOr::Present(debug) = &self.node.debug_state {
-                render_status_badge(ui, &format!("{:?}", debug.status));
+                render_actor_status_badge(ui, &debug.status);
             }
         });
     }

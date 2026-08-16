@@ -21,7 +21,7 @@ pub enum StatusUpdateEvent {
 }
 
 impl StatusUpdateEvent {
-    pub fn is_exit(self) -> bool {
+    pub fn is_shutdown(self) -> bool {
         self == StatusUpdateEvent::Shutdown
     }
 

@@ -102,7 +102,7 @@ impl<T: ChannelKind> Channel<T> {
         self.set_status(ActorStatus::Dead(Exit::from_result(reason)));
     }
 
-    pub(super) fn register_start(&self) {
+    pub(super) fn register_initialized(&self) {
         tracing::debug!("Process started");
         self.set_status(ActorStatus::Running);
     }

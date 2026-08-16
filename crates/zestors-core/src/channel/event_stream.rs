@@ -23,10 +23,14 @@ impl<T: Interface> EventStream<T> {
         if self.initializing {
             debug_assert!(self.status().is_initializing());
             self.initializing = false;
-            self.channel.register_start();
+            self.channel.register_initialized();
         }
 
         self.channel.next().await
+    }
+
+    pub async fn next_signal(&mut self) -> Option<SignalEvent> {
+        self.channel.recv_signal().await
     }
 }
 

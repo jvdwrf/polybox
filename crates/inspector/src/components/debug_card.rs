@@ -1,3 +1,4 @@
+use super::status_badge::render_actor_status_badge;
 use crate::theme::Theme;
 use crate::utils::format_duration;
 use egui::{CornerRadius, Frame, Margin, RichText, Stroke, Ui};
@@ -22,6 +23,11 @@ pub fn render_debug_card(ui: &mut Ui, pid: &str, debug: &types::DebugState) {
                 .num_columns(2)
                 .spacing([12.0, 4.0])
                 .show(ui, |ui| {
+                    // // Actor Status Row with dynamic color badge
+                    // ui.label(RichText::new("Status:").color(Theme::LABEL_MUTED));
+                    // render_actor_status_badge(ui, &debug.status);
+                    // ui.end_row();
+
                     ui.label(RichText::new("Uptime:").color(Theme::LABEL_MUTED));
                     ui.label(
                         RichText::new(format_duration(&debug.uptime)).color(egui::Color32::WHITE),
