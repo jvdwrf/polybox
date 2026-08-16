@@ -47,7 +47,7 @@ pub(crate) struct ChannelInner<Q: ?Sized> {
     msg_backpressure_limit: usize,
     created_at: Instant,
     spawns: RwLock<Vec<Instant>>,
-    exits: RwLock<Vec<(Instant, ExitResult)>>,
+    exits: RwLock<Vec<(Instant, Result<(), ExitError>)>>,
     msg_queue: Q,
 }
 
@@ -85,7 +85,7 @@ impl<T: ChannelKind> Channel<T> {
         spawned_at.push(Instant::now());
     }
 
-    fn add_exited_now(&self, reason: ExitResult) {
+    fn add_exited_now(&self, reason: Result<(), ExitError>) {
         let mut exited_at = self.inner.exits.write().unwrap();
 
         if exited_at.len() > KEEP_N_EXITS {
@@ -93,25 +93,6 @@ impl<T: ChannelKind> Channel<T> {
         }
 
         exited_at.push((Instant::now(), reason));
-    }
-
-    pub fn spawn_ref<R, F>(&self, f: impl FnOnce(EventStream<T>) -> F) -> Child<R, T>
-    where
-        T: Interface,
-        R: Send + 'static,
-        F: Future<Output = Result<R, Report>> + Send + 'static,
-        F::Output: Send + 'static,
-    {
-        self.clone().spawn(f)
-    }
-
-    fn last_exit(&self) -> Option<ExitResult> {
-        self.inner
-            .exits
-            .read()
-            .unwrap()
-            .last()
-            .map(|(_, result)| result.clone())
     }
 
     pub fn spawn<R, F>(self, f: impl FnOnce(EventStream<T>) -> F) -> Child<R, T>
@@ -138,25 +119,13 @@ impl<T: ChannelKind> Channel<T> {
             match exit_value {
                 Ok(val) => {
                     match &val {
-                        Ok(_) => {
-                            tracing::debug!(pid = ?pid, "Process exited normally");
-                            self.update_status(ActorStatus::Exited(None));
-                            self.add_exited_now(Ok(()));
-                        }
-                        Err(_) => {
-                            tracing::error!(pid = ?pid, "Process exited with error");
-                            self.update_status(ActorStatus::Exited(Some(
-                                ExitError::UnhandledError,
-                            )));
-                            self.add_exited_now(Err(ExitError::UnhandledError));
-                        }
+                        Ok(_) => self.update_exit_result(Ok(())),
+                        Err(_) => self.update_exit_result(Err(ExitError::UnhandledError)),
                     };
                     val
                 }
                 Err(boxed) => {
-                    tracing::error!(pid = ?pid, "Process panicked");
-                    self.update_status(ActorStatus::Exited(Some(ExitError::Panic)));
-                    self.add_exited_now(Err(ExitError::Panic));
+                    self.update_exit_result(Err(ExitError::Panic));
                     std::panic::resume_unwind(boxed);
                 }
             }
@@ -164,6 +133,16 @@ impl<T: ChannelKind> Channel<T> {
 
         this.add_spawned_now();
         Child::new(handle, Address::new(this))
+    }
+
+    fn update_exit_result(&self, exit_result: Result<(), ExitError>) {
+        match &exit_result {
+            Ok(()) => tracing::debug!(pid = ?self.pid(), "Process exited normally"),
+            Err(err) => tracing::error!(pid = ?self.pid(), "Process exited with error: {:?}", err),
+        }
+
+        self.add_exited_now(exit_result.clone());
+        self.update_status(ActorStatus::Exited(exit_result.err()));
     }
 
     pub(super) fn raw_queue(&self) -> Option<&ConcurrentQueue<T>>
@@ -576,13 +555,13 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
             }
 
             let status = subscriber.next().await;
-            if status != Some(ActorStatus::Exiting) {
+            if status == Some(ActorStatus::Running) {
                 return;
             }
         }
     }
 
-    async fn watch_exit(&self) -> ExitResult {
+    async fn watch_exit(&self) -> Result<(), ExitError> {
         loop {
             let mut subscriber = self.inner.status_observer.subscribe();
             let status = self.status();

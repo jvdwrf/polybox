@@ -14,7 +14,7 @@ impl<T: Blueprint> RepeatSpawn for T {
     fn spawn_with_data(&self, data: &Channel<Self::Inbox>) -> Child<Self::Exit, Self::Inbox> {
         let runner = self.instantiate();
 
-        data.spawn_ref(|state| runner.run(state))
+        data.clone().spawn(|state| runner.run(state))
     }
 }
 
@@ -31,7 +31,8 @@ impl<R: Blueprint> RepeatSpawnDyn for R {
 
         data.downcast_ref::<<R::Actor as Actor>::Interface>()
             .expect("ProcessData should be of correct type")
-            .spawn_ref(|state| runner.run(state))
+            .clone()
+            .spawn(|state| runner.run(state))
             .into_dyn()
     }
 }

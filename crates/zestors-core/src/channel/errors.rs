@@ -139,5 +139,3 @@ pub enum ExitError {
     #[error("Actor exited with error")]
     UnhandledError,
 }
-
-pub type ExitResult = Result<(), ExitError>;
