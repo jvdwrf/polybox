@@ -16,7 +16,7 @@ async fn main() {
     let child = spawn(
         Pid::rand(),
         async move |mut stream: EventStream<MyInterface>| {
-            while let Some(msg) = stream.recv().await {
+            while let Some(msg) = stream.next().await {
                 match msg {
                     Event::Signal(signal) => todo!(),
                     Event::Message(message) => match message {

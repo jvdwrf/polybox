@@ -352,7 +352,7 @@ impl Actor for Supervisor {
         loop {
             let msg = tokio::select! {
                 biased;
-                Some(msg) = state.recv() => {
+                Some(msg) = state.next() => {
                     msg
                 }
                 Some(item) = self.next() => {

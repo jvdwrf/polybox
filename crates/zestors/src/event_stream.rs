@@ -6,11 +6,11 @@ pub struct EventStream<T: Interface> {
 }
 
 impl<T: Interface> EventStream<T> {
-    pub fn new(channel: Channel<T>) -> Self {
+    pub(crate) fn new(channel: Channel<T>) -> Self {
         Self { channel }
     }
 
-    pub async fn recv(&mut self) -> Option<Event<T>> {
+    pub async fn next(&mut self) -> Option<Event<T>> {
         self.channel.recv().await
     }
 }

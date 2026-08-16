@@ -6,12 +6,12 @@ use std::fmt::Debug;
 use tokio::select;
 
 pub struct HandlerState<H: Handler> {
-    inner: EventStream<H::Interface>,
+    stream: EventStream<H::Interface>,
 }
 
 impl<H: Handler> HandlerState<H> {
-    pub fn new(inner: EventStream<H::Interface>) -> Self {
-        Self { inner }
+    pub fn new(stream: EventStream<H::Interface>) -> Self {
+        Self { stream }
     }
 
     pub async fn run(&mut self, handler: &mut H) -> Result<H::Exit, H::Error>
@@ -47,7 +47,7 @@ impl<H: Handler> HandlerState<H> {
     }
 
     async fn _run_once(&mut self, handler: &mut H) -> Result<Option<H::Exit>, H::Error> {
-        let state = &mut self.inner;
+        let state = &mut self.stream;
 
         if state.status().should_exit() && state.is_empty() {
             tracing::debug!("Actor is exiting due to status: {:?}", state.status());
@@ -55,7 +55,7 @@ impl<H: Handler> HandlerState<H> {
         }
 
         let msg = select! {
-            Some(msg) = state.recv() => msg,
+            Some(msg) = state.next() => msg,
 
             next = handler.schedule_next() => {
                 match next {
@@ -113,7 +113,7 @@ impl<H: Handler> AsActorRef for HandlerState<H> {
     type QueueType = H::Interface;
 
     fn as_channel(&self) -> &Channel<Self::QueueType> {
-        self.inner.as_channel()
+        self.stream.as_channel()
     }
 }
 
