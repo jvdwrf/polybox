@@ -32,7 +32,7 @@ impl SupervisorBlueprint {
         self
     }
 
-    pub fn with_child<T: RepeatSpawn>(mut self, spec: ChildSpec<T>) -> Self
+    pub fn with_child<T: SpawnOn>(mut self, spec: ChildSpec<T>) -> Self
     where
         ChildSpec<T>: Into<ChildSpec>,
     {
@@ -41,7 +41,7 @@ impl SupervisorBlueprint {
         self
     }
 
-    pub fn with_children<T: RepeatSpawn>(
+    pub fn with_children<T: SpawnOn>(
         mut self,
         specs: impl IntoIterator<Item = ChildSpec<T>>,
     ) -> Self
@@ -194,7 +194,7 @@ impl Supervisor {
             .collect()
     }
 
-    pub fn with_child<T: RepeatSpawn>(mut self, spec: ChildSpec<T>) -> Self
+    pub fn with_child<T: SpawnOn>(mut self, spec: ChildSpec<T>) -> Self
     where
         ChildSpec<T>: Into<ChildSpec>,
     {
@@ -202,7 +202,7 @@ impl Supervisor {
         self
     }
 
-    pub fn with_children<T: RepeatSpawn>(
+    pub fn with_children<T: SpawnOn>(
         mut self,
         specs: impl IntoIterator<Item = ChildSpec<T>>,
     ) -> Self
@@ -220,7 +220,7 @@ impl Supervisor {
         // since it will persist across restarts.
         let child = supervisee.spec.spawn()?;
         supervisee.child = Some(child);
-        registry.register(supervisee.spec.channel.address().clone())?;
+        registry.register(supervisee.address().clone())?;
         Ok(())
     }
 
@@ -241,7 +241,7 @@ impl Supervisor {
 
         // No restart is required -> Deregister the child and return early
         {
-            let mode = spec.restart_mode;
+            let mode = spec.cfg().restart_mode;
             let ((RestartMode::Always, _) | (RestartMode::OnError, Err(_))) = (mode, exit) else {
                 match exit {
                     Ok(_value) => {
@@ -300,11 +300,11 @@ impl Supervisor {
                 () = supervisee.watch_start() => {
                     Ok(())
                 }
-                () = tokio::time::sleep(supervisee.spec.init_timeout) => {
+                () = tokio::time::sleep(supervisee.spec.cfg().init_timeout) => {
                     Err(report!(
                         "Child {} failed to start within {:?}",
                         supervisee.spec.pid(),
-                        supervisee.spec.init_timeout
+                        supervisee.spec.cfg().init_timeout
                     ))
                 }
             }
@@ -421,8 +421,8 @@ impl Actor for Supervisor {
                             .iter()
                             .map(|(pid, supervisee)| ChildDescription {
                                 pid: pid.clone(),
-                                restart_mode: supervisee.spec.restart_mode,
-                                abort_timeout: supervisee.spec.abort_timeout,
+                                restart_mode: supervisee.spec.cfg().restart_mode,
+                                abort_timeout: supervisee.spec.cfg().abort_timeout,
                             })
                             .collect::<Vec<_>>();
                         tx.send(children).ok();
@@ -459,7 +459,7 @@ async fn shutdown_supervisees<'a>(supervisees: &mut [&'a mut Supervisee]) {
     let futures = supervisees
         .iter_mut()
         .filter_map(|supervisee| supervisee.child.take().map(|s| (s, &supervisee.spec)))
-        .map(|(child, spec)| child.shutdown_abort(spec.abort_timeout));
+        .map(|(child, spec)| child.shutdown_abort(spec.cfg().abort_timeout));
 
     let _results = join_all(futures).await;
 }
@@ -487,7 +487,7 @@ impl AsActorRef for Supervisee {
     type QueueType = Set<()>;
 
     fn as_channel(&self) -> &Channel<Self::QueueType> {
-        &self.spec.channel
+        &self.spec.as_channel()
     }
 }
 

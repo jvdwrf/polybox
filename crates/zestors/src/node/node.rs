@@ -42,9 +42,11 @@ impl Node {
         } = self;
 
         if let Some(api_cfg) = api_cfg {
-            supervisor_spec.blueprint.add_child(ChildSpec::new(
+            let supervisor_pid = supervisor_spec.pid().clone();
+
+            supervisor_spec.blueprint_mut().add_child(ChildSpec::new(
                 api_cfg.pid.clone(),
-                ApiServer::new(api_cfg, supervisor_spec.pid().clone()),
+                ApiServer::new(api_cfg, supervisor_pid),
             ));
         }
 
@@ -52,7 +54,7 @@ impl Node {
         let supervisor_address = supervisor_child.address().clone();
 
         Registry::local()
-            .register(supervisor_spec.channel.address().clone())
+            .register(supervisor_spec.address().clone())
             .attach("Root Supervisor failed to register")?;
 
         tokio::spawn(
@@ -104,7 +106,7 @@ impl NodeActor {
     }
 
     async fn exit_gracefully(self) -> ! {
-        let timeout = self.supervisor_spec.abort_timeout;
+        let timeout = self.supervisor_spec.cfg().abort_timeout;
 
         tokio::select! {
             exit = self.supervisor_child.shutdown_abort(timeout) => {

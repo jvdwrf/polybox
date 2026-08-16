@@ -1,20 +1,20 @@
 use super::*;
 
-pub trait RepeatSpawn {
+pub trait SpawnOn {
     type Inbox: ChannelKind;
     type Exit: Send + 'static;
 
-    fn spawn_with_data(
+    fn spawn_on(
         &self,
         data: Channel<Self::Inbox>,
     ) -> Result<Child<Self::Exit, Self::Inbox>, SpawnError>;
 }
 
-impl<T: Blueprint> RepeatSpawn for T {
+impl<T: Blueprint> SpawnOn for T {
     type Inbox = <T::Actor as Actor>::Interface;
     type Exit = <T::Actor as Actor>::Exit;
 
-    fn spawn_with_data(
+    fn spawn_on(
         &self,
         data: Channel<Self::Inbox>,
     ) -> Result<Child<Self::Exit, Self::Inbox>, SpawnError> {
@@ -24,14 +24,14 @@ impl<T: Blueprint> RepeatSpawn for T {
 }
 
 #[derive(Debug, Clone)]
-pub struct DynRepeatSpawner(Arc<dyn RepeatSpawnDyn + Send + Sync + 'static>);
+pub struct DynRepeatSpawner(Arc<dyn SpawnOnDyn + Send + Sync + 'static>);
 
-trait RepeatSpawnDyn: Debug {
-    fn spawn_dyn_with_data(&self, data: &Channel) -> Result<Child, SpawnError>;
+trait SpawnOnDyn: Debug {
+    fn spawn_on_dyn(&self, data: &Channel) -> Result<Child, SpawnError>;
 }
 
-impl<R: Blueprint> RepeatSpawnDyn for R {
-    fn spawn_dyn_with_data(&self, data: &Channel) -> Result<Child, SpawnError> {
+impl<R: Blueprint> SpawnOnDyn for R {
+    fn spawn_on_dyn(&self, data: &Channel) -> Result<Child, SpawnError> {
         let runner = self.instantiate().map(|res| res.map(std::mem::forget));
 
         data.downcast_ref::<<R::Actor as Actor>::Interface>()
@@ -42,15 +42,15 @@ impl<R: Blueprint> RepeatSpawnDyn for R {
     }
 }
 
-impl RepeatSpawn for DynRepeatSpawner {
+impl SpawnOn for DynRepeatSpawner {
     type Inbox = Set!();
     type Exit = ();
 
-    fn spawn_with_data(
+    fn spawn_on(
         &self,
         data: Channel<Self::Inbox>,
     ) -> Result<Child<Self::Exit, Self::Inbox>, SpawnError> {
-        self.0.spawn_dyn_with_data(&data)
+        self.0.spawn_on_dyn(&data)
     }
 }
 

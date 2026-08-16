@@ -84,7 +84,7 @@ async fn main() -> Result<(), Report> {
     let mut supervisor_a = Supervisor::blueprint();
 
     let actor_a = supervisor_a
-        .add_child(ChildSpec::new("HelloActor", MyActor::new("A")).mode(RestartMode::Never));
+        .add_child(ChildSpec::new("HelloActor", MyActor::new("A")).with_mode(RestartMode::Never));
     let actor_b = supervisor_a.add_child(ChildSpec::new("HelloActor2", MyActor::new("B")));
 
     let mut supervisor_b = Supervisor::blueprint();

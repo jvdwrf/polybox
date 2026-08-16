@@ -12,6 +12,10 @@ pub trait Blueprint: Debug + Send + Sync + 'static {
     fn default_init_timeout(&self) -> Duration {
         Duration::from_millis(5_000)
     }
+
+    fn default_restart_mode(&self) -> RestartMode {
+        RestartMode::OnError
+    }
 }
 
 impl<T: Actor + Clone + Debug + Send + Sync + 'static> Blueprint for T {
@@ -38,6 +42,10 @@ pub trait BlueprintExt: Blueprint + Sized {
         Self: Send + Sync + 'static,
     {
         self.instantiate().spawn(pid)
+    }
+
+    fn default_cfg(&self) -> SuperviseeConfig {
+        SuperviseeConfig::for_blueprint(self)
     }
 }
 impl<T: Blueprint> BlueprintExt for T {}
