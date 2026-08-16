@@ -280,7 +280,7 @@ pub enum SignalKind {
 
 #[derive(Debug)]
 pub enum Event<M> {
-    Signal(SignalInterface),
+    Signal(SignalEvent),
     Message(M),
 }
 
@@ -289,10 +289,4 @@ pub enum SignalEvent {
     GetState(Tx<DebugState>),
     GetChildren(Tx<Vec<ChildDescription>>),
     StatusUpdate(ActorStatus),
-}
-
-#[derive(Debug)]
-pub enum ActorEvent<M> {
-    Signal(SignalEvent),
-    Message(M),
 }

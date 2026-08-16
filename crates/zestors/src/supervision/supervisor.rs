@@ -366,11 +366,11 @@ impl Actor for Supervisor {
             };
 
             match msg {
-                ActorEvent::Signal(signal) => match signal {
+                Event::Signal(signal) => match signal {
                     SignalEvent::GetState(tx) => {
                         tx.send(DebugState {
                             status: state.status(),
-                            uptime: state.uptime(),
+                            uptime: state.uptime().unwrap_or_default(),
                             description: "Supervisor".to_string(),
                         })
                         .ok();
@@ -396,7 +396,7 @@ impl Actor for Supervisor {
                         ActorStatus::Suspended => (),
                     },
                 },
-                ActorEvent::Message(message) => match message {
+                Event::Message(message) => match message {
                     SupervisorInterface::RegisterChild(RegisterChild(spec)) => {
                         tracing::trace!("Registering child: {:?}", spec.pid());
                         self.add_dyn_child(spec);

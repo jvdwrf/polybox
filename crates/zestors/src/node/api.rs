@@ -66,7 +66,7 @@ impl Actor for ApiServer {
             };
 
             match event {
-                ActorEvent::Signal(signal) => match signal {
+                Event::Signal(signal) => match signal {
                     SignalEvent::GetState(tx) => {
                         let _ = tx.send(state.debug_state(&self));
                     }
@@ -79,7 +79,7 @@ impl Actor for ApiServer {
                         }
                     }
                 },
-                ActorEvent::Message(_infallible) => unreachable!(),
+                Event::Message(_infallible) => unreachable!(),
             }
         }
     }

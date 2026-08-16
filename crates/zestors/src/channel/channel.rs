@@ -7,8 +7,8 @@ use crate::{
     signals::{self, ActorStatus, Event},
 };
 use eyeball::SharedObservable;
-use std::{any::TypeId, marker::PhantomData};
-use tokio::select;
+use std::{any::TypeId, marker::PhantomData, sync::RwLock};
+use tokio::{select, time::Instant};
 use type_sets::{Contains, Set, TypeSet};
 
 const SIGNAL_QUEUE_CAPACITY: usize = 1_000_000;
@@ -23,17 +23,17 @@ impl<I: Interface> ChannelKind for I {
     type Set = <I as Interface>::Set;
 }
 
-impl<S: 'static> ChannelKind for Set<S>
+impl<S> ChannelKind for Set<S>
 where
-    Set<S>: TypeSet,
+    Set<S>: TypeSet + 'static,
 {
     type Set = Set<S>;
 }
 
 #[repr(transparent)]
-pub struct Channel<Q: ChannelKind = Set!()> {
+pub struct Channel<T: ChannelKind = Set!()> {
     pub(super) inner: Arc<ChannelInner<dyn IsDynQueue>>,
-    _marker: PhantomData<fn() -> Q>,
+    _marker: PhantomData<fn() -> T>,
 }
 
 pub(crate) struct ChannelInner<Q: ?Sized> {
@@ -43,6 +43,8 @@ pub(crate) struct ChannelInner<Q: ?Sized> {
     status_observer: SharedObservable<ActorStatus>,
     msg_notifier: Notify,
     msg_backpressure_limit: usize,
+    created_at: Instant,
+    spawned_at: RwLock<Vec<Instant>>,
     msg_queue: Q,
 }
 
@@ -66,12 +68,19 @@ impl<T: ChannelKind> Channel<T> {
             signal_notifier: Notify::new(),
             status_observer: SharedObservable::new(ActorStatus::Exiting),
             msg_queue: ConcurrentQueue::<T>::new(MSG_QUEUE_CAPACITY),
+            created_at: Instant::now(),
+            spawned_at: Default::default(),
         });
 
         Channel {
             inner,
             _marker: PhantomData,
         }
+    }
+
+    fn add_spawned_now(&self) {
+        let mut spawned_at = self.inner.spawned_at.write().unwrap();
+        spawned_at.push(Instant::now());
     }
 
     pub fn spawn<R, F>(self, f: impl FnOnce(ActorState<T>) -> F) -> Child<R, T>
@@ -117,6 +126,7 @@ impl<T: ChannelKind> Channel<T> {
             }
         });
 
+        this.add_spawned_now();
         Child::new(handle, Address::new(this))
     }
 
@@ -438,6 +448,20 @@ impl<Q: ChannelKind> ActorRef for Channel<Q> {
             }
         }
     }
+
+    fn created_at(&self) -> Instant {
+        self.inner.created_at
+    }
+
+    fn spawned_at(&self) -> Vec<Instant> {
+        let spawned_at = self.inner.spawned_at.read().unwrap();
+        spawned_at.clone()
+    }
+
+    fn last_spawned_at(&self) -> Option<Instant> {
+        let spawned_at = self.inner.spawned_at.read().unwrap();
+        spawned_at.last().cloned()
+    }
 }
 
 impl<Q: ChannelKind> IntoDyn for Channel<Q> {
@@ -493,7 +517,7 @@ impl<I: Interface> Channel<I> {
         raw_queue.pop().ok()
     }
 
-    pub(crate) async fn recv_signal(&self) -> Option<SignalInterface> {
+    pub(crate) async fn recv_signal(&self) -> Option<SignalEvent> {
         let mut notify = pin!(self.inner.signal_notifier.notified());
 
         loop {
@@ -509,13 +533,57 @@ impl<I: Interface> Channel<I> {
         }
     }
 
-    pub(crate) fn pop_signal(&self) -> Option<SignalInterface> {
-        match self.inner.signal_queue.pop() {
-            Ok(signal) => Some(signal),
-            Err(e) => match e {
-                PopError::Empty => None,
-                PopError::Closed => unreachable!("Queue should never be closed"),
-            },
+    pub(crate) fn pop_signal(&self) -> Option<SignalEvent> {
+        loop {
+            match self.inner.signal_queue.pop() {
+                Ok(signal) => match self.handle_signal(signal) {
+                    Some(event) => return Some(event),
+                    None => continue,
+                },
+                Err(e) => {
+                    return match e {
+                        PopError::Empty => None,
+                        PopError::Closed => unreachable!("Queue should never be closed"),
+                    };
+                }
+            }
+        }
+    }
+
+    fn handle_signal(&self, signal: SignalInterface) -> Option<SignalEvent> {
+        match signal {
+            SignalInterface::Shutdown(_) => {
+                self.inner.status_observer.set(ActorStatus::Exiting);
+                Some(SignalEvent::StatusUpdate(ActorStatus::Exiting))
+            }
+            SignalInterface::Suspend(_) => {
+                if self.status() == ActorStatus::Exiting {
+                    tracing::warn!("Actor is exiting, cannot suspend");
+                    None
+                } else {
+                    self.inner.status_observer.set(ActorStatus::Suspended);
+                    Some(SignalEvent::StatusUpdate(ActorStatus::Suspended))
+                }
+            }
+            SignalInterface::Resume(_) => {
+                if self.status() != ActorStatus::Suspended {
+                    tracing::warn!("Actor is not suspended, cannot resume");
+                    None
+                } else {
+                    self.inner.status_observer.set(ActorStatus::Running);
+                    Some(SignalEvent::StatusUpdate(ActorStatus::Running))
+                }
+            }
+            SignalInterface::GetState((_, tx)) => Some(SignalEvent::GetState(tx)),
+            SignalInterface::GetChildren((_, tx)) => Some(SignalEvent::GetChildren(tx)),
+            SignalInterface::GetStatus((_, tx)) => {
+                let _ = tx.send(self.status());
+                None
+            }
+            SignalInterface::Ping((_, tx)) => {
+                let _ = tx.send(());
+                None
+            }
         }
     }
 

@@ -5,6 +5,7 @@ use crate::{
     signals::{ActorStatus, ChildDescription, DebugState},
 };
 use std::{any::TypeId, future::Future};
+use tokio::time::Instant;
 use type_sets::{SubsetOf, TypeSet};
 
 /// Provides message-sending operations for a channel.
@@ -110,6 +111,12 @@ pub trait ActorRef {
     fn ping(&self) -> Rx<()>;
     fn get_children(&self) -> Rx<Vec<ChildDescription>>;
     fn address(&self) -> &Address<Self::QueueType>;
+    fn created_at(&self) -> Instant;
+    fn last_spawned_at(&self) -> Option<Instant>;
+    fn spawned_at(&self) -> Vec<Instant>;
+    fn uptime(&self) -> Option<Duration> {
+        self.last_spawned_at().map(|instant| instant.elapsed())
+    }
 }
 
 pub trait AsActorRef {
@@ -203,6 +210,22 @@ impl<T: AsActorRef> ActorRef for T {
 
     fn watch_exit(&self) -> impl Future<Output = ()> + Send {
         self.as_channel().watch_exit()
+    }
+
+    fn created_at(&self) -> Instant {
+        self.as_channel().created_at()
+    }
+
+    fn spawned_at(&self) -> Vec<Instant> {
+        self.as_channel().spawned_at()
+    }
+
+    fn uptime(&self) -> Option<Duration> {
+        self.as_channel().uptime()
+    }
+
+    fn last_spawned_at(&self) -> Option<Instant> {
+        self.as_channel().last_spawned_at()
     }
 }
 

@@ -14,10 +14,6 @@ impl<H: Handler> HandlerState<H> {
         Self { inner }
     }
 
-    pub fn uptime(&self) -> std::time::Duration {
-        self.inner.uptime()
-    }
-
     pub async fn run(&mut self, handler: &mut H) -> Result<H::Exit, H::Error>
     where
         H: Handler + Debug,
@@ -78,7 +74,7 @@ impl<H: Handler> HandlerState<H> {
         };
 
         match msg {
-            ActorEvent::Signal(signal) => match signal {
+            Event::Signal(signal) => match signal {
                 SignalEvent::StatusUpdate(status) => match status {
                     ActorStatus::Running => {
                         handler.on_resume().await?;
@@ -94,7 +90,7 @@ impl<H: Handler> HandlerState<H> {
                 SignalEvent::GetState(tx) => {
                     let _ = tx.send(signals::DebugState {
                         status: state.status(),
-                        uptime: state.uptime(),
+                        uptime: state.uptime().unwrap_or_default(),
                         description: handler.debug_state(),
                     });
                 }
@@ -104,7 +100,7 @@ impl<H: Handler> HandlerState<H> {
                 }
             },
 
-            ActorEvent::Message(msg) => {
+            Event::Message(msg) => {
                 msg.handle_with(self, handler).await?;
             }
         }

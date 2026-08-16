@@ -1,87 +1,24 @@
 use crate::_prelude::*;
 
 pub struct ActorState<I: Interface> {
-    status: ActorStatus,
-    shutdown_at: Option<tokio::time::Instant>,
-    start_time: tokio::time::Instant,
     stream: EventStream<I>,
 }
 
 impl<I: Interface> ActorState<I> {
     pub(crate) fn new(stream: EventStream<I>) -> Self {
-        Self {
-            status: ActorStatus::Running,
-            start_time: tokio::time::Instant::now(),
-            stream,
-            shutdown_at: None,
-        }
-    }
-
-    pub fn status(&self) -> ActorStatus {
-        self.status
-    }
-
-    pub fn uptime(&self) -> std::time::Duration {
-        self.start_time.elapsed()
+        Self { stream }
     }
 
     pub fn debug_state(&self, actor: impl Debug) -> DebugState {
         DebugState {
-            status: self.status,
-            uptime: self.uptime(),
+            status: self.status(),
+            uptime: self.uptime().unwrap_or_default(),
             description: format!("{actor:?}"),
         }
     }
 
-    pub async fn next(&mut self) -> Option<ActorEvent<I>> {
-        loop {
-            match self.stream.recv().await? {
-                Event::Message(msg) => break Some(ActorEvent::Message(msg)),
-                Event::Signal(signal) => match signal {
-                    SignalInterface::Shutdown(_) => {
-                        self.status = ActorStatus::Exiting;
-                        if self.shutdown_at.is_none() {
-                            self.shutdown_at = Some(tokio::time::Instant::now());
-                        }
-                        break Some(ActorEvent::Signal(SignalEvent::StatusUpdate(
-                            ActorStatus::Exiting,
-                        )));
-                    }
-                    SignalInterface::Suspend(_) => {
-                        if self.status.should_exit() {
-                            tracing::warn!("Actor is exiting, cannot suspend");
-                            break None;
-                        }
-                        self.status = ActorStatus::Suspended;
-                        break Some(ActorEvent::Signal(SignalEvent::StatusUpdate(
-                            ActorStatus::Suspended,
-                        )));
-                    }
-                    SignalInterface::Resume(_) => {
-                        if self.status != ActorStatus::Suspended {
-                            tracing::warn!("Actor is not suspended, cannot resume");
-                            break None;
-                        }
-                        self.status = ActorStatus::Running;
-                        break Some(ActorEvent::Signal(SignalEvent::StatusUpdate(
-                            ActorStatus::Running,
-                        )));
-                    }
-                    SignalInterface::GetState((_, tx)) => {
-                        break Some(ActorEvent::Signal(SignalEvent::GetState(tx)));
-                    }
-                    SignalInterface::GetChildren((_, tx)) => {
-                        break Some(ActorEvent::Signal(SignalEvent::GetChildren(tx)));
-                    }
-                    SignalInterface::GetStatus((_, tx)) => {
-                        let _ = tx.send(self.status);
-                    }
-                    SignalInterface::Ping((_, tx)) => {
-                        let _ = tx.send(());
-                    }
-                },
-            }
-        }
+    pub async fn next(&mut self) -> Option<Event<I>> {
+        self.stream.recv().await
     }
 }
 

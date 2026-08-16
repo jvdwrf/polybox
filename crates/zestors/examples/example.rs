@@ -6,7 +6,7 @@ use zestors::{
     handler::{self, Handle, HandledBy, Handler, HandlerState},
     polybox::Payload,
     registry::Pid,
-    signals::{self, ActorEvent, Event, Shutdown, SignalInterface},
+    signals::{self, Event, Shutdown, SignalInterface},
     spawn,
     supervision::{ActorRunnerExt as _, ActorState},
 };
@@ -18,8 +18,8 @@ async fn main() {
         async move |mut stream: ActorState<MyInterface>| {
             while let Some(msg) = stream.next().await {
                 match msg {
-                    ActorEvent::Signal(signal) => todo!(),
-                    ActorEvent::Message(message) => match message {
+                    Event::Signal(signal) => todo!(),
+                    Event::Message(message) => match message {
                         MyInterface::Add(payload) => {
                             println!("Received message: {:?}", payload);
                         }
