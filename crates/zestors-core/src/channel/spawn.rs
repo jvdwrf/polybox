@@ -57,6 +57,7 @@ struct AbortBomb<'a, T: ChannelKind> {
 
 impl<'a, T: ChannelKind> Drop for AbortBomb<'a, T> {
     fn drop(&mut self) {
+        tracing::debug!("AbortBomb triggered for channel {}", self.channel.pid());
         if !self.channel.status().is_dead() {
             self.channel.register_exit(Err(ExitError::Abort));
         }

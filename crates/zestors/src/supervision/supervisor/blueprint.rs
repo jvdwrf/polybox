@@ -102,10 +102,10 @@ impl Blueprint for SupervisorBlueprint {
     }
 
     fn default_abort_timeout(&self) -> Duration {
-        Duration::from_millis(120_000)
+        Duration::from_mins(5)
     }
 
     fn default_init_timeout(&self) -> Duration {
-        Duration::from_millis(120_000)
+        Duration::from_mins(5)
     }
 }

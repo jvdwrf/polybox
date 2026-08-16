@@ -89,9 +89,17 @@ impl Supervisor {
     fn spawn_supervisee(supervisee: &mut Supervisee, registry: &Registry) -> Result<(), Report> {
         // We only have to add the children to the registry the first time they are spawned,
         // since it will persist across restarts.
-        let child = supervisee.spec.spawn()?;
+        let child = supervisee.spec.spawn().attach(format!(
+            "Failed to spawn supervisee {}",
+            supervisee.spec.pid()
+        ))?;
         supervisee.child = Some(child);
-        registry.register(supervisee.address().clone())?;
+        registry
+            .register(supervisee.address().clone())
+            .attach(format!(
+                "Failed to register supervisee {}",
+                supervisee.spec.pid()
+            ))?;
         Ok(())
     }
 
@@ -119,7 +127,7 @@ impl Supervisor {
                         tracing::info!("Child {id} exited successfully. (mode: {mode:?})");
                     }
                     Err(e) => {
-                        tracing::warn!("Child {id} exited with error: {e:?}. (mode: {mode:?})",);
+                        tracing::warn!(error = ?e, "Child {id} exited with error. (mode: {mode:?})");
                     }
                 };
 
@@ -153,7 +161,7 @@ impl Supervisor {
 
     async fn restart_children<'a>(supervisees: &mut [&mut Supervisee]) {
         // First, shutdown all affected children
-        let _ = shutdown_supervisees(supervisees).await;
+        shutdown_supervisees(supervisees).await;
 
         // Now restart all affected children
         for supervisee in supervisees {
@@ -254,11 +262,34 @@ impl Actor for Supervisor {
 
     async fn run(mut self, mut stream: EventStream<Self::Interface>) -> Result<Self::Exit, Report> {
         for supervisee in self.supervisees.values_mut() {
-            Self::spawn_supervisee(supervisee, &self.registry)?;
+            if let Err(e) = Self::spawn_supervisee(supervisee, &self.registry) {
+                tracing::error!(error = ?e, "Failed to spawn supervisee: {}", supervisee.spec.pid());
+
+                return Err(report!(
+                    "Supervisor failed to spawn supervisee: {}",
+                    supervisee.spec.pid()
+                ));
+            }
+
+            tracing::debug!("Spawned supervisee: {}", supervisee.spec.pid());
         }
 
-        self.wait_for_children().await?;
-        tracing::debug!("All children started successfully");
+        if let Err(e) = self.wait_for_children().await {
+            tracing::error!(error = ?e,"Failed to initialize all children. Supervisor will now shutdown all children and exit.");
+
+            self.shutdown().await;
+
+            return Err(report!("Supervisor failed to initialize all children."));
+        }
+
+        tracing::info!(
+            "Supervisor started successfully with children: {}",
+            self.supervisees
+                .keys()
+                .map(|pid| pid.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
 
         loop {
             let msg = tokio::select! {
@@ -330,9 +361,27 @@ async fn shutdown_supervisees<'a>(supervisees: &mut [&'a mut Supervisee]) {
     let futures = supervisees
         .iter_mut()
         .filter_map(|supervisee| supervisee.child.take().map(|s| (s, &supervisee.spec)))
-        .map(|(child, spec)| child.shutdown_abort(spec.cfg().abort_timeout));
+        .map(|(child, spec)| async move {
+            child
+                .shutdown_abort(spec.cfg().abort_timeout)
+                .await
+                .attach(format!(
+                    "Child {} failed to shut down within {:?}",
+                    spec.pid(),
+                    spec.cfg().abort_timeout
+                ))
+        });
 
-    let _results = join_all(futures).await;
+    let res: Result<(), Report> = join_all(futures)
+        .await
+        .into_iter()
+        .collect_reports()
+        .context("One or more children failed to shut down within the specified timeout")
+        .map_err(Into::into);
+
+    if let Err(e) = res {
+        tracing::error!(error = ?e, "Abnormal shutdown of children");
+    }
 }
 
 #[derive(Debug)]
