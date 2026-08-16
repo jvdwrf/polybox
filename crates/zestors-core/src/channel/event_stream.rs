@@ -6,7 +6,7 @@ use crate::_prelude::*;
 #[error("Failed to spawn process: {0}")]
 pub enum SpawnError {
     #[error("There is already an active process running on this channel.")]
-    ActiveProcess,
+    DoubleSpawn,
 }
 
 #[derive(Debug)]
@@ -18,11 +18,8 @@ pub struct EventStream<T: Interface> {
 impl<T: Interface> EventStream<T> {
     pub(crate) fn try_new(channel: Channel<T>) -> Result<Self, SpawnError> {
         if !channel.status().is_dead() {
-            return Err(SpawnError::ActiveProcess);
+            return Err(SpawnError::DoubleSpawn);
         }
-
-        channel.set_status(ActorStatus::Initializing);
-        channel.add_spawned_now();
 
         Ok(Self {
             channel,
@@ -35,7 +32,7 @@ impl<T: Interface> EventStream<T> {
         if self.initializing {
             debug_assert!(self.status().is_initializing());
             self.initializing = false;
-            self.channel.set_status(ActorStatus::Running);
+            self.channel.register_start();
         }
 
         self.channel.next().await

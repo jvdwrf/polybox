@@ -9,6 +9,7 @@ use eyeball::SharedObservable;
 use futures::FutureExt as _;
 use std::{any::TypeId, fmt::Debug, marker::PhantomData, panic::AssertUnwindSafe, sync::RwLock};
 use tokio::{select, time::Instant};
+use tracing::instrument;
 use type_sets::{Contains, Set, TypeSet};
 
 const SIGNAL_QUEUE_CAPACITY: usize = 1_000_000;
@@ -75,7 +76,13 @@ impl<T: ChannelKind> Channel<T> {
         }
     }
 
-    pub(super) fn add_spawned_now(&self) {
+    pub(super) fn set_status(&self, status: ActorStatus) {
+        self.inner.status_observer.set(status);
+    }
+
+    pub(super) fn register_spawn(&self) {
+        tracing::debug!("Process initializing");
+
         let mut spawned_at = self.inner.spawns.write().unwrap();
 
         if spawned_at.len() > KEEP_N_SPAWNS {
@@ -83,9 +90,15 @@ impl<T: ChannelKind> Channel<T> {
         }
 
         spawned_at.push(Instant::now());
+        self.set_status(ActorStatus::Initializing);
     }
 
-    pub(super) fn add_exited_now(&self, reason: Result<(), ExitError>) {
+    pub(super) fn register_exit(&self, reason: Result<(), ExitError>) {
+        match &reason {
+            Ok(()) => tracing::debug!("Process exited normally"),
+            Err(err) => tracing::error!("Process exited with error: {:?}", err),
+        }
+
         let mut exited_at = self.inner.exits.write().unwrap();
 
         if exited_at.len() > KEEP_N_EXITS {
@@ -93,6 +106,27 @@ impl<T: ChannelKind> Channel<T> {
         }
 
         exited_at.push((Instant::now(), reason));
+        self.set_status(ActorStatus::Dead(reason.err()));
+    }
+
+    pub(super) fn register_start(&self) {
+        tracing::debug!("Process started");
+        self.set_status(ActorStatus::Running);
+    }
+
+    pub(super) fn register_suspend(&self) {
+        tracing::debug!("Process suspended");
+        self.set_status(ActorStatus::Suspended);
+    }
+
+    pub(super) fn register_resume(&self) {
+        tracing::debug!("Process resumed");
+        self.set_status(ActorStatus::Running);
+    }
+
+    pub(super) fn register_shutdown(&self) {
+        tracing::debug!("Process shutting down");
+        self.set_status(ActorStatus::Exiting);
     }
 
     pub(super) fn raw_queue(&self) -> Option<&ConcurrentQueue<T>>
@@ -117,29 +151,21 @@ impl<T: ChannelKind> Channel<T> {
         unsafe { &*(&self.inner.msg_queue as *const dyn IsDynQueue as *const ConcurrentQueue<T>) }
     }
 
-    pub(crate) fn update_status(&self, f: impl FnOnce(ActorStatus) -> Option<ActorStatus>) {
-        self.inner.status_observer.update_if(|status| {
-            let new_status = f(status.clone());
+    // fn update_status(&self, f: impl FnOnce(ActorStatus) -> Option<ActorStatus>) {
+    //     self.inner.status_observer.update_if(|status| {
+    //         let new_status = f(status.clone());
 
-            if let Some(new_status) = new_status {
-                *status = new_status;
-                true
-            } else {
-                false
-            }
-        });
-    }
+    //         if let Some(new_status) = new_status {
+    //             *status = new_status;
+    //             true
+    //         } else {
+    //             false
+    //         }
+    //     });
 
-    pub(crate) fn set_status(&self, status: ActorStatus) {
-        self.inner.status_observer.set(status);
-
-        if !status.accepts_messages() {
-            self.inner.msg_notifier.notify_waiters();
-        }
-    }
-
-    // pub(super) fn is_open(&self) -> bool {
-    //     self.inner.status_observer.read().accepts_messages()
+    //     if !self.status().accepts_messages() {
+    //         self.inner.msg_notifier.notify_waiters();
+    //     }
     // }
 
     pub(super) fn backpressure(&self) -> &BackPressure {
@@ -244,7 +270,7 @@ impl<I: Interface> Channel<I> {
     fn handle_signal(&self, signal: SignalInterface) -> Option<SignalEvent> {
         match signal {
             SignalInterface::Shutdown(_) => {
-                self.inner.status_observer.set(ActorStatus::Exiting);
+                self.register_shutdown();
                 Some(SignalEvent::StatusUpdate(StatusUpdateEvent::Shutdown))
             }
             SignalInterface::Suspend(_) => {
@@ -252,7 +278,7 @@ impl<I: Interface> Channel<I> {
                     tracing::warn!("Actor is exiting, cannot suspend");
                     None
                 } else {
-                    self.inner.status_observer.set(ActorStatus::Suspended);
+                    self.register_suspend();
                     Some(SignalEvent::StatusUpdate(StatusUpdateEvent::Suspend))
                 }
             }
@@ -261,7 +287,7 @@ impl<I: Interface> Channel<I> {
                     tracing::warn!("Actor is not suspended, cannot resume");
                     None
                 } else {
-                    self.inner.status_observer.set(ActorStatus::Running);
+                    self.register_resume();
                     Some(SignalEvent::StatusUpdate(StatusUpdateEvent::Resume))
                 }
             }
