@@ -56,7 +56,7 @@ impl<T: ChannelKind> Channel<T> {
             msg_backpressure_limit: BACKPRESSURE_LIMIT,
             signal_queue: ConcurrentQueue::bounded(SIGNAL_QUEUE_CAPACITY),
             signal_notifier: Notify::new(),
-            status_observer: SharedObservable::new(ActorStatus::Dead(None)),
+            status_observer: SharedObservable::new(ActorStatus::Dead(Exit::Normal)),
             msg_queue: ConcurrentQueue::<T>::new(MSG_QUEUE_CAPACITY),
             created_at: Instant::now(),
             spawns: Default::default(),
@@ -99,7 +99,7 @@ impl<T: ChannelKind> Channel<T> {
         }
 
         exited_at.push((Instant::now(), reason));
-        self.set_status(ActorStatus::Dead(reason.err()));
+        self.set_status(ActorStatus::Dead(Exit::from_result(reason)));
     }
 
     pub(super) fn register_start(&self) {
@@ -536,18 +536,27 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
         self.inner.msg_queue.len()
     }
 
-    async fn watch_start(&self) {
+    async fn watch_initialization(&self) -> Result<(), Exit> {
         loop {
             let mut subscriber = self.inner.status_observer.subscribe();
             let status = self.status();
 
-            if status == ActorStatus::Running {
-                return;
+            match status {
+                ActorStatus::Running => return Ok(()),
+                ActorStatus::Dead(exit) => {
+                    return Err(exit);
+                }
+                _ => {}
             }
 
             let status = subscriber.next().await;
-            if status == Some(ActorStatus::Running) {
-                return;
+
+            match status {
+                Some(ActorStatus::Running) => return Ok(()),
+                Some(ActorStatus::Dead(exit)) => {
+                    return Err(exit);
+                }
+                _ => {}
             }
         }
     }
@@ -557,20 +566,14 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
             let mut subscriber = self.inner.status_observer.subscribe();
             let status = self.status();
 
-            if let ActorStatus::Dead(opt_error) = status {
-                return match opt_error {
-                    Some(err) => Err(err),
-                    None => Ok(()),
-                };
+            if let ActorStatus::Dead(exit) = status {
+                return exit.into_result();
             }
 
             let status = subscriber.next().await;
 
-            if let Some(ActorStatus::Dead(opt_error)) = status {
-                return match opt_error {
-                    Some(err) => Err(err),
-                    None => Ok(()),
-                };
+            if let Some(ActorStatus::Dead(exit)) = status {
+                return exit.into_result();
             }
         }
     }

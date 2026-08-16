@@ -151,7 +151,7 @@ mod tests {
         async fn exit(
             &mut self,
             _address: &Address<Self::Interface>,
-            _reason: ExitReason,
+            _reason: ShutdownReason,
         ) -> Result<Self::Exit, Self::Error> {
             Ok(())
         }

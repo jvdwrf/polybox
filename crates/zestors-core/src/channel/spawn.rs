@@ -19,10 +19,10 @@ impl<T: ChannelKind> Channel<T> {
             let stream = EventStream::try_new(this.clone())?;
             let span = tracing::debug_span!("process", pid = %this.pid());
             let future = AssertUnwindSafe(spawn_fn(stream)).catch_unwind();
+            this.register_spawn();
 
             async move {
-                this.register_spawn();
-                let bomb = AbortBomb { channel: &this };
+                let mut bomb = AbortBomb::new(&this);
 
                 let res = match future.await {
                     Ok(val) => {
@@ -49,24 +49,34 @@ impl<T: ChannelKind> Channel<T> {
     }
 }
 
-/// Makes sure that the channel is marked as exited with an `Abort` error
-/// if the spawned task is aborted before it finishes executing.
 struct AbortBomb<'a, T: ChannelKind> {
     channel: &'a Channel<T>,
+    armed: bool,
+}
+
+impl<'a, T: ChannelKind> AbortBomb<'a, T> {
+    fn new(channel: &'a Channel<T>) -> Self {
+        Self {
+            channel,
+            armed: true,
+        }
+    }
+
+    fn defuse(&mut self) {
+        self.armed = false;
+    }
 }
 
 impl<'a, T: ChannelKind> Drop for AbortBomb<'a, T> {
     fn drop(&mut self) {
-        tracing::debug!("AbortBomb triggered for channel {}", self.channel.pid());
+        if !self.armed {
+            return;
+        }
+
+        tracing::debug!("AbortBomb triggered");
+
         if !self.channel.status().is_dead() {
             self.channel.register_exit(Err(ExitError::Abort));
         }
-    }
-}
-
-impl<'a, T: ChannelKind> AbortBomb<'a, T> {
-    fn defuse(self) -> &'a Channel<T> {
-        let Self { channel } = self;
-        channel
     }
 }

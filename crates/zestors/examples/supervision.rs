@@ -1,9 +1,12 @@
-use futures::join;
-use rootcause::Report;
+use futures::{future::join_all, join};
+use rootcause::{
+    Report,
+    prelude::{IteratorExt as _, ResultExt},
+};
 use std::time::Duration;
 use zestors::{
     HandlerInterface,
-    handler::{ExitReason, Handle, Handler, HandlerState},
+    handler::{Handle, Handler, HandlerState, ShutdownReason},
     node::{ApiConfig, Node},
     prelude::*,
     signals::RestartMode,
@@ -40,7 +43,7 @@ impl Handler for MyActor {
     async fn exit(
         &mut self,
         _address: &Address<Self::Interface>,
-        _reason: ExitReason,
+        _reason: ShutdownReason,
     ) -> Result<Self::Exit, Self::Error> {
         Ok(())
     }
@@ -108,12 +111,13 @@ async fn main() -> Result<(), Report> {
     })
     .start()?;
 
-    join!(
+    join_all([
         actor_a.watch_start(),
         actor_b.watch_start(),
         actor_c.watch_start(),
-        actor_d.watch_start()
-    );
+        actor_d.watch_start(),
+    ])
+    .await;
 
     tracing::info!("All actors started, sending messages...");
 

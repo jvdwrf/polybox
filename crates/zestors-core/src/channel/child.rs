@@ -74,25 +74,25 @@ impl<T, R: ChannelKind> Child<T, R> {
         self.attached
     }
 
-    pub async fn shutdown_abort(mut self, timeout: Duration) -> Result<T, JoinError> {
+    pub async fn shutdown_abort(mut self, timeout: Duration) -> Result<T, JoinAbortError> {
         self.address.signal_shutdown();
 
-        let timeout = tokio::time::sleep(timeout);
+        let sleep = tokio::time::sleep(timeout);
 
         tokio::select! {
             biased;
 
             exit_result = &mut self => {
-                return exit_result;
+                return exit_result.map_err(|err| err.into_aborted(false, timeout));
             }
 
-            _ = timeout => {
+            _ = sleep => {
                 tracing::warn!("Child did not exit within timeout. Aborting child.");
             }
         };
 
         self.abort();
-        self.await
+        self.await.map_err(|err| err.into_aborted(true, timeout))
     }
 }
 

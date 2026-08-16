@@ -2,7 +2,7 @@ use rootcause::Report;
 use std::time::Duration;
 use zestors::{
     HandlerInterface,
-    handler::{ExitReason, Handle, HandledBy, Handler, HandlerState},
+    handler::{ShutdownReason, Handle, HandledBy, Handler, HandlerState},
     prelude::*,
     signals::{DebugState, StatusUpdateEvent},
     spawn,
@@ -89,7 +89,7 @@ impl Handler for MyActor {
     async fn exit(
         &mut self,
         address: &Address<Self::Interface>,
-        reason: ExitReason,
+        reason: ShutdownReason,
     ) -> Result<Self::Exit, Self::Error> {
         println!("Exiting with reason: {:?}", reason);
         Ok(self.nr)

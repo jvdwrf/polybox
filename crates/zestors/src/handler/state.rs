@@ -54,7 +54,7 @@ impl<H: Handler> HandlerState<H> {
         if state.status().should_exit() && state.is_empty() {
             tracing::debug!("Actor is exiting due to status: {:?}", state.status());
             return handler
-                .exit(self.address(), ExitReason::Shutdown)
+                .exit(self.address(), ShutdownReason::Shutdown)
                 .await
                 .map(Some);
         }
@@ -75,7 +75,7 @@ impl<H: Handler> HandlerState<H> {
                 }
             }
 
-            else => return handler.exit(self.address(), ExitReason::Shutdown).await.map(Some),
+            else => return handler.exit(self.address(), ShutdownReason::Shutdown).await.map(Some),
         };
 
         match msg {
@@ -123,7 +123,7 @@ impl<H: Handler> AsActorRef for HandlerState<H> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum ExitReason {
+pub enum ShutdownReason {
     Shutdown,
     UnhandledError,
 }

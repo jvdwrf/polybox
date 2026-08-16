@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use super::*;
 use thiserror::Error;
 
@@ -144,6 +146,36 @@ pub enum ExitError {
     UnhandledError,
 }
 
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema, Copy, Error,
+)]
+pub enum Exit {
+    #[error("Actor exited normally")]
+    Normal,
+    #[error("Actor exited with error: {0}")]
+    Error(
+        #[from]
+        #[source]
+        ExitError,
+    ),
+}
+
+impl Exit {
+    pub fn from_result(result: Result<(), ExitError>) -> Self {
+        match result {
+            Ok(_) => Exit::Normal,
+            Err(err) => Exit::Error(err),
+        }
+    }
+
+    pub fn into_result(self) -> Result<(), ExitError> {
+        match self {
+            Exit::Normal => Ok(()),
+            Exit::Error(err) => Err(err),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Error)]
 #[error("Failed to spawn process: {0}")]
 pub enum SpawnError {
@@ -174,6 +206,43 @@ impl From<tokio::task::JoinError> for JoinError {
             JoinError::Panic
         } else {
             unreachable!("JoinError is neither cancelled nor panicked: {:?}", err)
+        }
+    }
+}
+
+impl From<JoinAbortError> for JoinError {
+    fn from(err: JoinAbortError) -> Self {
+        err.error
+    }
+}
+
+impl JoinError {
+    pub(super) fn into_aborted(self, aborted: bool, timeout: Duration) -> JoinAbortError {
+        JoinAbortError {
+            aborted,
+            timeout,
+            error: self,
+        }
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub struct JoinAbortError {
+    pub aborted: bool,
+    pub timeout: Duration,
+    pub error: JoinError,
+}
+
+impl Display for JoinAbortError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.aborted {
+            write!(
+                f,
+                "Child was aborted due to timeout of {:?}. Error: {}",
+                self.timeout, self.error
+            )
+        } else {
+            write!(f, "Child exited with error: {}", self.error)
         }
     }
 }

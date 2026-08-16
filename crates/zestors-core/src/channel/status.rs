@@ -6,7 +6,7 @@ pub enum ActorStatus {
     Running,
     Suspended,
     Exiting,
-    Dead(Option<ExitError>),
+    Dead(Exit),
 }
 
 impl ActorStatus {

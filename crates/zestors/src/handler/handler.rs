@@ -21,7 +21,7 @@ pub trait Handler: Debug + Sized + Send + Sync + 'static {
     fn exit(
         &mut self,
         _address: &Address<Self::Interface>,
-        reason: ExitReason,
+        reason: ShutdownReason,
     ) -> impl Future<Output = Result<Self::Exit, Self::Error>> + Send;
 
     /// Called when the actor encounters an error.

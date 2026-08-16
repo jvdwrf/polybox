@@ -176,9 +176,14 @@ impl Supervisor {
     async fn wait_for_children(&mut self) -> Result<(), Report> {
         let futures = self.supervisees.values().map(|supervisee| async move {
             tokio::select! {
-                () = supervisee.watch_start() => {
-                    Ok(())
+                exit = supervisee.watch_initialization() => {
+                    exit
+                        .attach_with(|| {
+                            format!("Child {} failed to start", supervisee.spec.pid())
+                        })
+                        .map_err(Into::into)
                 }
+
                 () = tokio::time::sleep(supervisee.spec.cfg().init_timeout) => {
                     Err(report!(
                         "Child {} failed to start within {:?}",
@@ -229,33 +234,6 @@ impl Supervisor {
     }
 }
 
-impl Stream for Supervisor {
-    type Item = ChildTermination;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        for (id, supervisee) in self.supervisees.iter_mut() {
-            if let Some(child) = &mut supervisee.child
-                && let Poll::Ready(exit) = child.poll_unpin(cx)
-            {
-                let reference = supervisee
-                    .child
-                    .take()
-                    .expect("reference should be present");
-
-                return Poll::Ready(Some(ChildTermination {
-                    id: id.clone(),
-                    exit,
-                    reference,
-                }));
-            }
-        }
-
-        Poll::Pending
-    }
-}
-
-impl Unpin for Supervisor {}
-
 impl Actor for Supervisor {
     type Interface = SupervisorInterface;
     type Exit = ();
@@ -278,8 +256,9 @@ impl Actor for Supervisor {
             tracing::error!(error = ?e,"Failed to initialize all children. Supervisor will now shutdown all children and exit.");
 
             self.shutdown().await;
+            tracing::debug!("Finished shutting down children after failed initialization.");
 
-            return Err(report!("Supervisor failed to initialize all children."));
+            return Err(report!("Failed to initialize children."));
         }
 
         tracing::info!(
@@ -357,6 +336,33 @@ impl Actor for Supervisor {
     }
 }
 
+impl Stream for Supervisor {
+    type Item = ChildTermination;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        for (id, supervisee) in self.supervisees.iter_mut() {
+            if let Some(child) = &mut supervisee.child
+                && let Poll::Ready(exit) = child.poll_unpin(cx)
+            {
+                let reference = supervisee
+                    .child
+                    .take()
+                    .expect("reference should be present");
+
+                return Poll::Ready(Some(ChildTermination {
+                    id: id.clone(),
+                    exit,
+                    reference,
+                }));
+            }
+        }
+
+        Poll::Pending
+    }
+}
+
+impl Unpin for Supervisor {}
+
 async fn shutdown_supervisees<'a>(supervisees: &mut [&'a mut Supervisee]) {
     let futures = supervisees
         .iter_mut()
@@ -365,11 +371,7 @@ async fn shutdown_supervisees<'a>(supervisees: &mut [&'a mut Supervisee]) {
             child
                 .shutdown_abort(spec.cfg().abort_timeout)
                 .await
-                .attach(format!(
-                    "Child {} failed to shut down within {:?}",
-                    spec.pid(),
-                    spec.cfg().abort_timeout
-                ))
+                .attach(spec.pid().clone())
         });
 
     let res: Result<(), Report> = join_all(futures)
