@@ -1,4 +1,4 @@
-use crate::{Interface, registry::Pid, signals::SignalInterface};
+use crate::_prelude::*;
 use concurrent_queue::{ConcurrentQueue, PopError, PushError};
 use std::time::Duration;
 use std::{pin::pin, sync::Arc};
@@ -21,9 +21,6 @@ pub use actor_ref::*;
 
 mod queue;
 pub use queue::*;
-
-mod sends;
-pub use sends::*;
 
 mod dyn_conv;
 pub use dyn_conv::*;

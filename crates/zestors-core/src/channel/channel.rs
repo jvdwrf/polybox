@@ -1,5 +1,4 @@
 use super::*;
-use crate::_prelude::*;
 use crate::{
     FromPayload, Message, MessageExt, Rx, TryIntoPayload,
     address::Address,
@@ -7,7 +6,8 @@ use crate::{
     signals::{self, ActorStatus, Event},
 };
 use eyeball::SharedObservable;
-use std::{any::TypeId, fmt::Debug, marker::PhantomData, sync::RwLock};
+use futures::FutureExt as _;
+use std::{any::TypeId, fmt::Debug, marker::PhantomData, panic::AssertUnwindSafe, sync::RwLock};
 use tokio::{select, time::Instant};
 use type_sets::{Contains, Set, TypeSet};
 
@@ -47,7 +47,7 @@ pub(crate) struct ChannelInner<Q: ?Sized> {
     msg_backpressure_limit: usize,
     created_at: Instant,
     spawns: RwLock<Vec<Instant>>,
-    exits: RwLock<Vec<(Instant, ExitReason)>>,
+    exits: RwLock<Vec<(Instant, ExitResult)>>,
     msg_queue: Q,
 }
 
@@ -92,7 +92,7 @@ impl<T: ChannelKind> Channel<T> {
         spawned_at.push(Instant::now());
     }
 
-    fn add_exited_now(&self, reason: ExitReason) {
+    fn add_exited_now(&self, reason: ExitResult) {
         let mut exited_at = self.inner.exits.write().unwrap();
 
         if exited_at.len() > KEEP_N_EXITS {
@@ -129,12 +129,12 @@ impl<T: ChannelKind> Channel<T> {
                         Ok(_) => {
                             tracing::debug!(pid = ?pid, "Process exited normally");
                             self.alert(ActorStatus::Exiting);
-                            self.add_exited_now(ExitReason::Shutdown);
+                            self.add_exited_now(Ok(()));
                         }
                         Err(_) => {
                             tracing::error!(pid = ?pid, "Process exited with error");
                             self.alert(ActorStatus::Exiting);
-                            self.add_exited_now(ExitReason::UnhandledError);
+                            self.add_exited_now(Err(ExitError::UnhandledError));
                         }
                     };
                     val
@@ -142,7 +142,7 @@ impl<T: ChannelKind> Channel<T> {
                 Err(boxed) => {
                     tracing::error!(pid = ?pid, "Process panicked");
                     self.alert(ActorStatus::Exiting);
-                    self.add_exited_now(ExitReason::UnhandledError);
+                    self.add_exited_now(Err(ExitError::Panic));
                     std::panic::resume_unwind(boxed);
                 }
             }
