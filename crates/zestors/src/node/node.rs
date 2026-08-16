@@ -48,7 +48,7 @@ impl Node {
             ));
         }
 
-        let supervisor_child = supervisor_spec.spawn();
+        let supervisor_child = supervisor_spec.spawn()?;
         let supervisor_address = supervisor_child.address().clone();
 
         Registry::local()
@@ -95,7 +95,7 @@ impl NodeActor {
                             "Root-Supervisor exited with error: {:?}. Restarting...",
                             err
                         );
-                        let new_supervisor_child = self.supervisor_spec.spawn();
+                        let new_supervisor_child = self.supervisor_spec.spawn().unwrap();
                         self.supervisor_child = new_supervisor_child;
                     }
                 }

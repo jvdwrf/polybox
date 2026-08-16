@@ -30,7 +30,7 @@ async fn main() {
                         SignalEvent::StatusUpdate(event) => match event {
                             StatusUpdateEvent::Resume => {}
                             StatusUpdateEvent::Suspend => {}
-                            StatusUpdateEvent::Exit => break,
+                            StatusUpdateEvent::Shutdown => break,
                         },
                     },
 

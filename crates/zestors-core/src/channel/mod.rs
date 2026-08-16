@@ -25,5 +25,11 @@ pub use dyn_conv::*;
 mod status;
 pub use status::*;
 
+mod spawn;
+pub use spawn::*;
+
+mod event_stream;
+pub use event_stream::*;
+
 #[cfg(test)]
 mod tests;

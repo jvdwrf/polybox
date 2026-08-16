@@ -60,11 +60,8 @@ impl<T: RepeatSpawn> ChildSpec<T> {
         self
     }
 
-    pub fn spawn(&self) -> Child<T::Exit, T::Inbox>
-    where
-        T: RepeatSpawn,
-    {
-        self.blueprint.spawn_with_data(&self.channel)
+    pub fn spawn(&self) -> Result<Child<T::Exit, T::Inbox>, SpawnError> {
+        self.blueprint.spawn_with_data(self.channel.clone())
     }
 }
 

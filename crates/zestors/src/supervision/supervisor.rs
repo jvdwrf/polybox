@@ -203,15 +203,13 @@ impl Supervisor {
         self
     }
 
-    fn spawn_supervisee(
-        supervisee: &mut Supervisee,
-        registry: &Registry,
-    ) -> Result<(), RegistryAddError> {
+    fn spawn_supervisee(supervisee: &mut Supervisee, registry: &Registry) -> Result<(), Report> {
         // We only have to add the children to the registry the first time they are spawned,
         // since it will persist across restarts.
-        let child = supervisee.spec.spawn();
+        let child = supervisee.spec.spawn()?;
         supervisee.child = Some(child);
-        registry.register(supervisee.spec.channel.address().clone())
+        registry.register(supervisee.spec.channel.address().clone())?;
+        Ok(())
     }
 
     async fn shutdown(&mut self) {
@@ -276,7 +274,10 @@ impl Supervisor {
 
         // Now restart all affected children
         for supervisee in supervisees {
-            let child = supervisee.spec.spawn();
+            let child = supervisee
+                .spec
+                .spawn()
+                .expect("Children should all be shut-down now");
             supervisee.child = Some(child);
         }
     }
@@ -388,7 +389,7 @@ impl Actor for Supervisor {
                         tx.send(children).ok();
                     }
                     SignalEvent::StatusUpdate(status) => match status {
-                        StatusUpdateEvent::Exit => {
+                        StatusUpdateEvent::Shutdown => {
                             self.shutdown().await;
                             break;
                         }

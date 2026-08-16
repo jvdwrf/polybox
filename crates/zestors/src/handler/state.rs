@@ -82,7 +82,7 @@ impl<H: Handler> HandlerState<H> {
                     StatusUpdateEvent::Suspend => {
                         handler.on_suspend().await?;
                     }
-                    StatusUpdateEvent::Exit => {
+                    StatusUpdateEvent::Shutdown => {
                         handler.on_shutdown().await?;
                     }
                 },

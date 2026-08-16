@@ -62,7 +62,7 @@ impl<T: ChannelKind> Channel<T> {
             msg_backpressure_limit: BACKPRESSURE_LIMIT,
             signal_queue: ConcurrentQueue::bounded(SIGNAL_QUEUE_CAPACITY),
             signal_notifier: Notify::new(),
-            status_observer: SharedObservable::new(ActorStatus::Initializing),
+            status_observer: SharedObservable::new(ActorStatus::Dead(None)),
             msg_queue: ConcurrentQueue::<T>::new(MSG_QUEUE_CAPACITY),
             created_at: Instant::now(),
             spawns: Default::default(),
@@ -75,7 +75,7 @@ impl<T: ChannelKind> Channel<T> {
         }
     }
 
-    fn add_spawned_now(&self) {
+    pub(super) fn add_spawned_now(&self) {
         let mut spawned_at = self.inner.spawns.write().unwrap();
 
         if spawned_at.len() > KEEP_N_SPAWNS {
@@ -85,7 +85,7 @@ impl<T: ChannelKind> Channel<T> {
         spawned_at.push(Instant::now());
     }
 
-    fn add_exited_now(&self, reason: Result<(), ExitError>) {
+    pub(super) fn add_exited_now(&self, reason: Result<(), ExitError>) {
         let mut exited_at = self.inner.exits.write().unwrap();
 
         if exited_at.len() > KEEP_N_EXITS {
@@ -93,56 +93,6 @@ impl<T: ChannelKind> Channel<T> {
         }
 
         exited_at.push((Instant::now(), reason));
-    }
-
-    pub fn spawn<R, F>(self, f: impl FnOnce(EventStream<T>) -> F) -> Child<R, T>
-    where
-        T: Interface,
-        R: Send + 'static,
-        F: Future<Output = Result<R, Report>> + Send + 'static,
-        F::Output: Send + 'static,
-    {
-        let state = EventStream::new(self.clone());
-        let spawned_future = AssertUnwindSafe(f(state)).catch_unwind();
-        let pid = self.pid().clone();
-        let this = self.clone();
-
-        let handle = tokio::spawn(async move {
-            // Notify that the process is alive
-            tracing::debug!(pid = ?pid, "Process started");
-            self.update_status(ActorStatus::Running);
-
-            // Run the future and catch any panics that occur
-            let exit_value = spawned_future.await;
-
-            // Depending on the exit_value, set the correct ExitSignal
-            match exit_value {
-                Ok(val) => {
-                    match &val {
-                        Ok(_) => self.update_exit_result(Ok(())),
-                        Err(_) => self.update_exit_result(Err(ExitError::UnhandledError)),
-                    };
-                    val
-                }
-                Err(boxed) => {
-                    self.update_exit_result(Err(ExitError::Panic));
-                    std::panic::resume_unwind(boxed);
-                }
-            }
-        });
-
-        this.add_spawned_now();
-        Child::new(handle, Address::new(this))
-    }
-
-    fn update_exit_result(&self, exit_result: Result<(), ExitError>) {
-        match &exit_result {
-            Ok(()) => tracing::debug!(pid = ?self.pid(), "Process exited normally"),
-            Err(err) => tracing::error!(pid = ?self.pid(), "Process exited with error: {:?}", err),
-        }
-
-        self.add_exited_now(exit_result.clone());
-        self.update_status(ActorStatus::Exited(exit_result.err()));
     }
 
     pub(super) fn raw_queue(&self) -> Option<&ConcurrentQueue<T>>
@@ -158,7 +108,7 @@ impl<T: ChannelKind> Channel<T> {
         }
     }
 
-    pub(crate) fn update_status(&self, status: ActorStatus) {
+    pub(crate) fn set_status(&self, status: ActorStatus) {
         self.inner.status_observer.set(status);
 
         if !status.accepts_messages() {
@@ -166,9 +116,9 @@ impl<T: ChannelKind> Channel<T> {
         }
     }
 
-    pub(super) fn is_open(&self) -> bool {
-        self.inner.status_observer.read().accepts_messages()
-    }
+    // pub(super) fn is_open(&self) -> bool {
+    //     self.inner.status_observer.read().accepts_messages()
+    // }
 
     pub(super) fn backpressure(&self) -> &BackPressure {
         BackPressure::default()
@@ -273,7 +223,7 @@ impl<I: Interface> Channel<I> {
         match signal {
             SignalInterface::Shutdown(_) => {
                 self.inner.status_observer.set(ActorStatus::Exiting);
-                Some(SignalEvent::StatusUpdate(StatusUpdateEvent::Exit))
+                Some(SignalEvent::StatusUpdate(StatusUpdateEvent::Shutdown))
             }
             SignalInterface::Suspend(_) => {
                 if self.status() == ActorStatus::Exiting {
@@ -406,7 +356,7 @@ where
     }
 
     fn send_now(&self, msg: M) -> Result<M::Output, SendError<M>> {
-        if !self.is_open() {
+        if !self.status().accepts_messages() {
             return Err(SendError(msg));
         }
 
@@ -459,7 +409,7 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
     }
 
     fn send_now_checked<M: Message>(&self, msg: M) -> Result<M::Output, SendCheckedError<M>> {
-        if !self.is_open() {
+        if !self.status().accepts_messages() {
             return Err(SendCheckedError::Closed(msg));
         }
 
@@ -566,7 +516,7 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
             let mut subscriber = self.inner.status_observer.subscribe();
             let status = self.status();
 
-            if let ActorStatus::Exited(opt_error) = status {
+            if let ActorStatus::Dead(opt_error) = status {
                 return match opt_error {
                     Some(err) => Err(err),
                     None => Ok(()),
@@ -575,7 +525,7 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
 
             let status = subscriber.next().await;
 
-            if let Some(ActorStatus::Exited(opt_error)) = status {
+            if let Some(ActorStatus::Dead(opt_error)) = status {
                 return match opt_error {
                     Some(err) => Err(err),
                     None => Ok(()),

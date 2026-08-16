@@ -16,9 +16,6 @@ pub use pid::*;
 mod signals;
 pub use signals::*;
 
-mod event_stream;
-pub use event_stream::*;
-
 pub(crate) mod schemas;
 
 pub(crate) mod _prelude {
@@ -38,7 +35,9 @@ where
     F: Future<Output = Result<R, rootcause::Report>> + Send + 'static,
     F::Output: Send + 'static,
 {
-    Channel::new(pid).spawn(f)
+    Channel::new(pid)
+        .spawn(f)
+        .expect("Channel was just created. Must be valid")
 }
 
 pub(crate) use messaging as polybox;

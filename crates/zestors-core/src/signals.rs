@@ -110,12 +110,12 @@ pub enum SignalEvent {
 pub enum StatusUpdateEvent {
     Resume,
     Suspend,
-    Exit,
+    Shutdown,
 }
 
 impl StatusUpdateEvent {
     pub fn is_exit(self) -> bool {
-        self == StatusUpdateEvent::Exit
+        self == StatusUpdateEvent::Shutdown
     }
 
     pub fn is_resume(self) -> bool {
