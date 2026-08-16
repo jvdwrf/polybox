@@ -117,21 +117,6 @@ impl<H: Handler> AsActorRef for HandlerState<H> {
     }
 }
 
-// impl<H: Handler> Observable for HandlerState<H> {
-//     async fn send_signal(&self, signal: SignalInterface) -> Result<(), SendError<SignalInterface>> {
-//         <Address<H::Interface> as Observable>::send_signal(&self.address(), signal).await
-//     }
-// }
-
-// impl<H: Handler, M: Message> Sends<M> for HandlerState<H>
-// where
-//     Address<H::Interface>: Sends<M>,
-// {
-//     async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
-//         self.address().send(msg).await
-//     }
-// }
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ExitReason {
     Shutdown,

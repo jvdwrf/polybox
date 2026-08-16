@@ -44,7 +44,8 @@ pub(crate) struct ChannelInner<Q: ?Sized> {
     msg_notifier: Notify,
     msg_backpressure_limit: usize,
     created_at: Instant,
-    spawned_at: RwLock<Vec<Instant>>,
+    spawns: RwLock<Vec<Instant>>,
+    exits: RwLock<Vec<(Instant, ExitReason)>>,
     msg_queue: Q,
 }
 
@@ -69,7 +70,8 @@ impl<T: ChannelKind> Channel<T> {
             status_observer: SharedObservable::new(ActorStatus::Exiting),
             msg_queue: ConcurrentQueue::<T>::new(MSG_QUEUE_CAPACITY),
             created_at: Instant::now(),
-            spawned_at: Default::default(),
+            spawns: Default::default(),
+            exits: Default::default(),
         });
 
         Channel {
@@ -79,8 +81,13 @@ impl<T: ChannelKind> Channel<T> {
     }
 
     fn add_spawned_now(&self) {
-        let mut spawned_at = self.inner.spawned_at.write().unwrap();
+        let mut spawned_at = self.inner.spawns.write().unwrap();
         spawned_at.push(Instant::now());
+    }
+
+    fn add_exited_now(&self, reason: ExitReason) {
+        let mut exited_at = self.inner.exits.write().unwrap();
+        exited_at.push((Instant::now(), reason));
     }
 
     pub fn spawn<R, F>(self, f: impl FnOnce(EventStream<T>) -> F) -> Child<R, T>
@@ -110,10 +117,12 @@ impl<T: ChannelKind> Channel<T> {
                         Ok(_) => {
                             tracing::debug!(pid = ?pid, "Process exited normally");
                             self.alert(ActorStatus::Exiting);
+                            self.add_exited_now(ExitReason::Shutdown);
                         }
                         Err(_) => {
                             tracing::error!(pid = ?pid, "Process exited with error");
                             self.alert(ActorStatus::Exiting);
+                            self.add_exited_now(ExitReason::UnhandledError);
                         }
                     };
                     val
@@ -121,6 +130,7 @@ impl<T: ChannelKind> Channel<T> {
                 Err(boxed) => {
                     tracing::error!(pid = ?pid, "Process panicked");
                     self.alert(ActorStatus::Exiting);
+                    self.add_exited_now(ExitReason::UnhandledError);
                     std::panic::resume_unwind(boxed);
                 }
             }
@@ -454,12 +464,12 @@ impl<Q: ChannelKind> ActorRef for Channel<Q> {
     }
 
     fn spawned_at(&self) -> Vec<Instant> {
-        let spawned_at = self.inner.spawned_at.read().unwrap();
+        let spawned_at = self.inner.spawns.read().unwrap();
         spawned_at.clone()
     }
 
     fn last_spawned_at(&self) -> Option<Instant> {
-        let spawned_at = self.inner.spawned_at.read().unwrap();
+        let spawned_at = self.inner.spawns.read().unwrap();
         spawned_at.last().cloned()
     }
 }
