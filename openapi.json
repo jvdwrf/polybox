@@ -76,11 +76,42 @@
   "components": {
     "schemas": {
       "ActorStatus": {
-        "type": "string",
-        "enum": [
-          "Running",
-          "Suspended",
-          "ShuttingDown"
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "initializing"
+            ]
+          },
+          {
+            "type": "string",
+            "enum": [
+              "running"
+            ]
+          },
+          {
+            "type": "string",
+            "enum": [
+              "suspended"
+            ]
+          },
+          {
+            "type": "string",
+            "enum": [
+              "exiting"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "dead"
+            ],
+            "properties": {
+              "dead": {
+                "$ref": "#/components/schemas/Exit"
+              }
+            }
+          }
         ]
       },
       "DebugState": {
@@ -119,7 +150,37 @@
             "format": "int64",
             "minimum": 0
           }
-        }
+        },
+        "example": "{\"secs\": 5, \"nanos\": 0}"
+      },
+      "Exit": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "Normal"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "Error"
+            ],
+            "properties": {
+              "Error": {
+                "$ref": "#/components/schemas/ExitError"
+              }
+            }
+          }
+        ]
+      },
+      "ExitError": {
+        "type": "string",
+        "enum": [
+          "Panic",
+          "Abort",
+          "UnhandledError"
+        ]
       },
       "RestartMode": {
         "type": "string",

@@ -36,7 +36,7 @@ impl Handler for MyActor {
     type Exit = ();
 
     async fn init(&mut self, _address: &Address<Self::Interface>) -> Result<(), Self::Error> {
-        tokio::time::sleep(Duration::from_secs(100)).await;
+        // tokio::time::sleep(Duration::from_secs(100)).await;
         Ok(())
     }
 
@@ -103,7 +103,6 @@ async fn main() -> Result<(), Report> {
             .with_child(ChildSpec::new("SupervisorA", supervisor_a))
             .with_child(ChildSpec::new("SupervisorB", supervisor_b)),
     ))
-    .with_restart_intensity(RestartIntensity::new(3, Duration::from_secs(60)))
     .with_api(ApiConfig {
         addr: "127.0.0.1:8080".parse()?,
         swagger_ui: true,

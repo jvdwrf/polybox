@@ -1,0 +1,121 @@
+#[derive(Clone, Debug)]
+pub struct Client {
+    client: ::ploidy_util::reqwest::Client,
+    headers: ::ploidy_util::http::HeaderMap,
+    base_url: ::ploidy_util::url::Url,
+}
+impl Client {
+    /// Creates a new client.
+    pub fn new(base_url: impl AsRef<str>) -> Result<Self, crate::error::Error> {
+        Ok(
+            Self::with_reqwest_client(
+                ::ploidy_util::reqwest::Client::new(),
+                base_url.as_ref().parse()?,
+            ),
+        )
+    }
+    pub fn with_reqwest_client(
+        client: crate::util::reqwest::Client,
+        base_url: crate::util::url::Url,
+    ) -> Self {
+        Self {
+            client,
+            headers: ::ploidy_util::http::HeaderMap::new(),
+            base_url,
+        }
+    }
+    /// Adds a header to each request.
+    pub fn with_header<K, V>(
+        mut self,
+        name: K,
+        value: V,
+    ) -> Result<Self, crate::error::Error>
+    where
+        K: TryInto<crate::util::http::HeaderName>,
+        V: TryInto<crate::util::http::HeaderValue>,
+        K::Error: Into<crate::util::http::Error>,
+        V::Error: Into<crate::util::http::Error>,
+    {
+        let name = name.try_into().map_err(crate::error::Error::bad_header_name)?;
+        let value = value
+            .try_into()
+            .map_err(|err| crate::error::Error::bad_header_value(name.clone(), err))?;
+        self.headers.insert(name, value);
+        Ok(Self {
+            client: self.client,
+            headers: self.headers,
+            base_url: self.base_url,
+        })
+    }
+    /// Adds a sensitive header to each request, like a password or a bearer token.
+    /// Sensitive headers won't appear in `Debug` output, and may be treated specially
+    /// by the underlying HTTP stack.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use reqwest::header::AUTHORIZATION;
+    ///
+    /// let client = Client::new("https://api.example.com")?
+    ///     .with_sensitive_header(AUTHORIZATION, "Bearer decafbadcafed00d")?;
+    /// ```
+    pub fn with_sensitive_header<K, V>(
+        self,
+        name: K,
+        value: V,
+    ) -> Result<Self, crate::error::Error>
+    where
+        K: TryInto<crate::util::http::HeaderName>,
+        V: TryInto<crate::util::http::HeaderValue>,
+        K::Error: Into<crate::util::http::Error>,
+        V::Error: Into<crate::util::http::Error>,
+    {
+        let name = name.try_into().map_err(crate::error::Error::bad_header_name)?;
+        let mut value: ::ploidy_util::http::HeaderValue = value
+            .try_into()
+            .map_err(|err| crate::error::Error::bad_header_value(name.clone(), err))?;
+        value.set_sensitive(true);
+        self.with_header(name, value)
+    }
+    pub fn with_user_agent<V>(self, value: V) -> Result<Self, crate::error::Error>
+    where
+        V: TryInto<crate::util::http::HeaderValue>,
+        V::Error: Into<crate::util::http::Error>,
+    {
+        self.with_header(::ploidy_util::http::header::USER_AGENT, value)
+    }
+    /// Returns a raw [`RequestBuilder`].
+    ///
+    /// Constructs the request URL by appending `path_and_query`
+    /// to the base URL's path and query. The path can be relative or
+    /// absolute; its segments are appended to the base path.
+    /// Appended query parameters are not deduplicated.
+    ///
+    /// For example, if this client's base URL is
+    /// `https://api.example.com/v1` and `path_and_query` is
+    /// `/pets/list?limit=10`, the request URL is
+    /// `https://api.example.com/v1/pets/list?limit=10`.
+    /// Prefer using the builder's [`query`] method to append
+    /// dynamic query parameters; use `path_and_query` for static
+    /// parameters.
+    ///
+    /// The request includes the client's default headers.
+    ///
+    /// Use this for requests that the client's operation methods
+    /// don't cover.
+    ///
+    /// [`RequestBuilder`]: crate::util::reqwest::RequestBuilder
+    /// [`query`]: crate::util::reqwest::RequestBuilder::query
+    pub fn request(
+        &self,
+        method: crate::util::reqwest::Method,
+        path_and_query: &str,
+    ) -> Result<crate::util::reqwest::RequestBuilder, crate::error::Error> {
+        let url = ::ploidy_util::url::UrlExt::with_path_and_query(
+            self.base_url.clone(),
+            path_and_query,
+        )?;
+        Ok(self.client.request(method, url).headers(self.headers.clone()))
+    }
+}
+pub mod default;

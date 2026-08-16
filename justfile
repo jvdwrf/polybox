@@ -9,14 +9,18 @@ generate-openapi:
     @cargo run --package zestors-gen-oapi
 
 generate-api-client: generate-openapi
-    docker run --rm \
-        -v "$PWD:/local" \
-        openapitools/openapi-generator-cli generate \
-        -i /local/openapi.json \
-        -g rust \
-        -o /local/crates/api-client \
-        --library reqwest \
-        --additional-properties=packageName=zestors-api-client \
-        --additional-properties=packageVersion=0.1.0
+    # docker run --rm \
+    #     -v "$PWD:/local" \
+    #     openapitools/openapi-generator-cli generate \
+    #     -i /local/openapi.json \
+    #     -g rust \
+    #     -o /local/crates/api-client \
+    #     --library reqwest \
+    #     --additional-properties=packageName=zestors-api-client \
+    #     --additional-properties=packageVersion=0.1.0
+    ploidy generate rust \
+        openapi.json \
+        -o crates/api-client
+    # /path/to/spec.yaml -o my-api-client
 
 mod inspector "crates/inspector"

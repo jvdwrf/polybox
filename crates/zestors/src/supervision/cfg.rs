@@ -12,7 +12,7 @@ impl Default for RestartIntensity {
     fn default() -> Self {
         Self {
             max_restarts: 3,
-            within: Duration::from_secs(5),
+            within: Duration::from_mins(5),
         }
     }
 }

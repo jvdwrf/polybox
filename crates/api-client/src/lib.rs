@@ -1,11 +1,10 @@
-#![allow(unused_imports)]
-#![allow(clippy::too_many_arguments)]
-
-extern crate serde_repr;
-extern crate serde;
-extern crate serde_json;
-extern crate url;
-extern crate reqwest;
-
-pub mod apis;
-pub mod models;
+pub mod types;
+pub mod client;
+pub mod error;
+#[cfg(feature = "tracing")]
+extern crate self as tracing;
+#[cfg(feature = "tracing")]
+pub(crate) use ::ploidy_util::tracing::*;
+pub use ::ploidy_util as util;
+pub use client::Client;
+pub use error::Error;

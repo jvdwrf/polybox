@@ -106,11 +106,13 @@ impl ApiServer {
     pub async fn run(self) -> Result<(), Report> {
         let (router, api) = self.create_router().split_for_parts();
 
-        // let router = match self.cfg.swagger_ui {
-        //     true => router
-        //         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api.clone())),
-        //     false => router,
-        // };
+        let router = match self.cfg.swagger_ui {
+            true => router.merge(
+                utoipa_swagger_ui::SwaggerUi::new("/swagger-ui")
+                    .url("/api-docs/openapi.json", api.clone()),
+            ),
+            false => router,
+        };
 
         let listener = TcpListener::bind(self.cfg.addr).await?;
 
