@@ -16,4 +16,10 @@ pub(crate) mod _prelude {
     pub(crate) use type_sets::Set;
 }
 
-pub(crate) use messaging as polybox;
+pub mod prelude {
+    pub use crate::{
+        channel::{ActorRef as _, Address, Channel, Child, EventStream, IntoDyn as _, Pid, spawn},
+        messaging::{Interface, Message, Payload, Sends as _, type_sets::Set},
+        signals::{Event, SignalEvent},
+    };
+}

@@ -18,7 +18,7 @@ use syn::{parse_macro_input, Data, DeriveInput, Expr, Fields, Lit, Type};
 /// where `T` is a type that implements the `Message` trait.
 #[proc_macro_derive(Interface, attributes(interface))]
 pub fn derive_interface_polybox(input: TokenStream) -> TokenStream {
-    derive_interface(input, "::messaging")
+    derive_interface(input, "::zestors")
 }
 
 #[proc_macro_derive(InterfaceZestors, attributes(interface))]
@@ -225,7 +225,7 @@ pub fn derive_actor_interface(input: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_derive(Message, attributes(msg))]
 pub fn derive_message(input: TokenStream) -> TokenStream {
-    _derive_message(input, "::messaging")
+    _derive_message(input, "::zestors")
 }
 
 #[proc_macro_derive(MessageZestors, attributes(msg))]
@@ -250,7 +250,7 @@ fn _derive_message(input: TokenStream, base: &str) -> TokenStream {
 
     let base_path: syn::Path = attrs.path.unwrap_or_else(|| syn::parse_str(base).unwrap());
     let output_type = if let Some(reply_type) = attrs.reply {
-        quote!( #base_path::messaging::Rx<#reply_type> )
+        quote!( #base_path::messaging::oneshot::Rx<#reply_type> )
     } else {
         quote!(())
     };

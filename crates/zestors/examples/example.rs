@@ -1,9 +1,10 @@
 use rootcause::Report;
 use std::time::Duration;
 use zestors::{
-    self, ActorRef as _, Address, DebugState, Event, EventStream, HandlerInterface, Interface,
-    Message, Payload, Pid, Sends as _, SignalEvent, StatusUpdateEvent,
-    handler::{self, ExitReason, Handle, HandledBy, Handler, HandlerState},
+    HandlerInterface,
+    handler::{ExitReason, Handle, HandledBy, Handler, HandlerState},
+    prelude::*,
+    signals::{DebugState, StatusUpdateEvent},
     spawn,
     supervision::ActorRunnerExt as _,
 };

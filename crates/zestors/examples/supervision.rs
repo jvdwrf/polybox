@@ -2,9 +2,11 @@ use futures::join;
 use rootcause::Report;
 use std::time::Duration;
 use zestors::{
-    ActorRef as _, Address, HandlerInterface, Interface, Payload, Pid, RestartMode,
+    HandlerInterface,
     handler::{ExitReason, Handle, Handler, HandlerState},
     node::{ApiConfig, Node},
+    prelude::*,
+    signals::RestartMode,
     supervision::{ChildSpec, RestartIntensity, Supervisor},
 };
 
