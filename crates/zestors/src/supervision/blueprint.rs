@@ -4,6 +4,14 @@ pub trait Blueprint: Debug + Send + Sync + 'static {
     type Actor: Actor;
 
     fn instantiate(&self) -> Self::Actor;
+
+    fn default_abort_timeout(&self) -> Duration {
+        Duration::from_millis(5_000)
+    }
+
+    fn default_init_timeout(&self) -> Duration {
+        Duration::from_millis(5_000)
+    }
 }
 
 impl<T: Actor + Clone + Debug + Send + Sync + 'static> Blueprint for T {

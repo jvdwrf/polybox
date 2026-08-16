@@ -13,8 +13,8 @@ impl<T: Blueprint> ChildSpec<T> {
     pub fn new(id: impl Into<Pid>, blueprint: T) -> Self {
         Self {
             restart_mode: RestartMode::OnError,
-            abort_timeout: Duration::from_millis(5_000),
-            init_timeout: Duration::from_millis(5_000),
+            abort_timeout: blueprint.default_abort_timeout(),
+            init_timeout: blueprint.default_init_timeout(),
             blueprint: blueprint.into(),
             channel: Channel::<<T::Actor as Actor>::Interface>::new(id.into()),
         }
@@ -59,8 +59,13 @@ impl<T: RepeatSpawn> ChildSpec<T> {
         self
     }
 
-    pub fn timeout(mut self, abort_timeout: Duration) -> Self {
+    pub fn abort_timeout(mut self, abort_timeout: Duration) -> Self {
         self.abort_timeout = abort_timeout;
+        self
+    }
+
+    pub fn init_timeout(mut self, init_timeout: Duration) -> Self {
+        self.init_timeout = init_timeout;
         self
     }
 

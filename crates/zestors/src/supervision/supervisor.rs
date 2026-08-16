@@ -105,6 +105,14 @@ impl Blueprint for SupervisorBlueprint {
             registry: Registry::local(),
         }
     }
+
+    fn default_abort_timeout(&self) -> Duration {
+        Duration::from_millis(60_000)
+    }
+
+    fn default_init_timeout(&self) -> Duration {
+        Duration::from_millis(60_000)
+    }
 }
 
 #[derive(Debug)]

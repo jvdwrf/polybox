@@ -30,6 +30,11 @@ impl Handler for MyActor {
     type Error = Report;
     type Exit = ();
 
+    async fn init(&mut self, _address: &Address<Self::Interface>) -> Result<(), Self::Error> {
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        Ok(())
+    }
+
     async fn exit(
         &mut self,
         _address: &Address<Self::Interface>,

@@ -2,4 +2,8 @@
   - [ ] before starting process?
   - [ ] after process exit?
 - [x] Fix that shutdown transfers through the whole supervision tree in the example
-- [ ] Supervisor is only ready after all it's children are
+- [x] Supervisor is only ready after all it's children are
+- [x] Add init method to handler
+- [ ] Fix DoubleSpawn error handling in supervisor
+- [ ] Fix children being aborted
+- [ ] Supervisors should have very high init/shutdown time
