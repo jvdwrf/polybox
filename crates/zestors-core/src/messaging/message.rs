@@ -1,4 +1,4 @@
-use crate::*;
+use crate::_prelude::*;
 use std::convert::Infallible;
 
 /// A trait that must be implemented for all types that are sent as messages.

@@ -135,33 +135,6 @@ impl<T, R: ChannelKind> Future for Child<T, R> {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum JoinError {
-    /// The task panicked.
-    #[error("task panicked")]
-    Panic,
-
-    /// The task was aborted.
-    #[error("task was aborted / cancelled")]
-    Aborted,
-
-    /// The actor exited with an unhandled error.
-    #[error("task returned an error: {0}")]
-    UnhandledError(Report),
-}
-
-impl From<tokio::task::JoinError> for JoinError {
-    fn from(err: tokio::task::JoinError) -> Self {
-        if err.is_cancelled() {
-            JoinError::Aborted
-        } else if err.is_panic() {
-            JoinError::Panic
-        } else {
-            unreachable!("JoinError is neither cancelled nor panicked: {:?}", err)
-        }
-    }
-}
-
 impl<T, R: ChannelKind> Drop for Child<T, R> {
     fn drop(&mut self) {
         if self.attached && self.handle.is_some() {

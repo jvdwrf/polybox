@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    Message, Rx,
-    signals::{ChildDescription, DebugState},
-};
+use crate::signals::{ChildDescription, DebugState};
 use std::{any::TypeId, future::Future};
 use tokio::time::Instant;
 

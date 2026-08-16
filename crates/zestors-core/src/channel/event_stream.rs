@@ -1,13 +1,4 @@
-use thiserror::Error;
-
 use crate::_prelude::*;
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Error)]
-#[error("Failed to spawn process: {0}")]
-pub enum SpawnError {
-    #[error("There is already an active process running on this channel.")]
-    DoubleSpawn,
-}
 
 #[derive(Debug)]
 pub struct EventStream<T: Interface> {

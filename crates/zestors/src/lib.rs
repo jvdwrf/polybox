@@ -15,6 +15,7 @@ pub use polybox_codegen::{
 pub(crate) mod _prelude {
     #![allow(unused_imports)]
     pub(crate) use crate::{handler::*, node::*, registry::*, supervision::*, *};
+    pub(crate) use zestors_core::{channel::*, messaging::*, signals::*};
 
     pub(crate) use serde::{Deserialize, Serialize};
     pub(crate) use std::{

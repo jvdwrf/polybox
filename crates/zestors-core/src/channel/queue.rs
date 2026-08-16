@@ -1,7 +1,5 @@
-use std::any::{Any, TypeId};
-
 use super::*;
-use crate::{BoxedPayload, Message, MessageExt};
+use std::any::{Any, TypeId};
 use type_sets::TypeSet;
 
 pub(crate) trait Queue: Send + 'static {

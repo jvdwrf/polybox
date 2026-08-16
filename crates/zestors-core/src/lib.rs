@@ -1,34 +1,19 @@
 pub mod channel;
-pub use channel::*;
+pub use channel::spawn;
 
 pub mod messaging;
-pub use messaging::*;
 
-mod signals;
-pub use signals::*;
+pub mod signals;
 
 pub(crate) mod schemas;
 
 pub(crate) mod _prelude {
-    pub(crate) use crate::*;
-
+    pub(crate) use crate::{channel::*, messaging::*, signals::*};
     pub(crate) use polybox_codegen::{Interface, Message};
     pub(crate) use rootcause::Report;
     pub(crate) use serde::{Deserialize, Serialize};
     pub(crate) use std::{future::Future, time::Duration};
-    pub(crate) use type_sets::{Contains, Set, SubsetOf};
-}
-
-pub fn spawn<T, R, F>(pid: Pid, f: impl FnOnce(EventStream<T>) -> F) -> Child<R, T>
-where
-    T: Interface,
-    R: Send + 'static,
-    F: Future<Output = Result<R, rootcause::Report>> + Send + 'static,
-    F::Output: Send + 'static,
-{
-    Channel::new(pid)
-        .spawn(f)
-        .expect("Channel was just created. Must be valid")
+    pub(crate) use type_sets::Set;
 }
 
 pub(crate) use messaging as polybox;

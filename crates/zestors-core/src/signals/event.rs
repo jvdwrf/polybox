@@ -33,3 +33,34 @@ impl StatusUpdateEvent {
         self == StatusUpdateEvent::Suspend
     }
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ChildDescription {
+    pub pid: Pid,
+    pub restart_mode: RestartMode,
+    pub abort_timeout: Duration,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct DebugState {
+    pub status: ActorStatus,
+
+    #[schema(value_type = DurationSchema)]
+    #[serde(with = "DurationSchema")]
+    pub uptime: std::time::Duration,
+
+    pub description: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
+pub enum RestartMode {
+    Always,
+    OnError,
+    Never,
+}
+
+impl Default for RestartMode {
+    fn default() -> Self {
+        RestartMode::OnError
+    }
+}

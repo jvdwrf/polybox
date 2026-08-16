@@ -250,7 +250,7 @@ fn _derive_message(input: TokenStream, base: &str) -> TokenStream {
 
     let base_path: syn::Path = attrs.path.unwrap_or_else(|| syn::parse_str(base).unwrap());
     let output_type = if let Some(reply_type) = attrs.reply {
-        quote!( #base_path::Rx<#reply_type> )
+        quote!( #base_path::messaging::Rx<#reply_type> )
     } else {
         quote!(())
     };
@@ -259,7 +259,7 @@ fn _derive_message(input: TokenStream, base: &str) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
     let expanded = quote! {
-        impl #impl_generics #base_path::Message for #name #ty_generics #where_clause {
+        impl #impl_generics #base_path::messaging::Message for #name #ty_generics #where_clause {
             type Output = #output_type;
             type Reply = <Self::Output as #base_path::messaging::MessageOutput<Self>>::Reply;
             type Payload = <Self::Output as #base_path::messaging::MessageOutput<Self>>::Payload;

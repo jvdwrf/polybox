@@ -1,14 +1,18 @@
-//! The core library for the `polybox` crate.
-//!
-//! See [GitHub](https://github.com/jvdwrf/polybox) for more information.
-
 mod interface;
+pub use interface::*;
+
 mod message;
+pub use message::*;
+
 pub mod oneshot;
+pub(crate) use oneshot::*;
+
 mod payload;
+pub use payload::*;
+
 mod sends;
+pub use sends::*;
 
 pub use type_sets;
-pub use {interface::*, message::*, oneshot::*, payload::*, sends::*};
 
 pub(crate) use type_sets::*;

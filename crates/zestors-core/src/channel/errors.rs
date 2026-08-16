@@ -1,4 +1,5 @@
 use super::*;
+use thiserror::Error;
 
 #[derive(Debug, thiserror::Error, Clone, PartialEq, Eq, Hash)]
 pub enum TrySendError<T> {
@@ -141,4 +142,38 @@ pub enum ExitError {
 
     #[error("Actor exited with error")]
     UnhandledError,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Error)]
+#[error("Failed to spawn process: {0}")]
+pub enum SpawnError {
+    #[error("There is already an active process running on this channel.")]
+    DoubleSpawn,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum JoinError {
+    /// The task panicked.
+    #[error("task panicked")]
+    Panic,
+
+    /// The task was aborted.
+    #[error("task was aborted / cancelled")]
+    Aborted,
+
+    /// The actor exited with an unhandled error.
+    #[error("task returned an error: {0}")]
+    UnhandledError(Report),
+}
+
+impl From<tokio::task::JoinError> for JoinError {
+    fn from(err: tokio::task::JoinError) -> Self {
+        if err.is_cancelled() {
+            JoinError::Aborted
+        } else if err.is_panic() {
+            JoinError::Panic
+        } else {
+            unreachable!("JoinError is neither cancelled nor panicked: {:?}", err)
+        }
+    }
 }

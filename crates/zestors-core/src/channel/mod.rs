@@ -7,8 +7,8 @@ use tokio::sync::Notify;
 mod channel;
 pub use channel::*;
 
-mod errors;
-pub use errors::*;
+pub mod errors;
+pub(crate) use errors::*;
 
 mod backpressure;
 pub use backpressure::*;
@@ -42,3 +42,15 @@ pub use child::*;
 
 #[cfg(test)]
 mod tests;
+
+pub fn spawn<T, R, F>(pid: Pid, f: impl FnOnce(EventStream<T>) -> F) -> Child<R, T>
+where
+    T: Interface,
+    R: Send + 'static,
+    F: Future<Output = Result<R, rootcause::Report>> + Send + 'static,
+    F::Output: Send + 'static,
+{
+    Channel::new(pid)
+        .spawn(f)
+        .expect("Channel was just created. Must be valid")
+}
