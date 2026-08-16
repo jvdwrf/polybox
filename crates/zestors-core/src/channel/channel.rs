@@ -100,12 +100,34 @@ impl<T: ChannelKind> Channel<T> {
         T: Interface,
     {
         if self.is_interface::<T>() {
-            Some(unsafe {
-                &*(&self.inner.msg_queue as *const dyn IsDynQueue as *const ConcurrentQueue<T>)
-            })
+            // SAFETY: We just checked that the channel's message queue is of type `ConcurrentQueue<T>`.
+            Some(unsafe { self.raw_queue_unchecked() })
         } else {
             None
         }
+    }
+
+    /// # Safety
+    /// This function is unsafe because it assumes that the channel's message queue is of type
+    /// `ConcurrentQueue<T>`. If this assumption is incorrect, it may lead to undefined behavior.
+    unsafe fn raw_queue_unchecked(&self) -> &ConcurrentQueue<T>
+    where
+        T: Interface,
+    {
+        unsafe { &*(&self.inner.msg_queue as *const dyn IsDynQueue as *const ConcurrentQueue<T>) }
+    }
+
+    pub(crate) fn update_status(&self, f: impl FnOnce(ActorStatus) -> Option<ActorStatus>) {
+        self.inner.status_observer.update_if(|status| {
+            let new_status = f(status.clone());
+
+            if let Some(new_status) = new_status {
+                *status = new_status;
+                true
+            } else {
+                false
+            }
+        });
     }
 
     pub(crate) fn set_status(&self, status: ActorStatus) {

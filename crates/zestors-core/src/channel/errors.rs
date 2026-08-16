@@ -136,6 +136,9 @@ pub enum ExitError {
     #[error("Actor panicked")]
     Panic,
 
+    #[error("Actor was aborted")]
+    Abort,
+
     #[error("Actor exited with error")]
     UnhandledError,
 }

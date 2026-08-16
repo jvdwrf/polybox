@@ -95,6 +95,8 @@ async fn test_actor_lifecycle() {
     tx.send(()).unwrap();
     tokio::time::sleep(Duration::from_millis(10)).await;
     assert!(child.status().is_dead());
+
+    assert_eq!(child.await.unwrap(), ());
 }
 
 #[test]
