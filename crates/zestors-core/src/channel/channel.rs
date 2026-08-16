@@ -52,14 +52,7 @@ pub(crate) struct ChannelInner<Q: ?Sized> {
 }
 
 impl<T: ChannelKind> Channel<T> {
-    pub(crate) fn clone(&self) -> Self {
-        Channel {
-            inner: self.inner.clone(),
-            _marker: PhantomData,
-        }
-    }
-
-    pub(crate) fn new(pid: Pid) -> Self
+    pub fn new(pid: Pid) -> Self
     where
         T: Interface,
     {
@@ -86,7 +79,7 @@ impl<T: ChannelKind> Channel<T> {
         let mut spawned_at = self.inner.spawns.write().unwrap();
 
         if spawned_at.len() > KEEP_N_SPAWNS {
-            spawned_at.remove(0);
+            _ = spawned_at.remove(0);
         }
 
         spawned_at.push(Instant::now());
@@ -96,10 +89,20 @@ impl<T: ChannelKind> Channel<T> {
         let mut exited_at = self.inner.exits.write().unwrap();
 
         if exited_at.len() > KEEP_N_EXITS {
-            exited_at.remove(0);
+            _ = exited_at.remove(0);
         }
 
         exited_at.push((Instant::now(), reason));
+    }
+
+    pub fn spawn_ref<R, F>(&self, f: impl FnOnce(EventStream<T>) -> F) -> Child<R, T>
+    where
+        T: Interface,
+        R: Send + 'static,
+        F: Future<Output = Result<R, Report>> + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        self.clone().spawn(f)
     }
 
     pub fn spawn<R, F>(self, f: impl FnOnce(EventStream<T>) -> F) -> Child<R, T>
@@ -631,5 +634,14 @@ impl<T: ChannelKind> Debug for Channel<T> {
             .field("status", &self.inner.status_observer.get())
             .field("len", &self.inner.msg_queue.len())
             .finish()
+    }
+}
+
+impl<T: ChannelKind> Clone for Channel<T> {
+    fn clone(&self) -> Self {
+        Channel {
+            inner: self.inner.clone(),
+            _marker: PhantomData,
+        }
     }
 }

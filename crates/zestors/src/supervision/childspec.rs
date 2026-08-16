@@ -64,7 +64,7 @@ impl<T: RepeatSpawn> ChildSpec<T> {
     where
         T: RepeatSpawn,
     {
-        self.blueprint.spawn_with_data(self.channel.clone())
+        self.blueprint.spawn_with_data(&self.channel)
     }
 }
 

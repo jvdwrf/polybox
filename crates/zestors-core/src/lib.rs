@@ -1,7 +1,7 @@
-mod channel;
+pub mod channel;
 pub use channel::*;
 
-mod messaging;
+pub mod messaging;
 pub use messaging::*;
 
 mod address;

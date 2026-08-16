@@ -1,14 +1,11 @@
 use rootcause::Report;
 use std::time::Duration;
 use zestors::{
-    ActorRef as _, HandlerInterface, Interface, Message, Sends as _,
-    event_stream::EventStream,
+    ActorRef as _, EventStream, HandlerInterface, Interface, Message, Payload, Pid, Sends as _,
     handler::{self, Handle, HandledBy, Handler, HandlerState},
-    polybox::Payload,
-    registry::Pid,
-    signals::{self, Event, Shutdown, SignalInterface},
     spawn,
     supervision::ActorRunnerExt as _,
+    {self, Event, Shutdown, SignalInterface},
 };
 
 #[tokio::main]

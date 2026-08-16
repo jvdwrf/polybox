@@ -18,7 +18,7 @@ use syn::{parse_macro_input, Data, DeriveInput, Expr, Fields, Lit, Type};
 /// where `T` is a type that implements the `Message` trait.
 #[proc_macro_derive(Interface, attributes(interface))]
 pub fn derive_interface_polybox(input: TokenStream) -> TokenStream {
-    derive_interface(input, "::polybox")
+    derive_interface(input, "::messaging")
 }
 
 #[proc_macro_derive(InterfaceZestors, attributes(interface))]
@@ -32,7 +32,7 @@ fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
 
     let base_path: syn::Path = extract_base_path(&input.attrs, "interface", base);
     let polybox_path: syn::Path =
-        syn::parse_str(&format!("{}::polybox", quote!(#base_path))).unwrap();
+        syn::parse_str(&format!("{}::messaging", quote!(#base_path))).unwrap();
 
     // Ensure we are working with an enum
     let variants = match &input.data {
@@ -225,7 +225,7 @@ pub fn derive_actor_interface(input: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_derive(Message, attributes(msg))]
 pub fn derive_message(input: TokenStream) -> TokenStream {
-    _derive_message(input, "::polybox")
+    _derive_message(input, "::messaging")
 }
 
 #[proc_macro_derive(MessageZestors, attributes(msg))]
@@ -259,10 +259,10 @@ fn _derive_message(input: TokenStream, base: &str) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
     let expanded = quote! {
-        impl #impl_generics #base_path::polybox::Message for #name #ty_generics #where_clause {
+        impl #impl_generics #base_path::Message for #name #ty_generics #where_clause {
             type Output = #output_type;
-            type Reply = <Self::Output as #base_path::polybox::MessageOutput<Self>>::Reply;
-            type Payload = <Self::Output as #base_path::polybox::MessageOutput<Self>>::Payload;
+            type Reply = <Self::Output as #base_path::messaging::MessageOutput<Self>>::Reply;
+            type Payload = <Self::Output as #base_path::messaging::MessageOutput<Self>>::Payload;
         }
     };
 
@@ -276,7 +276,7 @@ fn _derive_message(input: TokenStream, base: &str) -> TokenStream {
 
 // #[proc_macro_derive(MessageMethod, attributes(msg))]
 // pub fn derive_message_method(input: TokenStream) -> TokenStream {
-//     _derive_message_method(input, "::polybox")
+//     _derive_message_method(input, "::messaging")
 // }
 
 // fn _derive_message_method(input: TokenStream, base: &str) -> TokenStream {

@@ -211,7 +211,7 @@ impl Supervisor {
         // since it will persist across restarts.
         let child = supervisee.spec.spawn();
         supervisee.child = Some(child);
-        registry.register(supervisee.spec.channel.clone())
+        registry.register(supervisee.spec.channel.address().clone())
     }
 
     async fn shutdown(&mut self) {

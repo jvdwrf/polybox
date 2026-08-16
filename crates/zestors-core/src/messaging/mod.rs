@@ -9,6 +9,6 @@ pub mod rx_tx;
 mod sends;
 
 pub use type_sets;
-pub use {interface::*, message::*, payload::*, sends::*};
+pub use {interface::*, message::*, payload::*, rx_tx::*, sends::*};
 
-pub(crate) use {rx_tx::*, type_sets::*};
+pub(crate) use type_sets::*;

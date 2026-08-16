@@ -2,12 +2,10 @@ use futures::join;
 use rootcause::Report;
 use std::time::Duration;
 use zestors::{
-    ActorRef as _, HandlerInterface, Interface,
+    ActorRef as _, HandlerInterface, Interface, Payload, Pid, RestartMode,
     handler::{ExitReason, Handle, Handler, HandlerState},
     node::{ApiConfig, Node},
-    polybox::Payload,
-    registry::Pid,
-    supervision::{ChildSpec, RestartIntensity, RestartMode, Supervisor},
+    supervision::{ChildSpec, RestartIntensity, Supervisor},
 };
 
 #[derive(Interface, HandlerInterface)]

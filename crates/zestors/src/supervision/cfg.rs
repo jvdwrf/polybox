@@ -2,13 +2,6 @@ use crate::_prelude::*;
 use std::collections::VecDeque;
 use tokio::time::Instant;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
-pub enum RestartMode {
-    Always,
-    OnError,
-    Never,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RestartIntensity {
     max_restarts: usize,

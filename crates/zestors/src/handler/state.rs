@@ -88,7 +88,7 @@ impl<H: Handler> HandlerState<H> {
                 },
 
                 SignalEvent::GetState(tx) => {
-                    let _ = tx.send(signals::DebugState {
+                    let _ = tx.send(DebugState {
                         status: state.status(),
                         uptime: state.uptime().unwrap_or_default(),
                         description: handler.debug_state(),

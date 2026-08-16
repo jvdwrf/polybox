@@ -27,6 +27,7 @@ utoipa.workspace = true
 axum-autoroute.workspace = true
 concurrent-queue.workspace = true
 eyeball.workspace = true
+zestors-core.workspace = true
 
 [dev-dependencies]
 tracing-subscriber.workspace = true
