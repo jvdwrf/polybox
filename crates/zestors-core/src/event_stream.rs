@@ -11,7 +11,7 @@ impl<T: Interface> EventStream<T> {
     }
 
     pub async fn next(&mut self) -> Option<Event<T>> {
-        self.channel.recv().await
+        self.channel.next().await
     }
 }
 

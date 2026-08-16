@@ -3,7 +3,7 @@ use crate::{
     FromPayload, Message, MessageExt, Rx, TryIntoPayload,
     address::Address,
     new_request,
-    signals::{self, ActorStatus, Event},
+    signals::{self, Event},
 };
 use eyeball::SharedObservable;
 use futures::FutureExt as _;
@@ -62,7 +62,7 @@ impl<T: ChannelKind> Channel<T> {
             msg_backpressure_limit: BACKPRESSURE_LIMIT,
             signal_queue: ConcurrentQueue::bounded(SIGNAL_QUEUE_CAPACITY),
             signal_notifier: Notify::new(),
-            status_observer: SharedObservable::new(ActorStatus::Exiting),
+            status_observer: SharedObservable::new(ActorStatus::Initializing),
             msg_queue: ConcurrentQueue::<T>::new(MSG_QUEUE_CAPACITY),
             created_at: Instant::now(),
             spawns: Default::default(),
@@ -105,6 +105,15 @@ impl<T: ChannelKind> Channel<T> {
         self.clone().spawn(f)
     }
 
+    fn last_exit(&self) -> Option<ExitResult> {
+        self.inner
+            .exits
+            .read()
+            .unwrap()
+            .last()
+            .map(|(_, result)| result.clone())
+    }
+
     pub fn spawn<R, F>(self, f: impl FnOnce(EventStream<T>) -> F) -> Child<R, T>
     where
         T: Interface,
@@ -120,7 +129,7 @@ impl<T: ChannelKind> Channel<T> {
         let handle = tokio::spawn(async move {
             // Notify that the process is alive
             tracing::debug!(pid = ?pid, "Process started");
-            self.alert(ActorStatus::Running);
+            self.update_status(ActorStatus::Running);
 
             // Run the future and catch any panics that occur
             let exit_value = spawned_future.await;
@@ -131,12 +140,14 @@ impl<T: ChannelKind> Channel<T> {
                     match &val {
                         Ok(_) => {
                             tracing::debug!(pid = ?pid, "Process exited normally");
-                            self.alert(ActorStatus::Exiting);
+                            self.update_status(ActorStatus::Exited(None));
                             self.add_exited_now(Ok(()));
                         }
                         Err(_) => {
                             tracing::error!(pid = ?pid, "Process exited with error");
-                            self.alert(ActorStatus::Exiting);
+                            self.update_status(ActorStatus::Exited(Some(
+                                ExitError::UnhandledError,
+                            )));
                             self.add_exited_now(Err(ExitError::UnhandledError));
                         }
                     };
@@ -144,7 +155,7 @@ impl<T: ChannelKind> Channel<T> {
                 }
                 Err(boxed) => {
                     tracing::error!(pid = ?pid, "Process panicked");
-                    self.alert(ActorStatus::Exiting);
+                    self.update_status(ActorStatus::Exited(Some(ExitError::Panic)));
                     self.add_exited_now(Err(ExitError::Panic));
                     std::panic::resume_unwind(boxed);
                 }
@@ -168,16 +179,16 @@ impl<T: ChannelKind> Channel<T> {
         }
     }
 
-    pub(crate) fn alert(&self, status: ActorStatus) {
+    pub(crate) fn update_status(&self, status: ActorStatus) {
         self.inner.status_observer.set(status);
 
-        if !status.should_accept_messages() {
+        if !status.accepts_messages() {
             self.inner.msg_notifier.notify_waiters();
         }
     }
 
     pub(super) fn is_open(&self) -> bool {
-        self.inner.status_observer.read().should_accept_messages()
+        self.inner.status_observer.read().accepts_messages()
     }
 
     pub(super) fn backpressure(&self) -> &BackPressure {
@@ -283,7 +294,7 @@ impl<I: Interface> Channel<I> {
         match signal {
             SignalInterface::Shutdown(_) => {
                 self.inner.status_observer.set(ActorStatus::Exiting);
-                Some(SignalEvent::StatusUpdate(ActorStatus::Exiting))
+                Some(SignalEvent::StatusUpdate(StatusUpdateEvent::Exit))
             }
             SignalInterface::Suspend(_) => {
                 if self.status() == ActorStatus::Exiting {
@@ -291,7 +302,7 @@ impl<I: Interface> Channel<I> {
                     None
                 } else {
                     self.inner.status_observer.set(ActorStatus::Suspended);
-                    Some(SignalEvent::StatusUpdate(ActorStatus::Suspended))
+                    Some(SignalEvent::StatusUpdate(StatusUpdateEvent::Suspend))
                 }
             }
             SignalInterface::Resume(_) => {
@@ -300,7 +311,7 @@ impl<I: Interface> Channel<I> {
                     None
                 } else {
                     self.inner.status_observer.set(ActorStatus::Running);
-                    Some(SignalEvent::StatusUpdate(ActorStatus::Running))
+                    Some(SignalEvent::StatusUpdate(StatusUpdateEvent::Resume))
                 }
             }
             SignalInterface::GetState((_, tx)) => Some(SignalEvent::GetState(tx)),
@@ -316,7 +327,7 @@ impl<I: Interface> Channel<I> {
         }
     }
 
-    pub(crate) async fn recv(&self) -> Option<Event<I>> {
+    pub(crate) async fn next(&self) -> Option<Event<I>> {
         if self.status() == ActorStatus::Suspended {
             return self.recv_signal().await.map(Event::Signal);
         }
@@ -571,18 +582,25 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
         }
     }
 
-    async fn watch_exit(&self) {
+    async fn watch_exit(&self) -> ExitResult {
         loop {
             let mut subscriber = self.inner.status_observer.subscribe();
             let status = self.status();
 
-            if status == ActorStatus::Running {
-                return;
+            if let ActorStatus::Exited(opt_error) = status {
+                return match opt_error {
+                    Some(err) => Err(err),
+                    None => Ok(()),
+                };
             }
 
             let status = subscriber.next().await;
-            if status == Some(ActorStatus::Exiting) {
-                return;
+
+            if let Some(ActorStatus::Exited(opt_error)) = status {
+                return match opt_error {
+                    Some(err) => Err(err),
+                    None => Ok(()),
+                };
             }
         }
     }

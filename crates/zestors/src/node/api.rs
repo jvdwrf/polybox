@@ -77,8 +77,8 @@ impl Actor for ApiServer {
                     SignalEvent::GetChildren(tx) => {
                         tx.send(vec![]).ok();
                     }
-                    SignalEvent::StatusUpdate(status) => {
-                        if status.should_exit() {
+                    SignalEvent::StatusUpdate(update) => {
+                        if update.is_exit() {
                             break Ok(());
                         }
                     }

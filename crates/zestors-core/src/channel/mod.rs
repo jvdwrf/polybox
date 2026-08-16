@@ -4,9 +4,6 @@ use std::time::Duration;
 use std::{pin::pin, sync::Arc};
 use tokio::sync::Notify;
 
-mod status;
-pub use status::*;
-
 mod channel;
 pub use channel::*;
 
@@ -24,6 +21,9 @@ pub use queue::*;
 
 mod dyn_conv;
 pub use dyn_conv::*;
+
+mod status;
+pub use status::*;
 
 #[cfg(test)]
 mod tests;

@@ -388,12 +388,12 @@ impl Actor for Supervisor {
                         tx.send(children).ok();
                     }
                     SignalEvent::StatusUpdate(status) => match status {
-                        ActorStatus::Exiting => {
+                        StatusUpdateEvent::Exit => {
                             self.shutdown().await;
                             break;
                         }
-                        ActorStatus::Running => (),
-                        ActorStatus::Suspended => (),
+                        StatusUpdateEvent::Resume => (),
+                        StatusUpdateEvent::Suspend => (),
                     },
                 },
                 Event::Message(message) => match message {

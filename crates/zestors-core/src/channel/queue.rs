@@ -4,7 +4,7 @@ use super::*;
 use crate::{BoxedPayload, Message, MessageExt};
 use type_sets::TypeSet;
 
-pub trait Queue: Send + 'static {
+pub(crate) trait Queue: Send + 'static {
     type Item;
 
     fn new(capacity: usize) -> Self

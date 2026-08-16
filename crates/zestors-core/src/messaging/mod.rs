@@ -4,11 +4,11 @@
 
 mod interface;
 mod message;
+pub mod oneshot;
 mod payload;
-pub mod rx_tx;
 mod sends;
 
 pub use type_sets;
-pub use {interface::*, message::*, payload::*, rx_tx::*, sends::*};
+pub use {interface::*, message::*, oneshot::*, payload::*, sends::*};
 
 pub(crate) use type_sets::*;

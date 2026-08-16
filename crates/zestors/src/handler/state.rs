@@ -76,13 +76,13 @@ impl<H: Handler> HandlerState<H> {
         match msg {
             Event::Signal(signal) => match signal {
                 SignalEvent::StatusUpdate(status) => match status {
-                    ActorStatus::Running => {
+                    StatusUpdateEvent::Resume => {
                         handler.on_resume().await?;
                     }
-                    ActorStatus::Suspended => {
+                    StatusUpdateEvent::Suspend => {
                         handler.on_suspend().await?;
                     }
-                    ActorStatus::Exiting => {
+                    StatusUpdateEvent::Exit => {
                         handler.on_shutdown().await?;
                     }
                 },

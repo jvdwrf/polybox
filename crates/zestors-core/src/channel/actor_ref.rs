@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     Message, Rx,
     address::Address,
-    signals::{ActorStatus, ChildDescription, DebugState},
+    signals::{ChildDescription, DebugState},
 };
 use std::{any::TypeId, future::Future};
 use tokio::time::Instant;
@@ -32,7 +32,7 @@ pub trait ActorRef {
 
     fn watch_start(&self) -> impl Future<Output = ()> + Send;
 
-    fn watch_exit(&self) -> impl Future<Output = ()> + Send;
+    fn watch_exit(&self) -> impl Future<Output = ExitResult> + Send;
 
     fn members(&self) -> &'static [TypeId];
 
@@ -169,7 +169,7 @@ impl<T: AsActorRef> ActorRef for T {
         self.as_channel().watch_start()
     }
 
-    fn watch_exit(&self) -> impl Future<Output = ()> + Send {
+    fn watch_exit(&self) -> impl Future<Output = ExitResult> + Send {
         self.as_channel().watch_exit()
     }
 

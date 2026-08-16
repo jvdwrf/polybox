@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    Interface, Message, Payload,
-    signals::{ActorStatus, Shutdown},
-};
+use crate::{Interface, Message, Payload, signals::Shutdown};
 use std::time::Duration;
 use std::{assert_matches, sync::Arc};
 use tokio::time::{sleep, timeout};
@@ -46,7 +43,7 @@ fn test_channel_initialization_and_status() {
 
     assert!(channel.is_open());
 
-    channel.alert(ActorStatus::Exiting);
+    channel.update_status(ActorStatus::Exiting);
 
     assert!(!channel.is_open());
 }
@@ -55,10 +52,10 @@ fn test_channel_initialization_and_status() {
 fn test_channel_can_be_reopened() {
     let channel = create_test_channel::<TestInterface>();
 
-    channel.alert(ActorStatus::Exiting);
+    channel.update_status(ActorStatus::Exiting);
     assert!(!channel.is_open());
 
-    channel.alert(ActorStatus::Running);
+    channel.update_status(ActorStatus::Running);
     assert!(channel.is_open());
 }
 
@@ -145,7 +142,7 @@ fn test_send_now_and_pop_msg() {
 fn test_send_when_channel_closed() {
     let channel = create_test_channel::<TestInterface>();
 
-    channel.alert(ActorStatus::Exiting);
+    channel.update_status(ActorStatus::Exiting);
 
     let msg = PingMessage("closed_test".into());
     let res = channel.try_send(msg.clone());
@@ -475,7 +472,7 @@ fn test_status_change_is_shared_between_clones() {
     let channel = create_test_channel::<TestInterface>();
     let clone = channel.clone();
 
-    channel.alert(ActorStatus::Exiting);
+    channel.update_status(ActorStatus::Exiting);
 
     assert!(!channel.is_open());
     assert!(!clone.is_open());
@@ -487,7 +484,7 @@ fn test_status_change_is_shared_through_erased_view() {
 
     let dyn_channel: &Channel<Set!()> = channel.as_dyn_unchecked::<Set!()>();
 
-    channel.alert(ActorStatus::Exiting);
+    channel.update_status(ActorStatus::Exiting);
 
     assert!(!dyn_channel.is_open());
 }

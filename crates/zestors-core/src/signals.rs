@@ -23,35 +23,6 @@ pub struct Resume;
 #[msg(reply = ActorStatus)]
 pub struct GetStatus;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
-pub enum ActorStatus {
-    Running,
-    Suspended,
-    Exiting,
-}
-
-impl ActorStatus {
-    pub fn should_exit(&self) -> bool {
-        matches!(self, ActorStatus::Exiting)
-    }
-
-    pub fn should_accept_messages(&self) -> bool {
-        !matches!(self, ActorStatus::Suspended | ActorStatus::Exiting)
-    }
-
-    pub fn running(&self) -> bool {
-        matches!(self, ActorStatus::Running)
-    }
-
-    pub fn suspended(&self) -> bool {
-        matches!(self, ActorStatus::Suspended)
-    }
-
-    pub fn shutting_down(&self) -> bool {
-        matches!(self, ActorStatus::Exiting)
-    }
-}
-
 #[derive(Message, Debug)]
 #[msg(path = "crate")]
 #[msg(reply = DebugState)]
@@ -132,7 +103,28 @@ pub enum Event<M> {
 pub enum SignalEvent {
     GetState(Tx<DebugState>),
     GetChildren(Tx<Vec<ChildDescription>>),
-    StatusUpdate(ActorStatus),
+    StatusUpdate(StatusUpdateEvent),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub enum StatusUpdateEvent {
+    Resume,
+    Suspend,
+    Exit,
+}
+
+impl StatusUpdateEvent {
+    pub fn is_exit(self) -> bool {
+        self == StatusUpdateEvent::Exit
+    }
+
+    pub fn is_resume(self) -> bool {
+        self == StatusUpdateEvent::Resume
+    }
+
+    pub fn is_suspend(self) -> bool {
+        self == StatusUpdateEvent::Suspend
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]

@@ -1,11 +1,11 @@
 use rootcause::Report;
 use std::time::Duration;
 use zestors::{
-    ActorRef as _, EventStream, HandlerInterface, Interface, Message, Payload, Pid, Sends as _,
+    self, ActorRef as _, DebugState, Event, EventStream, HandlerInterface, Interface, Message,
+    Payload, Pid, Sends as _, SignalEvent, StatusUpdateEvent,
     handler::{self, Handle, HandledBy, Handler, HandlerState},
     spawn,
     supervision::ActorRunnerExt as _,
-    {self, Event, Shutdown, SignalInterface},
 };
 
 #[tokio::main]
@@ -15,7 +15,25 @@ async fn main() {
         async move |mut stream: EventStream<MyInterface>| {
             while let Some(msg) = stream.next().await {
                 match msg {
-                    Event::Signal(signal) => todo!(),
+                    Event::Signal(signal) => match signal {
+                        SignalEvent::GetState(tx) => {
+                            tx.send(DebugState {
+                                status: stream.status(),
+                                uptime: stream.uptime().unwrap_or_default(),
+                                description: "MyActor is running".to_string(),
+                            })
+                            .ok();
+                        }
+                        SignalEvent::GetChildren(tx) => {
+                            tx.send(vec![]).ok();
+                        }
+                        SignalEvent::StatusUpdate(event) => match event {
+                            StatusUpdateEvent::Resume => {}
+                            StatusUpdateEvent::Suspend => {}
+                            StatusUpdateEvent::Exit => break,
+                        },
+                    },
+
                     Event::Message(message) => match message {
                         MyInterface::Add(payload) => {
                             println!("Received message: {:?}", payload);
@@ -33,7 +51,7 @@ async fn main() {
 
     child.address().send(10u32).await.unwrap();
     child.address().signal_shutdown();
-    child.await.unwrap();
+    child.watch_exit().await.unwrap();
 
     test().await;
 }
