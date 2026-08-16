@@ -1,7 +1,6 @@
 use super::*;
 use crate::{
     Message, Rx,
-    address::Address,
     signals::{ChildDescription, DebugState},
 };
 use std::{any::TypeId, future::Future};

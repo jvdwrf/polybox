@@ -6,15 +6,15 @@ pub trait Blueprint: Debug + Send + Sync + 'static {
     fn instantiate(&self) -> Self::Actor;
 
     fn default_abort_timeout(&self) -> Duration {
-        Duration::from_millis(5_000)
+        Duration::from_millis(10_000)
     }
 
     fn default_init_timeout(&self) -> Duration {
-        Duration::from_millis(5_000)
+        Duration::from_millis(10_000)
     }
 
     fn default_restart_mode(&self) -> RestartMode {
-        RestartMode::OnError
+        RestartMode::default()
     }
 }
 
@@ -44,7 +44,7 @@ pub trait BlueprintExt: Blueprint + Sized {
         self.instantiate().spawn(pid)
     }
 
-    fn default_cfg(&self) -> SuperviseeConfig {
+    fn supervisee_cfg(&self) -> SuperviseeConfig {
         SuperviseeConfig::for_blueprint(self)
     }
 }

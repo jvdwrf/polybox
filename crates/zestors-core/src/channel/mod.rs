@@ -31,5 +31,14 @@ pub use spawn::*;
 mod event_stream;
 pub use event_stream::*;
 
+mod pid;
+pub use pid::*;
+
+mod address;
+pub use address::*;
+
+mod child;
+pub use child::*;
+
 #[cfg(test)]
 mod tests;

@@ -1,15 +1,11 @@
 use super::*;
 use crate::{
-    FromPayload, Message, MessageExt, Rx, TryIntoPayload,
-    address::Address,
-    new_request,
+    FromPayload, Message, MessageExt, Rx, TryIntoPayload, new_request,
     signals::{self, Event},
 };
 use eyeball::SharedObservable;
-use futures::FutureExt as _;
 use std::{any::TypeId, fmt::Debug, marker::PhantomData, panic::AssertUnwindSafe, sync::RwLock};
 use tokio::{select, time::Instant};
-use tracing::instrument;
 use type_sets::{Contains, Set, TypeSet};
 
 const SIGNAL_QUEUE_CAPACITY: usize = 1_000_000;
@@ -96,7 +92,7 @@ impl<T: ChannelKind> Channel<T> {
     pub(super) fn register_exit(&self, reason: Result<(), ExitError>) {
         match &reason {
             Ok(()) => tracing::debug!("Process exited normally"),
-            Err(err) => tracing::error!("Process exited with error: {:?}", err),
+            Err(err) => tracing::warn!("Process exited with error: {:?}", err),
         }
 
         let mut exited_at = self.inner.exits.write().unwrap();

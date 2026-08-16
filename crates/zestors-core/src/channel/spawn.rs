@@ -22,9 +22,9 @@ impl<T: ChannelKind> Channel<T> {
 
             async move {
                 this.register_spawn();
-                let _bomb = AbortBomb { channel: &this };
+                let bomb = AbortBomb { channel: &this };
 
-                match future.await {
+                let res = match future.await {
                     Ok(val) => {
                         match &val {
                             Ok(_) => this.register_exit(Ok(())),
@@ -36,7 +36,11 @@ impl<T: ChannelKind> Channel<T> {
                         this.register_exit(Err(ExitError::Panic));
                         std::panic::resume_unwind(boxed);
                     }
-                }
+                };
+
+                bomb.defuse();
+
+                res
             }
             .instrument(span)
         });
@@ -56,5 +60,12 @@ impl<'a, T: ChannelKind> Drop for AbortBomb<'a, T> {
         if !self.channel.status().is_dead() {
             self.channel.register_exit(Err(ExitError::Abort));
         }
+    }
+}
+
+impl<'a, T: ChannelKind> AbortBomb<'a, T> {
+    fn defuse(self) -> &'a Channel<T> {
+        let Self { channel } = self;
+        channel
     }
 }

@@ -27,7 +27,7 @@ pub struct ChildSpec<T: SpawnOn = DynRepeatSpawner> {
 impl<T: Blueprint> ChildSpec<T> {
     pub fn new(id: impl Into<Pid>, blueprint: T) -> Self {
         Self {
-            cfg: blueprint.default_cfg(),
+            cfg: blueprint.supervisee_cfg(),
             blueprint: blueprint.into(),
             channel: Channel::<<T::Actor as Actor>::Interface>::new(id.into()),
         }
@@ -37,7 +37,7 @@ impl<T: Blueprint> ChildSpec<T> {
         let data = Channel::<<T::Actor as Actor>::Interface>::new(Pid::rand());
 
         Self {
-            cfg: blueprint.default_cfg(),
+            cfg: blueprint.supervisee_cfg(),
             blueprint: blueprint.into(),
             channel: data,
         }

@@ -1,119 +1,4 @@
-use futures::future::join_all;
-use rootcause::{
-    prelude::{IteratorExt, ResultExt},
-    report,
-};
-
 use super::*;
-
-#[derive(Debug)]
-pub struct SupervisorBlueprint {
-    supervisees: IndexMap<Pid, ChildSpec>,
-    strategy: SupervisionStrategy,
-    restart_intensity: RestartIntensity,
-}
-
-impl SupervisorBlueprint {
-    pub fn new() -> Self {
-        Self {
-            supervisees: Default::default(),
-            strategy: SupervisionStrategy::default(),
-            restart_intensity: RestartIntensity::default(),
-        }
-    }
-
-    pub fn with_strategy(mut self, strategy: SupervisionStrategy) -> Self {
-        self.strategy = strategy;
-        self
-    }
-
-    pub fn with_intensity(mut self, restart_intensity: RestartIntensity) -> Self {
-        self.restart_intensity = restart_intensity;
-        self
-    }
-
-    pub fn with_child<T: SpawnOn>(mut self, spec: ChildSpec<T>) -> Self
-    where
-        ChildSpec<T>: Into<ChildSpec>,
-    {
-        let spec = spec.into();
-        self.supervisees.insert(spec.pid().clone(), spec);
-        self
-    }
-
-    pub fn with_children<T: SpawnOn>(
-        mut self,
-        specs: impl IntoIterator<Item = ChildSpec<T>>,
-    ) -> Self
-    where
-        ChildSpec<T>: Into<ChildSpec>,
-    {
-        for spec in specs {
-            let spec = spec.into();
-            self.supervisees.insert(spec.pid().clone(), spec);
-        }
-        self
-    }
-
-    pub fn add_dyn_child(&mut self, spec: ChildSpec) {
-        self.supervisees.insert(spec.pid().clone(), spec);
-    }
-
-    pub fn add_dyn_children(&mut self, specs: impl IntoIterator<Item = ChildSpec>) {
-        for spec in specs {
-            self.add_dyn_child(spec);
-        }
-    }
-
-    pub fn add_child<T>(&mut self, spec: ChildSpec<T>) -> Address<<T::Actor as Actor>::Interface>
-    where
-        T: Blueprint + Send + Sync + 'static,
-    {
-        let address = spec.address().clone();
-
-        self.add_dyn_child(spec.into_dyn());
-
-        address
-    }
-
-    pub fn add_children<T>(
-        &mut self,
-        specs: impl IntoIterator<Item = ChildSpec<T>>,
-    ) -> Vec<Address<<T::Actor as Actor>::Interface>>
-    where
-        T: Blueprint + Send + Sync + 'static,
-    {
-        specs
-            .into_iter()
-            .map(|blueprint| self.add_child(blueprint))
-            .collect()
-    }
-}
-
-impl Blueprint for SupervisorBlueprint {
-    type Actor = Supervisor;
-
-    fn instantiate(&self) -> Self::Actor {
-        Supervisor {
-            supervisees: self
-                .supervisees
-                .iter()
-                .map(|(id, spec)| (id.clone(), Supervisee::new(spec.clone())))
-                .collect(),
-            strategy: self.strategy,
-            restart_limiter: RestartLimiter::new(self.restart_intensity.clone()),
-            registry: Registry::local(),
-        }
-    }
-
-    fn default_abort_timeout(&self) -> Duration {
-        Duration::from_millis(60_000)
-    }
-
-    fn default_init_timeout(&self) -> Duration {
-        Duration::from_millis(60_000)
-    }
-}
 
 #[derive(Debug)]
 pub struct Supervisor {
@@ -123,33 +8,19 @@ pub struct Supervisor {
     registry: &'static Registry,
 }
 
-#[derive(Message, Debug)]
-#[msg(path = crate)]
-pub struct RegisterChild(ChildSpec);
-
-#[derive(Message, Debug)]
-#[msg(path = crate, reply = "Option<Supervisee>")]
-pub struct DeregisterChild(Pid);
-
-#[derive(Interface, Debug)]
-#[interface(crate = "crate")]
-pub enum SupervisorInterface {
-    RegisterChild(Payload<RegisterChild>),
-    DeregisterChild(Payload<DeregisterChild>),
-}
-
-impl Default for Supervisor {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Supervisor {
-    fn new() -> Self {
+    pub(super) fn new(
+        supervisees: IndexMap<Pid, ChildSpec>,
+        strategy: SupervisionStrategy,
+        restart_intensity: RestartIntensity,
+    ) -> Self {
         Self {
-            supervisees: Default::default(),
-            strategy: SupervisionStrategy::default(),
-            restart_limiter: RestartLimiter::default(),
+            supervisees: supervisees
+                .into_iter()
+                .map(|(pid, spec)| (pid, Supervisee::new(spec)))
+                .collect(),
+            strategy,
+            restart_limiter: RestartLimiter::new(restart_intensity),
             registry: Registry::local(),
         }
     }
@@ -445,7 +316,7 @@ impl Actor for Supervisor {
                     SupervisorInterface::DeregisterChild((DeregisterChild(id), tx)) => {
                         tracing::trace!("Deregistering child: {:?}", id);
                         let supervisee = self.supervisees.shift_remove(&id);
-                        tx.send(supervisee).ok();
+                        tx.send(supervisee.map(|s| s.spec)).ok();
                     }
                 },
             }
@@ -469,76 +340,4 @@ pub struct ChildTermination {
     pub id: Pid,
     pub exit: Result<(), JoinError>,
     pub reference: Child<()>,
-}
-
-#[derive(Debug)]
-pub struct Supervisee {
-    pub child: Option<Child<()>>,
-    pub spec: ChildSpec,
-}
-
-impl Supervisee {
-    fn new(spec: ChildSpec) -> Self {
-        Self { child: None, spec }
-    }
-}
-
-impl AsActorRef for Supervisee {
-    type QueueType = Set<()>;
-
-    fn as_channel(&self) -> &Channel<Self::QueueType> {
-        &self.spec.as_channel()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SupervisionStrategy {
-    OneForOne,
-    OneForAll,
-    RestForOne,
-}
-
-impl Default for SupervisionStrategy {
-    fn default() -> Self {
-        Self::OneForOne
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-#[error("Terminal child error: {id}, error: {error:?}")]
-pub struct RestartLimitReached {
-    pub id: Pid,
-    pub error: Option<JoinError>,
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum SupervisorError {
-    #[error("Restart limit reached for child {0}")]
-    RestartLimit(#[from] RestartLimitReached),
-
-    #[error("Another process is already registered with the same pid")]
-    RegistryAddError(
-        #[source]
-        #[from]
-        RegistryAddError,
-    ),
-}
-
-#[derive(Debug, Clone, Default)]
-pub(crate) struct RestartLimiter {
-    intensity: RestartIntensity,
-    restarts: VecDeque<Instant>,
-}
-
-impl RestartLimiter {
-    pub fn new(intensity: RestartIntensity) -> Self {
-        Self {
-            intensity,
-            restarts: VecDeque::new(),
-        }
-    }
-
-    pub fn allow_restart(&mut self) -> bool {
-        self.intensity.allow_restart(&mut self.restarts)
-    }
 }
