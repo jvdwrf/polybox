@@ -83,14 +83,14 @@ impl<T: ChannelKind> Channel<T> {
         spawned_at.push(Instant::now());
     }
 
-    pub fn spawn<R, F>(self, f: impl FnOnce(ActorState<T>) -> F) -> Child<R, T>
+    pub fn spawn<R, F>(self, f: impl FnOnce(EventStream<T>) -> F) -> Child<R, T>
     where
         T: Interface,
         R: Send + 'static,
         F: Future<Output = Result<R, Report>> + Send + 'static,
         F::Output: Send + 'static,
     {
-        let state = ActorState::new(EventStream::new(self.clone()));
+        let state = EventStream::new(self.clone());
         let spawned_future = AssertUnwindSafe(f(state)).catch_unwind();
         let pid = self.pid().clone();
         let this = self.clone();

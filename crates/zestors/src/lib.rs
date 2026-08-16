@@ -3,7 +3,7 @@ use futures::FutureExt;
 pub(crate) use polybox::*;
 use std::{panic::AssertUnwindSafe, sync::Arc};
 
-pub fn spawn<T, R, F>(pid: Pid, f: impl FnOnce(ActorState<T>) -> F) -> Child<R, T>
+pub fn spawn<T, R, F>(pid: Pid, f: impl FnOnce(EventStream<T>) -> F) -> Child<R, T>
 where
     T: Interface,
     R: Send + 'static,

@@ -344,7 +344,7 @@ impl Actor for Supervisor {
     type Interface = SupervisorInterface;
     type Exit = ();
 
-    async fn run(mut self, mut state: ActorState<Self::Interface>) -> Result<Self::Exit, Report> {
+    async fn run(mut self, mut state: EventStream<Self::Interface>) -> Result<Self::Exit, Report> {
         for supervisee in self.supervisees.values_mut() {
             Self::spawn_supervisee(supervisee, &self.registry)?;
         }
@@ -352,7 +352,7 @@ impl Actor for Supervisor {
         loop {
             let msg = tokio::select! {
                 biased;
-                Some(msg) = state.next() => {
+                Some(msg) = state.recv() => {
                     msg
                 }
                 Some(item) = self.next() => {

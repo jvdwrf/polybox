@@ -42,7 +42,7 @@ impl Actor for ApiServer {
     type Interface = Infallible;
     type Exit = ();
 
-    async fn run(self, mut state: ActorState<Self::Interface>) -> Result<Self::Exit, Report> {
+    async fn run(self, mut state: EventStream<Self::Interface>) -> Result<Self::Exit, Report> {
         let mut run_api = pin!(self.clone().run());
 
         loop {
@@ -59,7 +59,7 @@ impl Actor for ApiServer {
                     break api_exit.map_err(Into::into);
                 },
 
-                event = state.next() => match event {
+                event = state.recv() => match event {
                     Some(event) => event,
                     None => break Err(rootcause::report!("Actor event stream closed unexpectedly")),
                 }
@@ -68,7 +68,11 @@ impl Actor for ApiServer {
             match event {
                 Event::Signal(signal) => match signal {
                     SignalEvent::GetState(tx) => {
-                        let _ = tx.send(state.debug_state(&self));
+                        let _ = tx.send(DebugState {
+                            status: state.status(),
+                            uptime: state.uptime().unwrap_or(Duration::default()),
+                            description: format!("{:?}", self),
+                        });
                     }
                     SignalEvent::GetChildren(tx) => {
                         tx.send(vec![]).ok();

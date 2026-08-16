@@ -1,42 +1,12 @@
 use crate::_prelude::*;
 
-pub struct ActorState<I: Interface> {
-    stream: EventStream<I>,
-}
-
-impl<I: Interface> ActorState<I> {
-    pub(crate) fn new(stream: EventStream<I>) -> Self {
-        Self { stream }
-    }
-
-    pub fn debug_state(&self, actor: impl Debug) -> DebugState {
-        DebugState {
-            status: self.status(),
-            uptime: self.uptime().unwrap_or_default(),
-            description: format!("{actor:?}"),
-        }
-    }
-
-    pub async fn next(&mut self) -> Option<Event<I>> {
-        self.stream.recv().await
-    }
-}
-
-impl<I: Interface> AsActorRef for ActorState<I> {
-    type QueueType = I;
-
-    fn as_channel(&self) -> &Channel<Self::QueueType> {
-        self.stream.as_channel()
-    }
-}
-
 pub trait Actor: Send + Sized + 'static {
     type Interface: Interface;
     type Exit: Send + 'static;
 
     fn run(
         self,
-        state: ActorState<Self::Interface>,
+        state: EventStream<Self::Interface>,
     ) -> impl Future<Output = Result<Self::Exit, Report>> + Send + 'static;
 }
 
@@ -70,7 +40,7 @@ pub trait ActorRunnerExt: Actor {
 
     fn wrap<F, Fut, E>(self, mapper: F) -> WrapRun<Self, F>
     where
-        F: FnOnce(Self, ActorState<Self::Interface>) -> Fut + Send + 'static,
+        F: FnOnce(Self, EventStream<Self::Interface>) -> Fut + Send + 'static,
         Fut: Future<Output = Result<E, Report>> + Send + 'static,
         E: Send + 'static,
     {
@@ -122,7 +92,7 @@ where
 
     fn run(
         self,
-        state: ActorState<Self::Interface>,
+        state: EventStream<Self::Interface>,
     ) -> impl Future<Output = Result<Self::Exit, Report>> + Send + 'static {
         let Self { inner, map_exit } = self;
 
@@ -151,7 +121,7 @@ impl<T, F> WrapRun<T, F> {
     pub fn new<R, Fut>(inner: T, mapper: F) -> Self
     where
         T: Actor,
-        F: FnOnce(T, ActorState<T::Interface>) -> Fut + Send + 'static,
+        F: FnOnce(T, EventStream<T::Interface>) -> Fut + Send + 'static,
         Fut: Future<Output = Result<R, Report>> + Send + 'static,
         R: Send + 'static,
     {
@@ -162,7 +132,7 @@ impl<T, F> WrapRun<T, F> {
 impl<T, F, Fut, E> Actor for WrapRun<T, F>
 where
     T: Actor + Send + 'static,
-    F: FnOnce(T, ActorState<T::Interface>) -> Fut + Send + 'static,
+    F: FnOnce(T, EventStream<T::Interface>) -> Fut + Send + 'static,
     Fut: Future<Output = Result<E, Report>> + Send + 'static,
     E: Send + 'static,
 {
@@ -171,7 +141,7 @@ where
 
     fn run(
         self,
-        state: ActorState<Self::Interface>,
+        state: EventStream<Self::Interface>,
     ) -> impl Future<Output = Result<Self::Exit, Report>> + Send + 'static {
         let Self { inner, mapper } = self;
 

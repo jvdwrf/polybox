@@ -6,11 +6,11 @@ use std::fmt::Debug;
 use tokio::select;
 
 pub struct HandlerState<H: Handler> {
-    inner: ActorState<H::Interface>,
+    inner: EventStream<H::Interface>,
 }
 
 impl<H: Handler> HandlerState<H> {
-    pub fn new(inner: ActorState<H::Interface>) -> Self {
+    pub fn new(inner: EventStream<H::Interface>) -> Self {
         Self { inner }
     }
 
@@ -55,7 +55,7 @@ impl<H: Handler> HandlerState<H> {
         }
 
         let msg = select! {
-            Some(msg) = state.next() => msg,
+            Some(msg) = state.recv() => msg,
 
             next = handler.schedule_next() => {
                 match next {

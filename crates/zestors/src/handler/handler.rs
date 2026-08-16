@@ -66,10 +66,7 @@ impl<H: Handler> Actor for H {
     type Interface = H::Interface;
     type Exit = H::Exit;
 
-    async fn run(
-        mut self,
-        state: ActorState<Self::Interface>,
-    ) -> Result<Self::Exit, Report> {
+    async fn run(mut self, state: EventStream<Self::Interface>) -> Result<Self::Exit, Report> {
         HandlerState::new(state)
             .run(&mut self)
             .await

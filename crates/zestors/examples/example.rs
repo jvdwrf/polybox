@@ -8,15 +8,15 @@ use zestors::{
     registry::Pid,
     signals::{self, Event, Shutdown, SignalInterface},
     spawn,
-    supervision::{ActorRunnerExt as _, ActorState},
+    supervision::ActorRunnerExt as _,
 };
 
 #[tokio::main]
 async fn main() {
     let child = spawn(
         Pid::rand(),
-        async move |mut stream: ActorState<MyInterface>| {
-            while let Some(msg) = stream.next().await {
+        async move |mut stream: EventStream<MyInterface>| {
+            while let Some(msg) = stream.recv().await {
                 match msg {
                     Event::Signal(signal) => todo!(),
                     Event::Message(message) => match message {
