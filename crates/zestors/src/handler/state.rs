@@ -35,8 +35,6 @@ impl<H: Handler> HandlerState<H> {
                         SignalEvent::StatusUpdate(_) => {}
                         SignalEvent::GetState(tx) => {
                             tx.send(DebugState {
-                                status: self.status(),
-                                uptime: self.uptime().unwrap_or_default(),
                                 description: description.clone(),
                             })
                             .ok();
@@ -75,8 +73,6 @@ impl<H: Handler> HandlerState<H> {
                         }
                         SignalEvent::GetState(tx) => {
                             tx.send(DebugState {
-                                status: self.status(),
-                                uptime: self.uptime().unwrap_or_default(),
                                 description: debug_state.clone(),
                             })
                             .ok();
@@ -171,8 +167,6 @@ impl<H: Handler> HandlerState<H> {
 
                 SignalEvent::GetState(tx) => {
                     let _ = tx.send(DebugState {
-                        status: stream.status(),
-                        uptime: stream.uptime().unwrap_or_default(),
                         description: handler.debug_state(self.address()),
                     });
                 }

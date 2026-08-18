@@ -68,8 +68,6 @@ pub trait ActorRef {
 
     fn signal_resume(&self);
 
-    fn get_status(&self) -> Rx<ActorStatus>;
-
     fn get_debug_state(&self) -> Rx<DebugState>;
 
     fn ping(&self) -> Rx<()>;
@@ -140,10 +138,6 @@ impl<T: AsActorRef> ActorRef for T {
 
     fn signal_resume(&self) {
         self.as_channel().signal_resume()
-    }
-
-    fn get_status(&self) -> Rx<ActorStatus> {
-        self.as_channel().get_status()
     }
 
     fn get_debug_state(&self) -> Rx<DebugState> {

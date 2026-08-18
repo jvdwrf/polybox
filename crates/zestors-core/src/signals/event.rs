@@ -43,12 +43,11 @@ pub struct ChildDescription {
 
 #[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct DebugState {
-    pub status: ActorStatus,
+    // pub status: ActorStatus,
 
-    #[schema(value_type = DurationSchema)]
-    #[serde(with = "DurationSchema")]
-    pub uptime: std::time::Duration,
-
+    // #[schema(value_type = DurationSchema)]
+    // #[serde(with = "DurationSchema")]
+    // pub uptime: std::time::Duration,
     pub description: String,
 }
 

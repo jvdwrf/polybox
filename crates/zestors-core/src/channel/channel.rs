@@ -286,10 +286,6 @@ impl<I: Interface> Channel<I> {
             }
             SignalInterface::GetState((_, tx)) => Some(SignalEvent::GetState(tx)),
             SignalInterface::GetChildren((_, tx)) => Some(SignalEvent::GetChildren(tx)),
-            SignalInterface::GetStatus((_, tx)) => {
-                let _ = tx.send(self.status());
-                None
-            }
             SignalInterface::Ping((_, tx)) => {
                 let _ = tx.send(());
                 None
@@ -498,12 +494,6 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
 
     fn signal_resume(&self) {
         self.signal(SignalInterface::Resume(signals::Resume));
-    }
-
-    fn get_status(&self) -> Rx<ActorStatus> {
-        let (tx, rx) = new_request();
-        self.signal(SignalInterface::GetStatus((signals::GetStatus, tx)));
-        rx
     }
 
     fn get_debug_state(&self) -> Rx<signals::DebugState> {

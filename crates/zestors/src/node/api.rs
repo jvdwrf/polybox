@@ -69,8 +69,6 @@ impl Actor for ApiServer {
                 Event::Signal(signal) => match signal {
                     SignalEvent::GetState(tx) => {
                         let _ = tx.send(DebugState {
-                            status: state.status(),
-                            uptime: state.uptime().unwrap_or(Duration::default()),
                             description: format!("{:?}", self),
                         });
                     }

@@ -2,7 +2,7 @@ use rootcause::Report;
 use std::time::Duration;
 use zestors::{
     HandlerInterface,
-    handler::{ShutdownReason, Handle, HandledBy, Handler, HandlerState},
+    handler::{Handle, HandledBy, Handler, HandlerState, ShutdownReason},
     prelude::*,
     signals::{DebugState, StatusUpdateEvent},
     spawn,
@@ -19,8 +19,6 @@ async fn main() {
                     Event::Signal(signal) => match signal {
                         SignalEvent::GetState(tx) => {
                             tx.send(DebugState {
-                                status: stream.status(),
-                                uptime: stream.uptime().unwrap_or_default(),
                                 description: "MyActor is running".to_string(),
                             })
                             .ok();

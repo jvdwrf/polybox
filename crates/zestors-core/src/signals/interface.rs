@@ -12,10 +12,10 @@ pub(crate) struct Suspend;
 #[msg(path = "crate")]
 pub(crate) struct Resume;
 
-#[derive(Message, Debug)]
-#[msg(path = "crate")]
-#[msg(reply = ActorStatus)]
-pub(crate) struct GetStatus;
+// #[derive(Message, Debug)]
+// #[msg(path = "crate")]
+// #[msg(reply = ActorStatus)]
+// pub(crate) struct GetStatus;
 
 #[derive(Message, Debug)]
 #[msg(path = "crate")]
@@ -38,7 +38,7 @@ pub(crate) enum SignalInterface {
     Shutdown(Payload<Shutdown>),
     Suspend(Payload<Suspend>),
     Resume(Payload<Resume>),
-    GetStatus(Payload<GetStatus>),
+    // GetStatus(Payload<GetStatus>),
     GetState(Payload<GetState>),
     Ping(Payload<Ping>),
     GetChildren(Payload<GetChildren>),

@@ -131,8 +131,6 @@ impl Supervisor {
                         SignalEvent::StatusUpdate(_) => {}
                         SignalEvent::GetState(tx) => {
                             tx.send(DebugState {
-                                status: stream.status(),
-                                uptime: stream.uptime().unwrap_or_default(),
                                 description: "Supervisor".to_string(),
                             })
                             .ok();
@@ -344,8 +342,6 @@ impl Actor for Supervisor {
                         }
                         SignalEvent::GetState(tx) => {
                             tx.send(DebugState {
-                                status: stream.status(),
-                                uptime: stream.uptime().unwrap_or_default(),
                                 description: "Supervisor".to_string(),
                             })
                             .ok();
@@ -390,8 +386,6 @@ impl Actor for Supervisor {
                 Event::Signal(signal) => match signal {
                     SignalEvent::GetState(tx) => {
                         tx.send(DebugState {
-                            status: stream.status(),
-                            uptime: stream.uptime().unwrap_or_default(),
                             description: "Supervisor".to_string(),
                         })
                         .ok();
