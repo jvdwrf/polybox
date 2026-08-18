@@ -32,7 +32,6 @@ impl<H: Handler> HandlerState<H> {
             _ = async {
                 while let Some(signal) = self.stream.next_signal().await {
                     match signal {
-                        SignalEvent::StatusUpdate(_) => {}
                         SignalEvent::GetState(tx) => {
                             tx.send(DebugState {
                                 description: description.clone(),
@@ -41,6 +40,9 @@ impl<H: Handler> HandlerState<H> {
                         }
                         SignalEvent::GetChildren(tx) => {
                             tx.send(children.clone()).ok();
+                        }
+                        SignalEvent::Resume | SignalEvent::Suspend | SignalEvent::Shutdown => {
+                            tracing::debug!("Ignoring signal {:?} while exiting", signal);
                         }
                     }
                 }
@@ -66,11 +68,6 @@ impl<H: Handler> HandlerState<H> {
             _shutdown_signal_received = async {
                 while let Some(signal) = self.stream.next_signal().await {
                     match signal {
-                        SignalEvent::StatusUpdate(status) => {
-                            if status.is_shutdown() {
-                                break;
-                            }
-                        }
                         SignalEvent::GetState(tx) => {
                             tx.send(DebugState {
                                 description: debug_state.clone(),
@@ -79,6 +76,12 @@ impl<H: Handler> HandlerState<H> {
                         }
                         SignalEvent::GetChildren(tx) => {
                             tx.send(children.clone()).ok();
+                        }
+                        SignalEvent::Shutdown => {
+                            break;
+                        }
+                        SignalEvent::Resume | SignalEvent::Suspend => {
+                            tracing::debug!("Ignoring signal {:?} while initializing", signal);
                         }
                     }
                 }
@@ -153,17 +156,17 @@ impl<H: Handler> HandlerState<H> {
 
         match msg {
             Event::Signal(signal) => match signal {
-                SignalEvent::StatusUpdate(status) => match status {
-                    StatusUpdateEvent::Resume => {
-                        handler.on_resume(self.address()).await?;
-                    }
-                    StatusUpdateEvent::Suspend => {
-                        handler.on_suspend(self.address()).await?;
-                    }
-                    StatusUpdateEvent::Shutdown => {
-                        handler.on_shutdown(self.address()).await?;
-                    }
-                },
+                SignalEvent::Resume => {
+                    handler.on_resume(self.address()).await?;
+                }
+
+                SignalEvent::Suspend => {
+                    handler.on_suspend(self.address()).await?;
+                }
+
+                SignalEvent::Shutdown => {
+                    handler.on_shutdown(self.address()).await?;
+                }
 
                 SignalEvent::GetState(tx) => {
                     let _ = tx.send(DebugState {

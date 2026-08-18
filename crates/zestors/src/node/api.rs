@@ -75,11 +75,11 @@ impl Actor for ApiServer {
                     SignalEvent::GetChildren(tx) => {
                         tx.send(vec![]).ok();
                     }
-                    SignalEvent::StatusUpdate(update) => {
-                        if update.is_shutdown() {
-                            break Ok(());
-                        }
+                    SignalEvent::Shutdown => {
+                        tracing::info!("API server received shutdown signal");
+                        break Ok(());
                     }
+                    SignalEvent::Resume | SignalEvent::Suspend => {}
                 },
                 Event::Message(_infallible) => unreachable!(),
             }

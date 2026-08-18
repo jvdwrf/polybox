@@ -128,7 +128,6 @@ impl Supervisor {
             _ = async {
                 while let Some(signal) = stream.next_signal().await {
                     match signal {
-                        SignalEvent::StatusUpdate(_) => {}
                         SignalEvent::GetState(tx) => {
                             tx.send(DebugState {
                                 description: "Supervisor".to_string(),
@@ -137,6 +136,9 @@ impl Supervisor {
                         }
                         SignalEvent::GetChildren(tx) => {
                             tx.send(child_descriptions.clone()).ok();
+                        }
+                        SignalEvent::Resume | SignalEvent::Suspend | SignalEvent::Shutdown => {
+                            tracing::debug!("Ignoring signal {:?} while shutting down supervisees", signal);
                         }
                     }
                 }
@@ -335,11 +337,6 @@ impl Actor for Supervisor {
             _shutdown_signal_received = async {
                 while let Some(signal) = stream.next_signal().await {
                     match signal {
-                        SignalEvent::StatusUpdate(status) => {
-                            if status.is_shutdown() {
-                                break;
-                            }
-                        }
                         SignalEvent::GetState(tx) => {
                             tx.send(DebugState {
                                 description: "Supervisor".to_string(),
@@ -348,6 +345,12 @@ impl Actor for Supervisor {
                         }
                         SignalEvent::GetChildren(tx) => {
                             tx.send(child_descriptions.clone()).ok();
+                        }
+                        SignalEvent::Shutdown => {
+                            break;
+                        }
+                        SignalEvent::Resume | SignalEvent::Suspend => {
+                            tracing::debug!("Ignoring signal {:?} while initializing", signal);
                         }
                     }
                 }
@@ -394,14 +397,12 @@ impl Actor for Supervisor {
                         let children = self.get_child_descriptions();
                         tx.send(children).ok();
                     }
-                    SignalEvent::StatusUpdate(status) => match status {
-                        StatusUpdateEvent::Shutdown => {
-                            self.shutdown(None, &mut stream).await;
-                            break;
-                        }
-                        StatusUpdateEvent::Resume => (),
-                        StatusUpdateEvent::Suspend => (),
-                    },
+                    SignalEvent::Shutdown => {
+                        self.shutdown(None, &mut stream).await;
+                        break;
+                    }
+                    SignalEvent::Resume => (),
+                    SignalEvent::Suspend => (),
                 },
                 Event::Message(message) => match message {
                     SupervisorInterface::RegisterChild(RegisterChild(spec)) => {

@@ -58,10 +58,7 @@ async fn test_actor_lifecycle() {
                         tracing::info!("Received message: {:?}", msg);
                     }
                     Event::Signal(signal) => {
-                        if matches!(
-                            signal,
-                            SignalEvent::StatusUpdate(StatusUpdateEvent::Shutdown)
-                        ) {
+                        if matches!(signal, SignalEvent::Shutdown) {
                             rx.recv().await.unwrap();
                             return Ok(());
                         }

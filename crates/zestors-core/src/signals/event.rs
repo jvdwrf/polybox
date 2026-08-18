@@ -10,27 +10,22 @@ pub enum Event<M> {
 pub enum SignalEvent {
     GetState(Tx<DebugState>),
     GetChildren(Tx<Vec<ChildDescription>>),
-    StatusUpdate(StatusUpdateEvent),
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub enum StatusUpdateEvent {
     Resume,
     Suspend,
     Shutdown,
 }
 
-impl StatusUpdateEvent {
-    pub fn is_shutdown(self) -> bool {
-        self == StatusUpdateEvent::Shutdown
+impl SignalEvent {
+    pub fn is_shutdown(&self) -> bool {
+        matches!(self, SignalEvent::Shutdown)
     }
 
-    pub fn is_resume(self) -> bool {
-        self == StatusUpdateEvent::Resume
+    pub fn is_resume(&self) -> bool {
+        matches!(self, SignalEvent::Resume)
     }
 
-    pub fn is_suspend(self) -> bool {
-        self == StatusUpdateEvent::Suspend
+    pub fn is_suspend(&self) -> bool {
+        matches!(self, SignalEvent::Suspend)
     }
 }
 

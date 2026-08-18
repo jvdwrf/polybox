@@ -4,7 +4,7 @@ use zestors::{
     HandlerInterface,
     handler::{Handle, HandledBy, Handler, HandlerState, ShutdownReason},
     prelude::*,
-    signals::{DebugState, StatusUpdateEvent},
+    signals::DebugState,
     spawn,
     supervision::ActorRunnerExt as _,
 };
@@ -26,11 +26,11 @@ async fn main() {
                         SignalEvent::GetChildren(tx) => {
                             tx.send(vec![]).ok();
                         }
-                        SignalEvent::StatusUpdate(event) => match event {
-                            StatusUpdateEvent::Resume => {}
-                            StatusUpdateEvent::Suspend => {}
-                            StatusUpdateEvent::Shutdown => break,
-                        },
+                        SignalEvent::Shutdown => {
+                            println!("Received shutdown signal");
+                            break;
+                        }
+                        SignalEvent::Resume | SignalEvent::Suspend => {}
                     },
 
                     Event::Message(message) => match message {

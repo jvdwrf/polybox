@@ -264,7 +264,7 @@ impl<I: Interface> Channel<I> {
         match signal {
             SignalInterface::Shutdown(_) => {
                 self.register_shutdown();
-                Some(SignalEvent::StatusUpdate(StatusUpdateEvent::Shutdown))
+                Some(SignalEvent::Shutdown)
             }
             SignalInterface::Suspend(_) => {
                 if self.status() == ActorStatus::Exiting {
@@ -272,7 +272,7 @@ impl<I: Interface> Channel<I> {
                     None
                 } else {
                     self.register_suspend();
-                    Some(SignalEvent::StatusUpdate(StatusUpdateEvent::Suspend))
+                    Some(SignalEvent::Suspend)
                 }
             }
             SignalInterface::Resume(_) => {
@@ -281,11 +281,27 @@ impl<I: Interface> Channel<I> {
                     None
                 } else {
                     self.register_resume();
-                    Some(SignalEvent::StatusUpdate(StatusUpdateEvent::Resume))
+                    Some(SignalEvent::Resume)
                 }
             }
-            SignalInterface::GetState((_, tx)) => Some(SignalEvent::GetState(tx)),
-            SignalInterface::GetChildren((_, tx)) => Some(SignalEvent::GetChildren(tx)),
+            SignalInterface::GetState((_, tx)) => {
+                if tx.is_closed() {
+                    tracing::debug!("GetState signal received, but the response channel is closed");
+                    None
+                } else {
+                    Some(SignalEvent::GetState(tx))
+                }
+            }
+            SignalInterface::GetChildren((_, tx)) => {
+                if tx.is_closed() {
+                    tracing::debug!(
+                        "GetChildren signal received, but the response channel is closed"
+                    );
+                    None
+                } else {
+                    Some(SignalEvent::GetChildren(tx))
+                }
+            }
             SignalInterface::Ping((_, tx)) => {
                 let _ = tx.send(());
                 None
