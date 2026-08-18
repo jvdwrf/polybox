@@ -501,16 +501,6 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
         self.signal(SignalInterface::Resume(signals::Resume));
     }
 
-    async fn get_debug_state(&self) -> Result<DebugState, RequestCheckedError<GetDebug>> {
-        self.request_checked(GetDebug).await
-    }
-
-    async fn get_children(
-        &self,
-    ) -> Result<Vec<ChildDescription>, RequestCheckedError<GetChildren>> {
-        self.request_checked(GetChildren).await
-    }
-
     fn ping(&self) -> Rx<()> {
         let (tx, rx) = new_request();
         self.signal(SignalInterface::Ping((signals::Ping, tx)));

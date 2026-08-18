@@ -73,13 +73,13 @@ pub trait ActorRef {
 
     fn signal_resume(&self);
 
-    fn get_debug_state(
-        &self,
-    ) -> impl Future<Output = Result<DebugState, RequestCheckedError<GetDebug>>> + Send;
+    // fn get_debug_state(
+    //     &self,
+    // ) -> impl Future<Output = Result<DebugState, RequestCheckedError<GetDebug>>> + Send;
 
-    fn get_children(
-        &self,
-    ) -> impl Future<Output = Result<Vec<ChildDescription>, RequestCheckedError<GetChildren>>> + Send;
+    // fn get_children(
+    //     &self,
+    // ) -> impl Future<Output = Result<Vec<ChildDescription>, RequestCheckedError<GetChildren>>> + Send;
 
     fn ping(&self) -> Rx<()>;
 
@@ -156,18 +156,18 @@ impl<T: AsActorRef> ActorRef for T {
         self.as_channel().signal_resume()
     }
 
-    fn get_debug_state(
-        &self,
-    ) -> impl Future<Output = Result<DebugState, RequestCheckedError<GetDebug>>> + Send {
-        self.as_channel().get_debug_state()
-    }
+    // fn get_debug_state(
+    //     &self,
+    // ) -> impl Future<Output = Result<DebugState, RequestCheckedError<GetDebug>>> + Send {
+    //     self.as_channel().get_debug_state()
+    // }
 
-    fn get_children(
-        &self,
-    ) -> impl Future<Output = Result<Vec<ChildDescription>, RequestCheckedError<GetChildren>>> + Send
-    {
-        self.as_channel().get_children()
-    }
+    // fn get_children(
+    //     &self,
+    // ) -> impl Future<Output = Result<Vec<ChildDescription>, RequestCheckedError<GetChildren>>> + Send
+    // {
+    //     self.as_channel().get_children()
+    // }
 
     fn ping(&self) -> Rx<()> {
         self.as_channel().ping()

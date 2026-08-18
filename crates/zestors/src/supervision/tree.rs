@@ -41,7 +41,7 @@ impl SupervisionTree {
             return;
         };
 
-        let children = match address.get_children().await {
+        let children = match address.request_checked(GetChildren).await {
             Ok(children) => children,
             Err(err) => {
                 tracing::warn!("Failed to get children for PID {}: {}", self.pid, err);
@@ -79,7 +79,7 @@ impl SupervisionTree {
                 }
             };
 
-            let Ok(debug_state) = address.get_debug_state().await else {
+            let Ok(debug_state) = address.request_checked(GetDebug).await else {
                 continue;
             };
 

@@ -4,9 +4,8 @@ use zestors::{
     HandlerInterface,
     handler::{Handle, HandledBy, Handler, HandlerState, ShutdownReason},
     prelude::*,
-    signals::{GetChildren, GetDebug},
     spawn,
-    supervision::ActorRunnerExt as _,
+    supervision::{ActorRunnerExt as _, GetChildren, GetDebug},
 };
 
 #[tokio::main]
@@ -33,6 +32,9 @@ async fn main() {
                         }
                         MyInterface::Debug((_, tx)) => {
                             tx.send("MyActor is running".into()).ok();
+                        }
+                        MyInterface::Children((_, tx)) => {
+                            tx.send(vec![]).ok();
                         }
                     },
                 }
