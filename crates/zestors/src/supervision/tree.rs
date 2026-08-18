@@ -1,18 +1,16 @@
-use crate::{_prelude::*, schemas::DurationSchema};
+use crate::_prelude::*;
 use std::collections::VecDeque;
 
 #[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct SupervisionTree {
-    pid: Pid,
-
-    restart_mode: RestartMode,
-
-    #[schema(value_type = DurationSchema)]
-    #[serde(with = "DurationSchema")]
-    abort_timeout: Duration,
+    description: ChildDescription,
+    status: Option<ActorStatus>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     debug_state: Option<DebugState>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    channel_state: Option<ChannelSnapshot>,
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schema(no_recursion)]
@@ -20,46 +18,29 @@ pub struct SupervisionTree {
 }
 
 impl SupervisionTree {
-    pub fn new(child: ChildDescription) -> Self {
+    pub fn new(description: ChildDescription) -> Self {
         Self {
-            pid: child.pid,
+            status: Registry::local()
+                .get(&description.pid)
+                .map(|address| address.status()),
+            description,
             debug_state: None,
-            restart_mode: child.restart_mode,
-            abort_timeout: child.abort_timeout,
+            channel_state: None,
             children: Vec::new(),
         }
     }
 
-    pub async fn new_populated(child: ChildDescription) -> Self {
-        let mut tree = Self::new(child);
-        tree.populate_tree().await;
-        tree
+    pub async fn populated(mut self, timeout: Duration) -> Self {
+        self.populate(timeout).await;
+        self
     }
 
-    async fn populate_children(&mut self) {
-        let Some(address) = Registry::local().get(&self.pid) else {
-            return;
-        };
-
-        let children = match address.request_checked(GetChildren).await {
-            Ok(children) => children,
-            Err(err) => {
-                tracing::warn!("Failed to get children for PID {}: {}", self.pid, err);
-                vec![]
-            }
-        };
-
-        for child in children {
-            self.children.push(SupervisionTree::new(child));
-        }
-    }
-
-    pub async fn populate_tree(&mut self) -> () {
+    pub async fn populate(&mut self, timeout: Duration) -> () {
         let mut queue = VecDeque::new();
         queue.push_back(self);
 
         while let Some(node) = queue.pop_front() {
-            node.populate_children().await;
+            node.populate_layer(timeout).await;
 
             for child in &mut node.children {
                 queue.push_back(child);
@@ -67,19 +48,48 @@ impl SupervisionTree {
         }
     }
 
-    pub async fn populate_debug_state(&mut self) {
+    async fn populate_layer(&mut self, timeout: Duration) {
+        let Some(address) = Registry::local().get(&self.description.pid) else {
+            return;
+        };
+
+        let children =
+            match tokio::time::timeout(timeout, address.request_checked(GetChildren)).await {
+                Ok(Ok(children)) => children,
+                Ok(Err(err)) => {
+                    tracing::warn!(
+                        "Failed to get children for PID {}: {}",
+                        self.description.pid,
+                        err
+                    );
+                    vec![]
+                }
+                Err(_) => {
+                    tracing::warn!("Timeout getting children for PID {}", self.description.pid);
+                    vec![]
+                }
+            };
+
+        for child in children {
+            self.children.push(SupervisionTree::new(child));
+        }
+    }
+
+    pub async fn populate_debug_state(&mut self, timeout: Duration) {
         let mut queue = VecDeque::new();
         queue.push_back(self);
 
         while let Some(node) = queue.pop_front() {
-            let address = match Registry::local().get(&node.pid) {
+            let address = match Registry::local().get(&node.description.pid) {
                 Some(address) => address,
                 None => {
                     continue;
                 }
             };
 
-            let Ok(debug_state) = address.request_checked(GetDebug).await else {
+            let Ok(Ok(debug_state)) =
+                tokio::time::timeout(timeout, address.request_checked(GetDebug)).await
+            else {
                 continue;
             };
 
@@ -91,8 +101,34 @@ impl SupervisionTree {
         }
     }
 
-    pub async fn with_debug_state(mut self) -> Self {
-        self.populate_debug_state().await;
+    pub async fn populated_debug_state(mut self, timeout: Duration) -> Self {
+        self.populate_debug_state(timeout).await;
+        self
+    }
+
+    pub fn populate_channel_snapshots(&mut self) {
+        let mut queue = VecDeque::new();
+        queue.push_back(self);
+
+        while let Some(node) = queue.pop_front() {
+            let address = match Registry::local().get(&node.description.pid) {
+                Some(address) => address,
+                None => {
+                    continue;
+                }
+            };
+
+            let channel_state = address.snapshot();
+            node.channel_state = Some(channel_state);
+
+            for child in &mut node.children {
+                queue.push_back(child);
+            }
+        }
+    }
+
+    pub fn populated_channel_snapshots(mut self) -> Self {
+        self.populate_channel_snapshots();
         self
     }
 }

@@ -1,5 +1,4 @@
 use super::*;
-use crate::signals::{ChildDescription, DebugState};
 use std::{any::TypeId, future::Future};
 use tokio::time::Instant;
 
@@ -30,6 +29,8 @@ pub trait ActorRef {
     fn pid(&self) -> &Pid;
 
     fn status(&self) -> ActorStatus;
+
+    fn snapshot(&self) -> ChannelSnapshot;
 
     fn watch_start(&self) -> impl Future<Output = ()> + Send
     where
@@ -156,19 +157,6 @@ impl<T: AsActorRef> ActorRef for T {
         self.as_channel().signal_resume()
     }
 
-    // fn get_debug_state(
-    //     &self,
-    // ) -> impl Future<Output = Result<DebugState, RequestCheckedError<GetDebug>>> + Send {
-    //     self.as_channel().get_debug_state()
-    // }
-
-    // fn get_children(
-    //     &self,
-    // ) -> impl Future<Output = Result<Vec<ChildDescription>, RequestCheckedError<GetChildren>>> + Send
-    // {
-    //     self.as_channel().get_children()
-    // }
-
     fn ping(&self) -> Rx<()> {
         self.as_channel().ping()
     }
@@ -211,5 +199,9 @@ impl<T: AsActorRef> ActorRef for T {
 
     fn last_spawned_at(&self) -> Option<Instant> {
         self.as_channel().last_spawned_at()
+    }
+
+    fn snapshot(&self) -> ChannelSnapshot {
+        self.as_channel().snapshot()
     }
 }

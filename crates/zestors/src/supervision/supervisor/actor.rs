@@ -281,8 +281,7 @@ impl Supervisor {
             .iter()
             .map(|(pid, supervisee)| ChildDescription {
                 pid: pid.clone(),
-                restart_mode: supervisee.spec.cfg().restart_mode,
-                abort_timeout: supervisee.spec.cfg().abort_timeout,
+                cfg: supervisee.spec.cfg().clone(),
             })
             .collect()
     }

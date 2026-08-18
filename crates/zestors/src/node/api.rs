@@ -2,7 +2,7 @@ use crate::_prelude::*;
 use axum::extract::{Query, State};
 use axum_autoroute::{AutorouteApiRouter, autoroute, method_routers};
 use smol_str::format_smolstr;
-use std::{convert::Infallible, net::SocketAddr, pin::pin};
+use std::{net::SocketAddr, pin::pin};
 use tokio::net::TcpListener;
 use utoipa::IntoParams;
 // use utoipa_swagger_ui::SwaggerUi;
@@ -168,15 +168,20 @@ async fn get_tree(
         return "PID not found in registry".into_404();
     }
 
-    let tree = SupervisionTree::new_populated(ChildDescription {
+    let tree = SupervisionTree::new(ChildDescription {
         pid,
-        restart_mode: RestartMode::Always,
-        abort_timeout: Duration::from_secs(10),
+        cfg: SuperviseeConfig {
+            restart_mode: RestartMode::Always,
+            abort_timeout: Duration::from_secs(10),
+            init_timeout: Duration::from_secs(10),
+        },
     })
-    .await;
+    .populated(Duration::from_millis(50))
+    .await
+    .populated_channel_snapshots();
 
     let tree = if include_debug {
-        tree.with_debug_state().await
+        tree.populated_debug_state(Duration::from_millis(50)).await
     } else {
         tree
     };

@@ -1,6 +1,10 @@
 use super::*;
-use crate::signals::{self, Event};
+use crate::{
+    schemas::ZonedSchema,
+    signals::{self, Event},
+};
 use eyeball::SharedObservable;
+use jiff::{SignedDuration, Timestamp, Zoned, tz::TimeZone};
 use std::{any::TypeId, fmt::Debug, marker::PhantomData, panic::AssertUnwindSafe, sync::RwLock};
 use tokio::{select, time::Instant};
 use type_sets::{Contains, Set, TypeSet};
@@ -10,6 +14,24 @@ const MSG_QUEUE_CAPACITY: usize = 1_000_000;
 pub(super) const BACKPRESSURE_LIMIT: usize = 100;
 const KEEP_N_SPAWNS: usize = 5;
 const KEEP_N_EXITS: usize = 5;
+
+#[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct ChannelSnapshot {
+    pub pid: Pid,
+    pub status: ActorStatus,
+
+    pub signal_len: usize,
+    pub msg_len: usize,
+
+    #[schema(value_type = Vec<ZonedSchema>)]
+    pub spawns: Vec<Zoned>,
+
+    #[schema(value_type = Vec<(ZonedSchema, Exit)>)]
+    pub exits: Vec<(Zoned, Exit)>,
+
+    #[schema(value_type = ZonedSchema)]
+    pub created_at: Zoned,
+}
 
 pub trait ChannelKind: 'static {
     type Set: TypeSet + 'static;
@@ -574,6 +596,38 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
         let spawned_at = self.inner.spawns.read().unwrap();
         spawned_at.last().cloned()
     }
+
+    fn snapshot(&self) -> ChannelSnapshot {
+        let clock = Clock::now();
+        let channel = &self.inner;
+
+        ChannelSnapshot {
+            pid: channel.pid.clone(),
+            status: channel.status_observer.get(),
+            signal_len: channel.signal_queue.len(),
+            msg_len: channel.msg_queue.len(),
+            spawns: channel
+                .spawns
+                .read()
+                .unwrap()
+                .iter()
+                .map(|instant| clock.zoned_at(instant.clone()))
+                .collect(),
+            exits: channel
+                .exits
+                .read()
+                .unwrap()
+                .iter()
+                .map(|(instant, res)| {
+                    (
+                        clock.zoned_at(instant.clone()),
+                        Exit::from_result(res.clone()),
+                    )
+                })
+                .collect(),
+            created_at: clock.zoned_at(channel.created_at),
+        }
+    }
 }
 
 impl<Q: ChannelKind> IntoDyn for Channel<Q> {
@@ -617,5 +671,30 @@ impl<T: ChannelKind> Clone for Channel<T> {
             inner: self.inner.clone(),
             _marker: PhantomData,
         }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Clock {
+    instant: Instant,
+    timestamp: Timestamp,
+}
+
+impl Clock {
+    fn now() -> Self {
+        Self {
+            instant: Instant::now(),
+            timestamp: Timestamp::now(),
+        }
+    }
+
+    fn timestamp_at(self, instant: Instant) -> Timestamp {
+        let elapsed = instant.duration_since(self.instant);
+
+        self.timestamp + SignedDuration::from_nanos(elapsed.as_nanos() as i64)
+    }
+
+    fn zoned_at(self, instant: Instant) -> Zoned {
+        self.timestamp_at(instant).to_zoned(TimeZone::UTC)
     }
 }

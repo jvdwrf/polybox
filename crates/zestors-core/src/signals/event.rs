@@ -31,13 +31,6 @@ impl SignalEvent {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ChildDescription {
-    pub pid: Pid,
-    pub restart_mode: RestartMode,
-    pub abort_timeout: Duration,
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, utoipa::ToSchema)]
 #[schema(value_type = String, format = "string", example = "MyActor is running")]
 pub struct DebugState(SmolStr);

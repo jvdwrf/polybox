@@ -44,6 +44,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 vtable = "0.4"
 concurrent-queue = "2"
 eyeball = "0.8"
+jiff = { version = "0.2", features = ["serde"] }
 
 iced = { version = "0.14" }
 iced_test = { version = "0.14", features = [] }
