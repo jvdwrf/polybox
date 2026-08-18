@@ -82,6 +82,7 @@ impl SupervisionTree {
             let Ok(debug_state) = address.get_debug_state().await else {
                 continue;
             };
+
             node.debug_state = Some(debug_state);
 
             for child in &mut node.children {

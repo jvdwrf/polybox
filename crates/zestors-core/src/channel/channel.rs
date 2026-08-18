@@ -471,6 +471,13 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
         }
     }
 
+    async fn request_checked<M: Message>(
+        &self,
+        msg: M,
+    ) -> Result<M::Reply, RequestCheckedError<M>> {
+        Ok(self.send_checked(msg).await?.receive().await?)
+    }
+
     fn pid(&self) -> &Pid {
         &self.inner.pid
     }
@@ -504,11 +511,8 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
         self.signal(SignalInterface::Resume(signals::Resume));
     }
 
-    fn get_debug_state(&self) -> Rx<signals::DebugState> {
-        // let (tx, rx) = new_request();
-        // self.signal(SignalInterface::GetState((signals::RequestDebugState, tx)));
-        // rx
-        todo!()
+    async fn get_debug_state(&self) -> Result<DebugState, RequestCheckedError<DebugRequest>> {
+        self.request_checked(DebugRequest).await
     }
 
     fn ping(&self) -> Rx<()> {

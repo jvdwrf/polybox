@@ -48,6 +48,14 @@ pub trait Sends<M: Message>: Sync {
     /// If the underlying queue is at capacity, the message is dropped and the
     /// implementation may log the overflow.
     fn force_send(&self, msg: M) -> M::Output;
+
+    /// Sends a message and waits for a reply.
+    ///
+    /// This is the same as [`Sends::send`] with [`MessageOutput::receive`] called on the result. The resulting value is therefore [`Message::Reply`] instead of
+    /// [`Message::Output`].
+    fn request(&self, msg: M) -> impl Future<Output = Result<M::Reply, RequestError<M>>> + Send {
+        async move { Ok(self.send(msg).await?.receive().await?) }
+    }
 }
 
 impl<M, T> Sends<M> for T

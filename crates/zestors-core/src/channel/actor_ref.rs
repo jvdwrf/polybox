@@ -22,6 +22,11 @@ pub trait ActorRef {
     /// Same as [`Sends::force_send`], but checks whether the message type is accepted by the channel.
     fn force_send_checked<M: Message>(&self, msg: M) -> Result<M::Output, NotAccepted<M>>;
 
+    fn request_checked<M: Message>(
+        &self,
+        msg: M,
+    ) -> impl Future<Output = Result<M::Reply, RequestCheckedError<M>>> + Send;
+
     fn pid(&self) -> &Pid;
 
     fn status(&self) -> ActorStatus;
@@ -68,7 +73,9 @@ pub trait ActorRef {
 
     fn signal_resume(&self);
 
-    fn get_debug_state(&self) -> Rx<DebugState>;
+    fn get_debug_state(
+        &self,
+    ) -> impl Future<Output = Result<DebugState, RequestCheckedError<DebugRequest>>> + Send;
 
     fn ping(&self) -> Rx<()>;
 
@@ -116,6 +123,13 @@ impl<T: AsActorRef> ActorRef for T {
         self.as_channel().force_send_checked(msg)
     }
 
+    fn request_checked<M: Message>(
+        &self,
+        msg: M,
+    ) -> impl Future<Output = Result<M::Reply, RequestCheckedError<M>>> + Send {
+        self.as_channel().request_checked(msg)
+    }
+
     fn pid(&self) -> &Pid {
         self.as_channel().pid()
     }
@@ -140,7 +154,9 @@ impl<T: AsActorRef> ActorRef for T {
         self.as_channel().signal_resume()
     }
 
-    fn get_debug_state(&self) -> Rx<DebugState> {
+    fn get_debug_state(
+        &self,
+    ) -> impl Future<Output = Result<DebugState, RequestCheckedError<DebugRequest>>> + Send {
         self.as_channel().get_debug_state()
     }
 
