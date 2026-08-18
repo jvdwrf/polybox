@@ -21,7 +21,6 @@ impl<H: Handler> HandlerState<H> {
     ) -> Result<H::Exit, H::Error> {
         tracing::info!("Actor is exiting due to reason: {:?}", reason);
         let address = self.address().clone();
-        let description = handler.debug_state(&address);
         let children = handler.children();
 
         tokio::select! {
@@ -32,10 +31,6 @@ impl<H: Handler> HandlerState<H> {
             _ = async {
                 while let Some(signal) = self.stream.next_signal().await {
                     match signal {
-                        SignalEvent::GetState(tx) => {
-                            tx.send(description.clone())
-                            .ok();
-                        }
                         SignalEvent::GetChildren(tx) => {
                             tx.send(children.clone()).ok();
                         }
@@ -66,10 +61,6 @@ impl<H: Handler> HandlerState<H> {
             _shutdown_signal_received = async {
                 while let Some(signal) = self.stream.next_signal().await {
                     match signal {
-                        SignalEvent::GetState(tx) => {
-                            tx.send(debug_state.clone())
-                            .ok();
-                        }
                         SignalEvent::GetChildren(tx) => {
                             tx.send(children.clone()).ok();
                         }
@@ -162,10 +153,6 @@ impl<H: Handler> HandlerState<H> {
 
                 SignalEvent::Shutdown => {
                     handler.on_shutdown(self.address()).await?;
-                }
-
-                SignalEvent::GetState(tx) => {
-                    let _ = tx.send(handler.debug_state(self.address()));
                 }
 
                 SignalEvent::GetChildren(tx) => {

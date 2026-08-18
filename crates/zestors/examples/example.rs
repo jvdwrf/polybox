@@ -4,7 +4,7 @@ use zestors::{
     HandlerInterface,
     handler::{Handle, HandledBy, Handler, HandlerState, ShutdownReason},
     prelude::*,
-    signals::DebugState,
+    signals::DebugRequest,
     spawn,
     supervision::ActorRunnerExt as _,
 };
@@ -17,9 +17,6 @@ async fn main() {
             while let Some(msg) = stream.next().await {
                 match msg {
                     Event::Signal(signal) => match signal {
-                        SignalEvent::GetState(tx) => {
-                            tx.send("MyActor is running".into()).ok();
-                        }
                         SignalEvent::GetChildren(tx) => {
                             tx.send(vec![]).ok();
                         }
@@ -36,6 +33,9 @@ async fn main() {
                         }
                         MyInterface::Print(payload) => {
                             println!("Received message: {:?}", payload);
+                        }
+                        MyInterface::Debug((_, tx)) => {
+                            tx.send("MyActor is running".into()).ok();
                         }
                     },
                 }
@@ -71,6 +71,7 @@ impl MyActor {
 enum MyInterface {
     Add(Payload<u32>),
     Print(Payload<String>),
+    Debug(Payload<DebugRequest>),
 }
 
 #[derive(Message)]
@@ -83,7 +84,7 @@ impl Handler for MyActor {
 
     async fn exit(
         &mut self,
-        address: &Address<Self::Interface>,
+        _address: &Address<Self::Interface>,
         reason: ShutdownReason,
     ) -> Result<Self::Exit, Self::Error> {
         println!("Exiting with reason: {:?}", reason);
@@ -132,6 +133,17 @@ impl Handle<IntervalTick> for MyActor {
         _: Payload<IntervalTick>,
     ) -> Result<(), Self::Error> {
         println!("Interval tick: {}", self.nr);
+        Ok(())
+    }
+}
+
+impl Handle<DebugRequest> for MyActor {
+    async fn handle(
+        &mut self,
+        _: &mut HandlerState<Self>,
+        (_, tx): Payload<DebugRequest>,
+    ) -> Result<(), Self::Error> {
+        tx.send("MyActor is running".into()).ok();
         Ok(())
     }
 }

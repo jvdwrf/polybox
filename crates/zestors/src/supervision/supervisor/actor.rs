@@ -1,3 +1,5 @@
+use smol_str::format_smolstr;
+
 use super::*;
 
 #[derive(Debug)]
@@ -128,10 +130,6 @@ impl Supervisor {
             _ = async {
                 while let Some(signal) = stream.next_signal().await {
                     match signal {
-                        SignalEvent::GetState(tx) => {
-                            tx.send("Supervisor".into())
-                            .ok();
-                        }
                         SignalEvent::GetChildren(tx) => {
                             tx.send(child_descriptions.clone()).ok();
                         }
@@ -335,9 +333,6 @@ impl Actor for Supervisor {
             _shutdown_signal_received = async {
                 while let Some(signal) = stream.next_signal().await {
                     match signal {
-                        SignalEvent::GetState(tx) => {
-                            tx.send("Supervisor".into()).ok();
-                        }
                         SignalEvent::GetChildren(tx) => {
                             tx.send(child_descriptions.clone()).ok();
                         }
@@ -382,9 +377,6 @@ impl Actor for Supervisor {
 
             match msg {
                 Event::Signal(signal) => match signal {
-                    SignalEvent::GetState(tx) => {
-                        tx.send("Supervisor".into()).ok();
-                    }
                     SignalEvent::GetChildren(tx) => {
                         let children = self.get_child_descriptions();
                         tx.send(children).ok();
@@ -406,6 +398,10 @@ impl Actor for Supervisor {
                         tracing::trace!("Deregistering child: {:?}", id);
                         let supervisee = self.supervisees.shift_remove(&id);
                         tx.send(supervisee.map(|s| s.spec)).ok();
+                    }
+
+                    SupervisorInterface::Debug((_, tx)) => {
+                        let _ = tx.send(format_smolstr!("{self:?}").into());
                     }
                 },
             }

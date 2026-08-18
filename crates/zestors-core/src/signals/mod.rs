@@ -6,3 +6,8 @@ pub(crate) use interface::*;
 
 mod event;
 pub use event::*;
+
+#[derive(Message, Debug)]
+#[msg(path = "crate")]
+#[msg(reply = DebugState)]
+pub struct DebugRequest;

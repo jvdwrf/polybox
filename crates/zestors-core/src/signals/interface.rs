@@ -19,11 +19,6 @@ pub(crate) struct Resume;
 
 #[derive(Message, Debug)]
 #[msg(path = "crate")]
-#[msg(reply = DebugState)]
-pub(crate) struct GetState;
-
-#[derive(Message, Debug)]
-#[msg(path = "crate")]
 #[msg(reply = "Vec<ChildDescription>")]
 pub(crate) struct GetChildren;
 
@@ -39,7 +34,7 @@ pub(crate) enum SignalInterface {
     Suspend(Payload<Suspend>),
     Resume(Payload<Resume>),
     // GetStatus(Payload<GetStatus>),
-    GetState(Payload<GetState>),
+    // GetState(Payload<GetState>),
     Ping(Payload<Ping>),
     GetChildren(Payload<GetChildren>),
 }

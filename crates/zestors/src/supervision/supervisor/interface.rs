@@ -13,4 +13,5 @@ pub struct DeregisterChild(pub Pid);
 pub enum SupervisorInterface {
     RegisterChild(Payload<RegisterChild>),
     DeregisterChild(Payload<DeregisterChild>),
+    Debug(Payload<DebugRequest>),
 }

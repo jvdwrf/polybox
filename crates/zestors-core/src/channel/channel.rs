@@ -284,14 +284,6 @@ impl<I: Interface> Channel<I> {
                     Some(SignalEvent::Resume)
                 }
             }
-            SignalInterface::GetState((_, tx)) => {
-                if tx.is_closed() {
-                    tracing::debug!("GetState signal received, but the response channel is closed");
-                    None
-                } else {
-                    Some(SignalEvent::GetState(tx))
-                }
-            }
             SignalInterface::GetChildren((_, tx)) => {
                 if tx.is_closed() {
                     tracing::debug!(
@@ -513,9 +505,10 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
     }
 
     fn get_debug_state(&self) -> Rx<signals::DebugState> {
-        let (tx, rx) = new_request();
-        self.signal(SignalInterface::GetState((signals::GetState, tx)));
-        rx
+        // let (tx, rx) = new_request();
+        // self.signal(SignalInterface::GetState((signals::RequestDebugState, tx)));
+        // rx
+        todo!()
     }
 
     fn ping(&self) -> Rx<()> {

@@ -39,8 +39,14 @@ pub(super) struct ApiServer {
     pub cfg: Arc<ApiConfig>,
 }
 
+#[derive(Interface)]
+#[interface(crate = "crate")]
+pub(super) enum ApiServerInterface {
+    Debug(Payload<DebugRequest>),
+}
+
 impl Actor for ApiServer {
-    type Interface = Infallible;
+    type Interface = ApiServerInterface;
     type Exit = ();
 
     async fn run(self, mut state: EventStream<Self::Interface>) -> Result<Self::Exit, Report> {
@@ -68,9 +74,6 @@ impl Actor for ApiServer {
 
             match event {
                 Event::Signal(signal) => match signal {
-                    SignalEvent::GetState(tx) => {
-                        let _ = tx.send(format_smolstr!("{self:?}").into());
-                    }
                     SignalEvent::GetChildren(tx) => {
                         tx.send(vec![]).ok();
                     }
@@ -80,7 +83,11 @@ impl Actor for ApiServer {
                     }
                     SignalEvent::Resume | SignalEvent::Suspend => {}
                 },
-                Event::Message(_infallible) => unreachable!(),
+                Event::Message(msg) => match msg {
+                    ApiServerInterface::Debug((_, tx)) => {
+                        let _ = tx.send(format_smolstr!("{self:?}").into());
+                    }
+                },
             }
         }
     }

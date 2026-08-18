@@ -12,7 +12,6 @@ pub enum Event<M> {
 
 #[derive(Debug)]
 pub enum SignalEvent {
-    GetState(Tx<DebugState>),
     GetChildren(Tx<Vec<ChildDescription>>),
     Resume,
     Suspend,
