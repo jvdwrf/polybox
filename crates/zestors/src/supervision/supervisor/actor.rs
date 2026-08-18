@@ -129,9 +129,7 @@ impl Supervisor {
                 while let Some(signal) = stream.next_signal().await {
                     match signal {
                         SignalEvent::GetState(tx) => {
-                            tx.send(DebugState {
-                                description: "Supervisor".to_string(),
-                            })
+                            tx.send("Supervisor".into())
                             .ok();
                         }
                         SignalEvent::GetChildren(tx) => {
@@ -338,10 +336,7 @@ impl Actor for Supervisor {
                 while let Some(signal) = stream.next_signal().await {
                     match signal {
                         SignalEvent::GetState(tx) => {
-                            tx.send(DebugState {
-                                description: "Supervisor".to_string(),
-                            })
-                            .ok();
+                            tx.send("Supervisor".into()).ok();
                         }
                         SignalEvent::GetChildren(tx) => {
                             tx.send(child_descriptions.clone()).ok();
@@ -388,10 +383,7 @@ impl Actor for Supervisor {
             match msg {
                 Event::Signal(signal) => match signal {
                     SignalEvent::GetState(tx) => {
-                        tx.send(DebugState {
-                            description: "Supervisor".to_string(),
-                        })
-                        .ok();
+                        tx.send("Supervisor".into()).ok();
                     }
                     SignalEvent::GetChildren(tx) => {
                         let children = self.get_child_descriptions();

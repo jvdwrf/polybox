@@ -33,9 +33,7 @@ impl<H: Handler> HandlerState<H> {
                 while let Some(signal) = self.stream.next_signal().await {
                     match signal {
                         SignalEvent::GetState(tx) => {
-                            tx.send(DebugState {
-                                description: description.clone(),
-                            })
+                            tx.send(description.clone())
                             .ok();
                         }
                         SignalEvent::GetChildren(tx) => {
@@ -69,9 +67,7 @@ impl<H: Handler> HandlerState<H> {
                 while let Some(signal) = self.stream.next_signal().await {
                     match signal {
                         SignalEvent::GetState(tx) => {
-                            tx.send(DebugState {
-                                description: debug_state.clone(),
-                            })
+                            tx.send(debug_state.clone())
                             .ok();
                         }
                         SignalEvent::GetChildren(tx) => {
@@ -169,9 +165,7 @@ impl<H: Handler> HandlerState<H> {
                 }
 
                 SignalEvent::GetState(tx) => {
-                    let _ = tx.send(DebugState {
-                        description: handler.debug_state(self.address()),
-                    });
+                    let _ = tx.send(handler.debug_state(self.address()));
                 }
 
                 SignalEvent::GetChildren(tx) => {

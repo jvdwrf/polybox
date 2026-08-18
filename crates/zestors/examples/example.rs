@@ -18,10 +18,7 @@ async fn main() {
                 match msg {
                     Event::Signal(signal) => match signal {
                         SignalEvent::GetState(tx) => {
-                            tx.send(DebugState {
-                                description: "MyActor is running".to_string(),
-                            })
-                            .ok();
+                            tx.send("MyActor is running".into()).ok();
                         }
                         SignalEvent::GetChildren(tx) => {
                             tx.send(vec![]).ok();

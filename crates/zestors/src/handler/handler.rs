@@ -1,5 +1,6 @@
 use crate::_prelude::*;
 use futures::future::pending;
+use smol_str::format_smolstr;
 use std::{
     convert::Infallible,
     fmt::{Debug, Display},
@@ -59,8 +60,8 @@ pub trait Handler: Debug + Sized + Send + Sync + 'static {
         async { Ok(()) }
     }
 
-    fn debug_state(&self, _address: &Address<Self::Interface>) -> String {
-        format!("{self:?}")
+    fn debug_state(&self, _address: &Address<Self::Interface>) -> DebugState {
+        format_smolstr!("{self:?}").into()
     }
 
     /// Called whenever the actor is waiting for a new event to process.

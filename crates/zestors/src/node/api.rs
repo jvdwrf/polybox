@@ -1,6 +1,7 @@
 use crate::_prelude::*;
 use axum::extract::{Query, State};
 use axum_autoroute::{AutorouteApiRouter, autoroute, method_routers};
+use smol_str::format_smolstr;
 use std::{convert::Infallible, net::SocketAddr, pin::pin};
 use tokio::net::TcpListener;
 use utoipa::IntoParams;
@@ -68,9 +69,7 @@ impl Actor for ApiServer {
             match event {
                 Event::Signal(signal) => match signal {
                     SignalEvent::GetState(tx) => {
-                        let _ = tx.send(DebugState {
-                            description: format!("{:?}", self),
-                        });
+                        let _ = tx.send(format_smolstr!("{self:?}").into());
                     }
                     SignalEvent::GetChildren(tx) => {
                         tx.send(vec![]).ok();
