@@ -42,7 +42,8 @@ pub(super) struct ApiServer {
 #[derive(Interface)]
 #[interface(crate = "crate")]
 pub(super) enum ApiServerInterface {
-    Debug(Payload<DebugRequest>),
+    Debug(Payload<GetDebug>),
+    Children(Payload<GetChildren>),
 }
 
 impl Actor for ApiServer {
@@ -74,18 +75,20 @@ impl Actor for ApiServer {
 
             match event {
                 Event::Signal(signal) => match signal {
-                    SignalEvent::GetChildren(tx) => {
-                        tx.send(vec![]).ok();
-                    }
                     SignalEvent::Shutdown => {
                         tracing::info!("API server received shutdown signal");
                         break Ok(());
                     }
                     SignalEvent::Resume | SignalEvent::Suspend => {}
                 },
+
                 Event::Message(msg) => match msg {
                     ApiServerInterface::Debug((_, tx)) => {
                         let _ = tx.send(format_smolstr!("{self:?}").into());
+                    }
+
+                    ApiServerInterface::Children((_, tx)) => {
+                        tx.send(vec![]).ok();
                     }
                 },
             }

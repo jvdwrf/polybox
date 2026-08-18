@@ -130,9 +130,6 @@ impl Supervisor {
             _ = async {
                 while let Some(signal) = stream.next_signal().await {
                     match signal {
-                        SignalEvent::GetChildren(tx) => {
-                            tx.send(child_descriptions.clone()).ok();
-                        }
                         SignalEvent::Resume | SignalEvent::Suspend | SignalEvent::Shutdown => {
                             tracing::debug!("Ignoring signal {:?} while shutting down supervisees", signal);
                         }
@@ -333,9 +330,6 @@ impl Actor for Supervisor {
             _shutdown_signal_received = async {
                 while let Some(signal) = stream.next_signal().await {
                     match signal {
-                        SignalEvent::GetChildren(tx) => {
-                            tx.send(child_descriptions.clone()).ok();
-                        }
                         SignalEvent::Shutdown => {
                             break;
                         }
@@ -377,10 +371,6 @@ impl Actor for Supervisor {
 
             match msg {
                 Event::Signal(signal) => match signal {
-                    SignalEvent::GetChildren(tx) => {
-                        let children = self.get_child_descriptions();
-                        tx.send(children).ok();
-                    }
                     SignalEvent::Shutdown => {
                         self.shutdown(None, &mut stream).await;
                         break;
@@ -402,6 +392,11 @@ impl Actor for Supervisor {
 
                     SupervisorInterface::Debug((_, tx)) => {
                         let _ = tx.send(format_smolstr!("{self:?}").into());
+                    }
+
+                    SupervisorInterface::Children((_, tx)) => {
+                        let children = self.get_child_descriptions();
+                        tx.send(children).ok();
                     }
                 },
             }

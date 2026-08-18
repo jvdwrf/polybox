@@ -75,11 +75,13 @@ pub trait ActorRef {
 
     fn get_debug_state(
         &self,
-    ) -> impl Future<Output = Result<DebugState, RequestCheckedError<DebugRequest>>> + Send;
+    ) -> impl Future<Output = Result<DebugState, RequestCheckedError<GetDebug>>> + Send;
+
+    fn get_children(
+        &self,
+    ) -> impl Future<Output = Result<Vec<ChildDescription>, RequestCheckedError<GetChildren>>> + Send;
 
     fn ping(&self) -> Rx<()>;
-
-    fn get_children(&self) -> Rx<Vec<ChildDescription>>;
 
     fn address(&self) -> &Address<Self::ChannelKind>;
 
@@ -156,16 +158,19 @@ impl<T: AsActorRef> ActorRef for T {
 
     fn get_debug_state(
         &self,
-    ) -> impl Future<Output = Result<DebugState, RequestCheckedError<DebugRequest>>> + Send {
+    ) -> impl Future<Output = Result<DebugState, RequestCheckedError<GetDebug>>> + Send {
         self.as_channel().get_debug_state()
+    }
+
+    fn get_children(
+        &self,
+    ) -> impl Future<Output = Result<Vec<ChildDescription>, RequestCheckedError<GetChildren>>> + Send
+    {
+        self.as_channel().get_children()
     }
 
     fn ping(&self) -> Rx<()> {
         self.as_channel().ping()
-    }
-
-    fn get_children(&self) -> Rx<Vec<ChildDescription>> {
-        self.as_channel().get_children()
     }
 
     fn members(&self) -> &'static [TypeId] {

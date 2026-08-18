@@ -284,16 +284,6 @@ impl<I: Interface> Channel<I> {
                     Some(SignalEvent::Resume)
                 }
             }
-            SignalInterface::GetChildren((_, tx)) => {
-                if tx.is_closed() {
-                    tracing::debug!(
-                        "GetChildren signal received, but the response channel is closed"
-                    );
-                    None
-                } else {
-                    Some(SignalEvent::GetChildren(tx))
-                }
-            }
             SignalInterface::Ping((_, tx)) => {
                 let _ = tx.send(());
                 None
@@ -511,19 +501,19 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
         self.signal(SignalInterface::Resume(signals::Resume));
     }
 
-    async fn get_debug_state(&self) -> Result<DebugState, RequestCheckedError<DebugRequest>> {
-        self.request_checked(DebugRequest).await
+    async fn get_debug_state(&self) -> Result<DebugState, RequestCheckedError<GetDebug>> {
+        self.request_checked(GetDebug).await
+    }
+
+    async fn get_children(
+        &self,
+    ) -> Result<Vec<ChildDescription>, RequestCheckedError<GetChildren>> {
+        self.request_checked(GetChildren).await
     }
 
     fn ping(&self) -> Rx<()> {
         let (tx, rx) = new_request();
         self.signal(SignalInterface::Ping((signals::Ping, tx)));
-        rx
-    }
-
-    fn get_children(&self) -> Rx<Vec<signals::ChildDescription>> {
-        let (tx, rx) = new_request();
-        self.signal(SignalInterface::GetChildren((signals::GetChildren, tx)));
         rx
     }
 

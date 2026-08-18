@@ -4,7 +4,7 @@ use zestors::{
     HandlerInterface,
     handler::{Handle, HandledBy, Handler, HandlerState, ShutdownReason},
     prelude::*,
-    signals::DebugRequest,
+    signals::{GetChildren, GetDebug},
     spawn,
     supervision::ActorRunnerExt as _,
 };
@@ -17,9 +17,6 @@ async fn main() {
             while let Some(msg) = stream.next().await {
                 match msg {
                     Event::Signal(signal) => match signal {
-                        SignalEvent::GetChildren(tx) => {
-                            tx.send(vec![]).ok();
-                        }
                         SignalEvent::Shutdown => {
                             println!("Received shutdown signal");
                             break;
@@ -71,7 +68,8 @@ impl MyActor {
 enum MyInterface {
     Add(Payload<u32>),
     Print(Payload<String>),
-    Debug(Payload<DebugRequest>),
+    Debug(Payload<GetDebug>),
+    Children(Payload<GetChildren>),
 }
 
 #[derive(Message)]
@@ -137,13 +135,24 @@ impl Handle<IntervalTick> for MyActor {
     }
 }
 
-impl Handle<DebugRequest> for MyActor {
+impl Handle<GetDebug> for MyActor {
     async fn handle(
         &mut self,
         _: &mut HandlerState<Self>,
-        (_, tx): Payload<DebugRequest>,
+        (_, tx): Payload<GetDebug>,
     ) -> Result<(), Self::Error> {
         tx.send("MyActor is running".into()).ok();
+        Ok(())
+    }
+}
+
+impl Handle<GetChildren> for MyActor {
+    async fn handle(
+        &mut self,
+        _: &mut HandlerState<Self>,
+        (_, tx): Payload<GetChildren>,
+    ) -> Result<(), Self::Error> {
+        tx.send(vec![]).ok();
         Ok(())
     }
 }
