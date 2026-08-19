@@ -15,8 +15,8 @@ egui = { version = "0.36", features = [] }
 tokio = { workspace = true, features = ["full"] }
 rootcause = { workspace = true }
 futures = { workspace = true }
-zestors-client-api = { workspace = true }
 zestors = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
 
 [features]
 _ra = []

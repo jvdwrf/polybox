@@ -4,10 +4,8 @@ members = [
     "crates/polybox-codegen",
     "crates/type-sets",
     "crates/zestors",
-    "crates/gen-oapi",
     "crates/inspector",
     "crates/zestors-core",
-    "crates/client-api",
 ]
 
 [workspace.dependencies]
@@ -15,7 +13,6 @@ polybox-codegen = { path = "crates/polybox-codegen", version = "0.0.2" }
 zestors = { path = "crates/zestors", version = "0.1.0" }
 type-sets = { path = "crates/type-sets" }
 zestors-core = { path = "crates/zestors-core" }
-zestors-client-api = { path = "crates/client-api" }
 
 
 tokio = { version = "1", features = ["full"] }

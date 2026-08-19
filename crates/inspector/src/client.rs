@@ -16,7 +16,8 @@ impl Client {
     }
 
     pub async fn get_tree(&self) -> rootcause::Result<Option<SupervisionTree>> {
-        let response = self.client.get(self.base_url.join("/tree")?).send().await?;
+        let url = self.base_url.join("/tree")?;
+        let response = self.client.get(url).send().await?;
 
         match response.status() {
             StatusCode::OK => {
@@ -24,15 +25,18 @@ impl Client {
                 Ok(Some(supervision_tree))
             }
             StatusCode::NOT_FOUND => Ok(None),
-            status => {
-                let error_text = response.text().await?;
-
-                Err(report!(
-                    "Unexpected status: {}. Response text: {}",
-                    status,
-                    error_text
-                ))
-            }
+            _ => Err(response_error(response).await),
         }
     }
+}
+
+async fn response_error(response: reqwest::Response) -> rootcause::Report {
+    let status = response.status();
+    let error_text = response.text().await.unwrap_or_default();
+
+    report!(
+        "Unexpected status: {}. Response text: {}",
+        status,
+        error_text
+    )
 }

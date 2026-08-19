@@ -2,7 +2,8 @@ use std::sync::LazyLock;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use zestors::supervision::SupervisionTree;
-use zestors_client_api::Client;
+
+use crate::client::Client;
 
 static CLIENT: LazyLock<Client> =
     LazyLock::new(|| Client::new("http://localhost:8080").expect("Failed to create API client"));

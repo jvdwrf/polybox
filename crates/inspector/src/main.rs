@@ -2,6 +2,7 @@
 
 mod api;
 mod app;
+mod client;
 mod components;
 mod theme;
 mod utils;
