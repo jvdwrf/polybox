@@ -1,5 +1,5 @@
 use egui::{Color32, Context, Stroke, Visuals};
-use zestors_api_client::types::ActorStatus;
+use zestors::channel::ActorStatus;
 
 pub struct Theme;
 
@@ -24,28 +24,28 @@ impl Theme {
     /// Resolves label text, background color, and foreground color for an `ActorStatus` variant.
     pub fn actor_status_style(status: &ActorStatus) -> (String, Color32, Color32) {
         match status {
-            ActorStatus::ActorStatus1(s) => (
-                s.to_string(),
+            ActorStatus::Initializing => (
+                "Initializing".to_string(),
                 Color32::from_rgb(60, 50, 30),    // Amber BG
                 Color32::from_rgb(229, 192, 123), // Amber FG
             ),
-            ActorStatus::ActorStatus2(s) => (
-                s.to_string(),
+            ActorStatus::Running => (
+                "Running".to_string(),
                 Color32::from_rgb(34, 60, 45),    // Green BG
                 Color32::from_rgb(152, 195, 121), // Green FG
             ),
-            ActorStatus::ActorStatus3(s) => (
-                s.to_string(),
+            ActorStatus::Suspended => (
+                "Suspended".to_string(),
                 Color32::from_rgb(38, 45, 60),   // Blue BG
                 Color32::from_rgb(97, 175, 239), // Blue FG
             ),
-            ActorStatus::ActorStatus4(s) => (
-                s.to_string(),
+            ActorStatus::Exiting => (
+                "Exiting".to_string(),
                 Color32::from_rgb(70, 45, 25),    // Orange BG
                 Color32::from_rgb(209, 154, 102), // Orange FG
             ),
-            ActorStatus::ActorStatus5(dead_info) => (
-                format!("dead ({:?})", dead_info.dead),
+            ActorStatus::Dead(exit) => (
+                format!("Dead ({:?})", exit),
                 Color32::from_rgb(65, 35, 40),    // Red BG
                 Color32::from_rgb(224, 108, 117), // Red FG
             ),

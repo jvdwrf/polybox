@@ -90,6 +90,20 @@ impl<'a> From<Cow<'a, str>> for Pid {
     }
 }
 
+impl From<Pid> for String {
+    #[inline]
+    fn from(pid: Pid) -> String {
+        pid.0.into()
+    }
+}
+
+impl From<&Pid> for String {
+    #[inline]
+    fn from(pid: &Pid) -> String {
+        pid.0.to_string()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

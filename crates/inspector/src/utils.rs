@@ -1,8 +1,8 @@
-use zestors_api_client::types;
+use std::time::Duration;
 
-pub fn format_duration(d: &types::DurationSchema) -> String {
-    let total_secs = d.secs;
-    let nanos = d.nanos;
+pub fn format_duration(d: &Duration) -> String {
+    let total_secs = d.as_secs();
+    let nanos = d.subsec_nanos();
 
     if total_secs == 0 && nanos == 0 {
         return "0s".to_string();

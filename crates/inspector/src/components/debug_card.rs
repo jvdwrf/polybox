@@ -1,10 +1,9 @@
-use super::status_badge::render_actor_status_badge;
 use crate::theme::Theme;
 use crate::utils::format_duration;
 use egui::{CornerRadius, Frame, Margin, RichText, Stroke, Ui};
-use zestors_api_client::types;
+use zestors::{channel::Pid, signals::DebugState};
 
-pub fn render_debug_card(ui: &mut Ui, pid: &str, debug: &types::DebugState) {
+pub fn render_debug_card(ui: &mut Ui, pid: &Pid, debug: &DebugState) {
     Frame::canvas(ui.style())
         .fill(Theme::INNER_CARD_BG)
         .stroke(Stroke::new(1.0, Theme::BORDER_COLOR))
@@ -29,15 +28,13 @@ pub fn render_debug_card(ui: &mut Ui, pid: &str, debug: &types::DebugState) {
                     // ui.end_row();
 
                     ui.label(RichText::new("Uptime:").color(Theme::LABEL_MUTED));
-                    ui.label(
-                        RichText::new(format_duration(&debug.uptime)).color(egui::Color32::WHITE),
-                    );
+                    // ui.label(RichText::new(format_duration(&"todo")).color(egui::Color32::WHITE));
                     ui.end_row();
 
                     ui.label(RichText::new("Description:").color(Theme::LABEL_MUTED));
                     ui.add(
                         egui::Label::new(
-                            RichText::new(&debug.description).color(egui::Color32::LIGHT_GRAY),
+                            RichText::new(debug.to_string()).color(egui::Color32::LIGHT_GRAY),
                         )
                         .wrap(),
                     );

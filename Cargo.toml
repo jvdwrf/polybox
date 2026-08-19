@@ -1,21 +1,21 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/api-client",
     "crates/polybox-codegen",
     "crates/type-sets",
     "crates/zestors",
     "crates/gen-oapi",
     "crates/inspector",
     "crates/zestors-core",
+    "crates/client-api",
 ]
 
 [workspace.dependencies]
 polybox-codegen = { path = "crates/polybox-codegen", version = "0.0.2" }
 zestors = { path = "crates/zestors", version = "0.1.0" }
 type-sets = { path = "crates/type-sets" }
-zestors-api-client = { path = "crates/api-client" }
 zestors-core = { path = "crates/zestors-core" }
+zestors-client-api = { path = "crates/client-api" }
 
 
 tokio = { version = "1", features = ["full"] }
@@ -36,7 +36,7 @@ rand = { version = "0.10" }
 bs58 = { version = "0.5" }
 axum = "0.8"
 serde_json = "1"
-utoipa = { version = "5", features = ["axum_extras"] }
+utoipa = { version = "5", features = ["axum_extras", "jiff_0_2"] }
 utoipa-axum = { version = "0.2" }
 utoipa-swagger-ui = { version = "9", features = ["axum"] }
 axum-autoroute = { version = "0.2", features = [] }
@@ -45,6 +45,9 @@ vtable = "0.4"
 concurrent-queue = "2"
 eyeball = "0.8"
 jiff = { version = "0.2", features = ["serde"] }
+anyhow = "1.0"
+serde_with = "3"
+reqwest = { version = "0.13" }
 
 iced = { version = "0.14" }
 iced_test = { version = "0.14", features = [] }

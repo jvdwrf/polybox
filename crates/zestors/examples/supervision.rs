@@ -59,11 +59,11 @@ impl Handler for MyActor {
         Ok(())
     }
 
-    async fn schedule_next(&mut self) -> Result<impl HandledBy<Self>, Self::Error> {
-        tokio::time::sleep(Duration::from_secs(5)).await;
-        tracing::error!("Actor {} is idle for too long, shutting down", self.name);
-        Err::<Infallible, _>(report!("Idle timeout reached, shutting down"))
-    }
+    // async fn schedule_next(&mut self) -> Result<impl HandledBy<Self>, Self::Error> {
+    //     tokio::time::sleep(Duration::from_secs(5)).await;
+    //     tracing::error!("Actor {} is idle for too long, shutting down", self.name);
+    //     Err::<Infallible, _>(report!("Idle timeout reached, shutting down"))
+    // }
 }
 
 impl Handle<u32> for MyActor {

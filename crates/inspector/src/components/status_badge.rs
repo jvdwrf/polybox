@@ -1,6 +1,6 @@
 use crate::theme::Theme;
 use egui::{CornerRadius, Frame, Margin, RichText, Ui};
-use zestors_api_client::types::ActorStatus;
+use zestors::channel::ActorStatus;
 
 pub fn render_actor_status_badge(ui: &mut Ui, status: &ActorStatus) {
     let (label_text, badge_bg, badge_fg) = Theme::actor_status_style(status);

@@ -3,20 +3,20 @@ use super::status_badge::render_actor_status_badge;
 use crate::theme::Theme;
 use crate::utils::format_duration;
 use egui::{CornerRadius, Frame, Margin, RichText, Stroke, Ui, collapsing_header::CollapsingState};
-use zestors_api_client::{types, util::AbsentOr};
+use zestors::supervision::SupervisionTree;
 
 pub struct SupervisionNodeWidget<'a> {
-    node: &'a types::SupervisionTree,
+    node: &'a SupervisionTree,
     default_open: bool,
 }
 
 impl<'a> SupervisionNodeWidget<'a> {
-    pub fn new(node: &'a types::SupervisionTree, default_open: bool) -> Self {
+    pub fn new(node: &'a SupervisionTree, default_open: bool) -> Self {
         Self { node, default_open }
     }
 
     pub fn show(self, ui: &mut Ui) {
-        let node_id = ui.make_persistent_id(&self.node.pid);
+        let node_id = ui.make_persistent_id(&self.node.description.pid);
 
         Frame::group(ui.style())
             .fill(Theme::CARD_BG)
@@ -34,13 +34,12 @@ impl<'a> SupervisionNodeWidget<'a> {
         ui.horizontal(|ui| {
             ui.label(RichText::new("PID:").small().color(Theme::LABEL_MUTED));
             ui.label(
-                RichText::new(&self.node.pid)
+                RichText::new(&self.node.description.pid)
                     .strong()
                     .color(Theme::PID_BLUE),
             );
-
-            if let AbsentOr::Present(debug) = &self.node.debug_state {
-                render_actor_status_badge(ui, &debug.status);
+            if let Some(status) = &self.node.status {
+                render_actor_status_badge(ui, status);
             }
         });
     }
@@ -49,42 +48,40 @@ impl<'a> SupervisionNodeWidget<'a> {
         ui.add_space(4.0);
 
         // Core Metadata Grid
-        egui::Grid::new(ui.make_persistent_id(&format!("{}_grid", self.node.pid)))
+        egui::Grid::new(ui.make_persistent_id(&format!("{}_grid", self.node.description.pid)))
             .num_columns(2)
             .spacing([12.0, 6.0])
             .show(ui, |ui| {
                 ui.label(RichText::new("Restart Mode:").color(Theme::LABEL_MUTED));
                 ui.label(
-                    RichText::new(format!("{:?}", self.node.restart_mode))
+                    RichText::new(format!("{:?}", self.node.description.cfg.restart_mode))
                         .color(Theme::VALUE_PURPLE),
                 );
                 ui.end_row();
 
                 ui.label(RichText::new("Abort Timeout:").color(Theme::LABEL_MUTED));
                 ui.label(
-                    RichText::new(format_duration(&self.node.abort_timeout))
+                    RichText::new(format_duration(&self.node.description.cfg.abort_timeout))
                         .color(egui::Color32::WHITE),
                 );
                 ui.end_row();
             });
 
         // Debug Section
-        if let AbsentOr::Present(debug) = &self.node.debug_state {
+        if let Some(debug) = &self.node.debug_state {
             ui.add_space(6.0);
-            render_debug_card(ui, &self.node.pid, debug);
+            render_debug_card(ui, &self.node.description.pid, debug);
         }
 
         // Child Recursion
-        if let AbsentOr::Present(children) = &self.node.children {
-            if !children.is_empty() {
-                ui.add_space(8.0);
-                ui.vertical(|ui| {
-                    for child in children {
-                        SupervisionNodeWidget::new(child, false).show(ui);
-                        ui.add_space(4.0);
-                    }
-                });
-            }
+        if !self.node.children.is_empty() {
+            ui.add_space(8.0);
+            ui.vertical(|ui| {
+                for child in &self.node.children {
+                    SupervisionNodeWidget::new(child, false).show(ui);
+                    ui.add_space(4.0);
+                }
+            });
         }
     }
 }

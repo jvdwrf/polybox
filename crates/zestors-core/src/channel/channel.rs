@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    schemas::ZonedSchema,
-    signals::{self, Event},
-};
+use crate::signals::{self, Event};
 use eyeball::SharedObservable;
 use jiff::{SignedDuration, Timestamp, Zoned, tz::TimeZone};
 use std::{any::TypeId, fmt::Debug, marker::PhantomData, panic::AssertUnwindSafe, sync::RwLock};
@@ -23,13 +20,10 @@ pub struct ChannelSnapshot {
     pub signal_len: usize,
     pub msg_len: usize,
 
-    #[schema(value_type = Vec<ZonedSchema>)]
     pub spawns: Vec<Zoned>,
 
-    #[schema(value_type = Vec<(ZonedSchema, Exit)>)]
     pub exits: Vec<(Zoned, Exit)>,
 
-    #[schema(value_type = ZonedSchema)]
     pub created_at: Zoned,
 }
 

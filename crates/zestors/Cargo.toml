@@ -29,6 +29,7 @@ concurrent-queue.workspace = true
 eyeball.workspace = true
 zestors-core.workspace = true
 utoipa-swagger-ui.workspace = true
+anyhow.workspace = true
 
 [dev-dependencies]
 tracing-subscriber.workspace = true

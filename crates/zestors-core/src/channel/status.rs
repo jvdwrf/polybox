@@ -1,8 +1,9 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema, Copy)]
-// #[serde(tag = "status")]
+#[serde(tag = "type")]
 pub enum ActorStatus {
+    #[schema(rename = "initializing")]
     #[serde(rename = "initializing")]
     Initializing,
     #[serde(rename = "running")]

@@ -78,60 +78,173 @@
       "ActorStatus": {
         "oneOf": [
           {
-            "type": "string",
-            "enum": [
-              "initializing"
-            ]
-          },
-          {
-            "type": "string",
-            "enum": [
-              "running"
-            ]
-          },
-          {
-            "type": "string",
-            "enum": [
-              "suspended"
-            ]
-          },
-          {
-            "type": "string",
-            "enum": [
-              "exiting"
-            ]
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "initializing"
+                ]
+              }
+            }
           },
           {
             "type": "object",
             "required": [
-              "dead"
+              "type"
             ],
             "properties": {
-              "dead": {
-                "$ref": "#/components/schemas/Exit"
+              "type": {
+                "type": "string",
+                "enum": [
+                  "running"
+                ]
               }
             }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "suspended"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "exiting"
+                ]
+              }
+            }
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Exit"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "dead"
+                    ]
+                  }
+                }
+              }
+            ]
           }
         ]
       },
-      "DebugState": {
+      "ChannelSnapshot": {
         "type": "object",
         "required": [
+          "pid",
           "status",
-          "uptime",
-          "description"
+          "signal_len",
+          "msg_len",
+          "spawns",
+          "exits",
+          "created_at"
         ],
         "properties": {
-          "description": {
-            "type": "string"
+          "created_at": {
+            "$ref": "#/components/schemas/String"
+          },
+          "exits": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": false,
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "Normal"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "Error"
+                      ],
+                      "properties": {
+                        "Error": {
+                          "$ref": "#/components/schemas/ExitError"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "msg_len": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pid": {
+            "$ref": "#/components/schemas/String"
+          },
+          "signal_len": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "spawns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/String"
+            }
           },
           "status": {
             "$ref": "#/components/schemas/ActorStatus"
-          },
-          "uptime": {
-            "$ref": "#/components/schemas/DurationSchema"
           }
         }
+      },
+      "ChildDescription": {
+        "type": "object",
+        "required": [
+          "pid",
+          "cfg"
+        ],
+        "properties": {
+          "cfg": {
+            "$ref": "#/components/schemas/SuperviseeConfig"
+          },
+          "pid": {
+            "$ref": "#/components/schemas/String"
+          }
+        }
+      },
+      "DebugState": {
+        "type": "string",
+        "format": "string",
+        "example": "MyActor is running"
       },
       "DurationSchema": {
         "type": "object",
@@ -193,16 +306,40 @@
       "String": {
         "type": "string"
       },
-      "SupervisionTree": {
+      "SuperviseeConfig": {
         "type": "object",
         "required": [
-          "pid",
           "restart_mode",
-          "abort_timeout"
+          "abort_timeout",
+          "init_timeout"
         ],
         "properties": {
           "abort_timeout": {
             "$ref": "#/components/schemas/DurationSchema"
+          },
+          "init_timeout": {
+            "$ref": "#/components/schemas/DurationSchema"
+          },
+          "restart_mode": {
+            "$ref": "#/components/schemas/RestartMode"
+          }
+        }
+      },
+      "SupervisionTree": {
+        "type": "object",
+        "required": [
+          "description"
+        ],
+        "properties": {
+          "channel_state": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelSnapshot"
+              }
+            ]
           },
           "children": {
             "type": "array",
@@ -220,11 +357,18 @@
               }
             ]
           },
-          "pid": {
-            "$ref": "#/components/schemas/String"
+          "description": {
+            "$ref": "#/components/schemas/ChildDescription"
           },
-          "restart_mode": {
-            "$ref": "#/components/schemas/RestartMode"
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActorStatus"
+              }
+            ]
           }
         }
       }

@@ -3,18 +3,18 @@ use std::collections::VecDeque;
 
 #[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct SupervisionTree {
-    description: ChildDescription,
-    status: Option<ActorStatus>,
+    pub description: ChildDescription,
+    pub status: Option<ActorStatus>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    debug_state: Option<DebugState>,
+    pub debug_state: Option<DebugState>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    channel_state: Option<ChannelSnapshot>,
+    pub channel_state: Option<ChannelSnapshot>,
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schema(no_recursion)]
-    children: Vec<SupervisionTree>,
+    pub children: Vec<SupervisionTree>,
 }
 
 impl SupervisionTree {

@@ -3,12 +3,12 @@ use crate::components::SupervisionNodeWidget;
 use crate::theme::Theme;
 use egui::{Color32, RichText};
 use tokio::sync::mpsc;
-use zestors_api_client::types;
+use zestors::supervision::SupervisionTree;
 
 pub struct MyApp {
     pub sender: mpsc::Sender<ApiMessage>,
     pub receiver: mpsc::Receiver<ApiMessage>,
-    pub tree: Option<rootcause::Result<types::SupervisionTree>>,
+    pub tree: Option<rootcause::Result<Option<SupervisionTree>>>,
 }
 
 impl Default for MyApp {
@@ -55,12 +55,17 @@ impl eframe::App for MyApp {
 
             if let Some(tree_result) = &self.tree {
                 match tree_result {
-                    Ok(tree) => {
+                    Ok(Some(tree)) => {
                         egui::ScrollArea::both()
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
                                 SupervisionNodeWidget::new(tree, true).show(ui);
                             });
+                    }
+                    Ok(None) => {
+                        ui.label(
+                            RichText::new("No supervision tree found.").color(Theme::LABEL_MUTED),
+                        );
                     }
                     Err(e) => {
                         ui.colored_label(Theme::ERROR_RED, format!("Error loading tree: {:#?}", e));
