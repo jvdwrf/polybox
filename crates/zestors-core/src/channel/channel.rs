@@ -35,11 +35,8 @@ impl<I: Interface> ChannelKind for I {
     type Set = <I as Interface>::Set;
 }
 
-impl<S> ChannelKind for Set<S>
-where
-    Set<S>: TypeSet + 'static,
-{
-    type Set = Set<S>;
+impl<S: TypeSet + 'static> ChannelKind for Set<S> {
+    type Set = S;
 }
 
 #[repr(transparent)]
@@ -325,8 +322,7 @@ impl<I: Interface> Channel<I> {
 impl<M, T> Sends<M> for Channel<Set<T>>
 where
     M: Message,
-    T: 'static,
-    Set<T>: TypeSet + Contains<M>,
+    T: TypeSet + Contains<M> + 'static,
 {
     async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
         match self.send_checked(msg).await {

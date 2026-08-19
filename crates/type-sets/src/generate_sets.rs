@@ -28,7 +28,7 @@ macro_rules! generate_sets {
             ///
             /// Look at the [`Set`] macro for a more convenient way to define type sets.
             // pub struct $struct<$($el),*>(PhantomData<fn() -> ($($el),*)>);
-            pub(crate) type $struct<$($el),*> = crate::Set<($($el,)*)>;
+            pub(crate) type $struct<$($el),*> = ($($el,)*);
         )*
 
         // Subset implementations
@@ -199,7 +199,7 @@ mod _priv_0 {
 }
 pub(crate) use _priv_0::*;
 
-pub(crate) type Set0 = Set<()>;
+pub(crate) type Set0 = ();
 
 #[diagnostic::do_not_recommend]
 impl<S: ?Sized> SubsetOf<S> for dyn Contains0 {}

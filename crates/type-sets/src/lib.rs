@@ -2,6 +2,20 @@ use std::{any::TypeId, fmt::Debug, marker::PhantomData};
 
 pub struct Set<T>(PhantomData<fn() -> T>);
 
+impl<T> TypeSet for Set<T>
+where
+    T: TypeSet,
+{
+    type Set = T::Set;
+
+    fn members() -> &'static [TypeId]
+    where
+        Self: 'static,
+    {
+        T::members()
+    }
+}
+
 impl<T> Debug for Set<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Set<{}>", std::any::type_name::<T>())
