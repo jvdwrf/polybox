@@ -1,8 +1,6 @@
-use std::fmt::Display;
-
-use smol_str::SmolStr;
-
 use super::*;
+use smol_str::SmolStr;
+use std::fmt::Display;
 
 #[derive(Debug)]
 pub enum Event<M> {

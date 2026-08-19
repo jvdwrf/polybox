@@ -1,6 +1,4 @@
-//! Macros for the `polybox` crate.
-//!
-//! See [GitHub](https://github.com/jvdwrf/polybox) for more information.
+//! Macros for the `zestors` crate.
 
 extern crate proc_macro;
 use darling::FromAttributes;
@@ -21,16 +19,22 @@ pub fn derive_interface_polybox(input: TokenStream) -> TokenStream {
     derive_interface(input, "::zestors")
 }
 
-#[proc_macro_derive(InterfaceZestors, attributes(interface))]
-pub fn derive_interface_zestors(input: TokenStream) -> TokenStream {
-    derive_interface(input, "::zestors")
+#[derive(darling::FromAttributes)]
+#[darling(attributes(interface))]
+struct InterfaceAttrs {
+    path: Option<syn::Path>,
 }
 
 fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
+    let attrs = match InterfaceAttrs::from_attributes(&input.attrs) {
+        Ok(attrs) => attrs,
+        Err(err) => return err.write_errors().into(),
+    };
     let enum_name = &input.ident;
 
-    let base_path: syn::Path = extract_base_path(&input.attrs, "interface", base);
+    // let base_path: syn::Path = extract_base_path(&input.attrs, "interface", base);
+    let base_path: syn::Path = attrs.path.unwrap_or_else(|| syn::parse_str(base).unwrap());
     let polybox_path: syn::Path =
         syn::parse_str(&format!("{}::messaging", quote!(#base_path))).unwrap();
 
@@ -160,6 +164,10 @@ fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
 pub fn derive_actor_interface(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let enum_name = &input.ident;
+    let attrs = match InterfaceAttrs::from_attributes(&input.attrs) {
+        Ok(attrs) => attrs,
+        Err(err) => return err.write_errors().into(),
+    };
 
     // Ensure we are working with an enum
     let variants = match &input.data {
@@ -167,7 +175,9 @@ pub fn derive_actor_interface(input: TokenStream) -> TokenStream {
         _ => panic!("HandlerInterface derive can only be used on enums"),
     };
 
-    let base_path = extract_base_path(&input.attrs, "interface", "::zestors");
+    let base_path = attrs
+        .path
+        .unwrap_or_else(|| syn::parse_str("::zestors").unwrap());
 
     let mut handle_matches = Vec::new();
     let mut inner_types = Vec::new();
@@ -228,11 +238,6 @@ pub fn derive_message(input: TokenStream) -> TokenStream {
     _derive_message(input, "::zestors")
 }
 
-#[proc_macro_derive(MessageZestors, attributes(msg))]
-pub fn derive_message_zestors(input: TokenStream) -> TokenStream {
-    _derive_message(input, "::zestors")
-}
-
 #[derive(darling::FromAttributes)]
 #[darling(attributes(msg))]
 struct MessageAttrs {
@@ -267,63 +272,6 @@ fn _derive_message(input: TokenStream, base: &str) -> TokenStream {
     };
 
     TokenStream::from(expanded)
-}
-
-// #[proc_macro_derive(MessageMethodZestors, attributes(msg))]
-// pub fn derive_message_method_zestors(input: TokenStream) -> TokenStream {
-//     _derive_message_method(input, "::zestors")
-// }
-
-// #[proc_macro_derive(MessageMethod, attributes(msg))]
-// pub fn derive_message_method(input: TokenStream) -> TokenStream {
-//     _derive_message_method(input, "::messaging")
-// }
-
-// fn _derive_message_method(input: TokenStream, base: &str) -> TokenStream {
-//     let input = parse_macro_input!(input as DeriveInput);
-//     let name = &input.ident;
-//     let base_path = extract_base_path(&input.attrs, "msg", base);
-//     let trait_name = syn::Ident::new(&format!("Send{}", name), name.span());
-//     let method_name = syn::Ident::new(
-//         &format!("send_{}", name.to_string().to_lowercase()),
-//         name.span(),
-//     );
-//     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-
-//     let expanded = quote! {
-//         pub trait #trait_name #impl_generics #where_clause {
-//             fn #method_name(&self, msg: ) -> #base_path::SendFuture<'_, Result<#base_path::Output<#name #ty_generics>, #base_path::SendError<#name #ty_generics>>>;
-//         }
-//     };
-
-//     TokenStream::from(expanded)
-// }
-
-fn extract_base_path(attrs: &[syn::Attribute], attr_name: &str, default_path: &str) -> syn::Path {
-    let mut base_path: syn::Path = syn::parse_str(default_path).unwrap();
-
-    for attr in attrs {
-        if attr.path().is_ident(attr_name) {
-            let _ = attr.parse_nested_meta(|meta| {
-                if meta.path.is_ident("crate") {
-                    let value = meta.value()?;
-                    let expr: Expr = value.parse()?;
-                    if let Expr::Lit(syn::ExprLit {
-                        lit: Lit::Str(lit_str),
-                        ..
-                    }) = expr
-                    {
-                        if let Ok(parsed_path) = syn::parse_str::<syn::Path>(&lit_str.value()) {
-                            base_path = parsed_path;
-                        }
-                    }
-                }
-                Ok(())
-            });
-        }
-    }
-
-    base_path
 }
 
 fn extract_inner_payload_type(ty: &Type) -> Option<&Type> {

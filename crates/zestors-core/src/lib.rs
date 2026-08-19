@@ -5,15 +5,14 @@ pub mod messaging;
 
 pub mod signals;
 
-pub(crate) mod schemas;
-
+#[allow(unused_imports)]
 pub(crate) mod _prelude {
     pub(crate) use crate::{channel::*, messaging::*, signals::*};
-    pub(crate) use polybox_codegen::{Interface, Message};
     pub(crate) use rootcause::Report;
     pub(crate) use serde::{Deserialize, Serialize};
     pub(crate) use std::{future::Future, time::Duration};
     pub(crate) use type_sets::Set;
+    pub(crate) use zestors_codegen::{Interface, Message};
 }
 
 pub mod prelude {

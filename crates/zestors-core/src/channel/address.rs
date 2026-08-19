@@ -59,7 +59,7 @@ mod tests {
     use super::*;
 
     #[derive(Interface)]
-    #[interface(crate = "crate")]
+    #[interface(path = "crate")]
     pub enum MyInterface {
         A(Payload<u32>),
     }

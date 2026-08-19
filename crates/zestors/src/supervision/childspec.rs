@@ -148,7 +148,7 @@ mod tests {
     use super::*;
 
     #[derive(Interface, HandlerInterface)]
-    #[interface(crate = "crate")]
+    #[interface(path = "crate")]
     pub enum MyInterface {
         A(Payload<u32>),
     }

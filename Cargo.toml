@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/polybox-codegen",
+    "crates/codegen",
     "crates/type-sets",
     "crates/zestors",
     "crates/inspector",
@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.dependencies]
-polybox-codegen = { path = "crates/polybox-codegen", version = "0.0.2" }
+zestors-codegen = { path = "crates/codegen", version = "0.0.2" }
 zestors = { path = "crates/zestors", version = "0.1.0" }
 type-sets = { path = "crates/type-sets" }
 zestors-core = { path = "crates/zestors-core" }

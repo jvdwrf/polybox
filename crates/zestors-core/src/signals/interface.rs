@@ -18,7 +18,7 @@ pub(crate) struct Resume;
 pub(crate) struct Ping;
 
 #[derive(Interface, Debug)]
-#[interface(crate = "crate")]
+#[interface(path = "crate")]
 pub(crate) enum SignalInterface {
     Shutdown(Payload<Shutdown>),
     Suspend(Payload<Suspend>),

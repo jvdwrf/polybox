@@ -20,14 +20,14 @@ struct PingMessage(pub String);
 struct PongMessage(pub u64);
 
 #[derive(Debug, Interface)]
-#[interface(crate = "crate")]
+#[interface(path = "crate")]
 enum TestInterface {
     Ping(Payload<PingMessage>),
     Pong(Payload<PongMessage>),
 }
 
 #[derive(Debug, Interface)]
-#[interface(crate = "crate")]
+#[interface(path = "crate")]
 enum UnrelatedInterface {}
 
 fn create_running_channel<S: ChannelKind + Interface>() -> Channel<S> {

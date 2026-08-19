@@ -7,9 +7,7 @@ pub mod handler;
 pub mod node;
 pub mod registry;
 pub mod supervision;
-pub use polybox_codegen::{
-    HandlerInterface, InterfaceZestors as Interface, MessageZestors as Message,
-};
+pub use zestors_codegen::{HandlerInterface, Interface, Message};
 
 pub(crate) mod _prelude {
     #![allow(unused_imports)]
@@ -34,6 +32,6 @@ pub(crate) mod _prelude {
 pub(crate) mod schemas;
 
 pub mod prelude {
-    pub use polybox_codegen::{Interface, Message};
+    pub use zestors_codegen::{Interface, Message};
     pub use zestors_core::prelude::*;
 }

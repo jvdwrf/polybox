@@ -9,7 +9,7 @@ pub struct RegisterChild(pub ChildSpec);
 pub struct DeregisterChild(pub Pid);
 
 #[derive(Interface, Debug)]
-#[interface(crate = "crate")]
+#[interface(path = "crate")]
 pub enum SupervisorInterface {
     RegisterChild(Payload<RegisterChild>),
     DeregisterChild(Payload<DeregisterChild>),

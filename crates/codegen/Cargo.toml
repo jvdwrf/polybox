@@ -1,5 +1,5 @@
 [package]
-name = "polybox-codegen"
+name = "zestors-codegen"
 version = "0.0.2"
 edition = "2021"
 repository = "https://github.com/jvdwrf/polybox"
