@@ -2,7 +2,7 @@ use super::*;
 use crate::schemas::DurationSchema;
 
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
-pub struct SuperviseeConfig {
+pub struct ChildConfig {
     pub restart_mode: RestartMode,
 
     #[schema(value_type = DurationSchema)]
@@ -17,10 +17,10 @@ pub struct SuperviseeConfig {
 #[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ChildDescription {
     pub pid: Pid,
-    pub cfg: SuperviseeConfig,
+    pub cfg: ChildConfig,
 }
 
-impl SuperviseeConfig {
+impl ChildConfig {
     pub fn for_blueprint<T: Blueprint>(blueprint: &T) -> Self {
         Self {
             restart_mode: blueprint.default_restart_mode(),
@@ -31,7 +31,7 @@ impl SuperviseeConfig {
 }
 
 pub struct ChildSpec<T: SpawnOn = DynRepeatSpawner> {
-    cfg: SuperviseeConfig,
+    cfg: ChildConfig,
     blueprint: T,
     channel: Channel<T::Inbox>,
 }
@@ -72,7 +72,7 @@ impl<T: Blueprint> ChildSpec<T> {
 // Implementations when T can be any type that implements RepeatSpawn
 // (including DynRepeatSpawner)
 impl<T: SpawnOn> ChildSpec<T> {
-    pub fn cfg(&self) -> &SuperviseeConfig {
+    pub fn cfg(&self) -> &ChildConfig {
         &self.cfg
     }
 
@@ -99,7 +99,7 @@ impl<T: SpawnOn> ChildSpec<T> {
         self
     }
 
-    pub fn with_cfg(mut self, cfg: SuperviseeConfig) -> Self {
+    pub fn with_cfg(mut self, cfg: ChildConfig) -> Self {
         self.cfg = cfg;
         self
     }

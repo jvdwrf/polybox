@@ -2,7 +2,7 @@ use super::*;
 use crate::signals::{self, Event};
 use eyeball::SharedObservable;
 use jiff::{SignedDuration, Timestamp, Zoned, tz::TimeZone};
-use std::{any::TypeId, fmt::Debug, marker::PhantomData, panic::AssertUnwindSafe, sync::RwLock};
+use std::{any::TypeId, fmt::Debug, marker::PhantomData, sync::RwLock};
 use tokio::{select, time::Instant};
 use type_sets::{Contains, Set, TypeSet};
 

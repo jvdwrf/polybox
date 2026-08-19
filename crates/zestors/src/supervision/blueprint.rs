@@ -44,8 +44,8 @@ pub trait BlueprintExt: Blueprint + Sized {
         self.instantiate().spawn(pid)
     }
 
-    fn supervisee_cfg(&self) -> SuperviseeConfig {
-        SuperviseeConfig::for_blueprint(self)
+    fn supervisee_cfg(&self) -> ChildConfig {
+        ChildConfig::for_blueprint(self)
     }
 }
 impl<T: Blueprint> BlueprintExt for T {}

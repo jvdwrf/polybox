@@ -5,43 +5,49 @@ use smol_str::format_smolstr;
 use std::{net::SocketAddr, pin::pin};
 use tokio::net::TcpListener;
 use utoipa::IntoParams;
-// use utoipa_swagger_ui::SwaggerUi;
 
 #[derive(Clone, Debug)]
-pub struct ApiConfig {
+pub struct ApiServerBlueprint {
     pub addr: SocketAddr,
-    pub swagger_ui: bool,
-    pub pid: Pid,
 }
 
-impl ApiConfig {
-    pub fn generate_openapi() -> utoipa::openapi::OpenApi {
-        ApiServer::new(Self::default(), Pid::new(""))
-            .create_router()
-            .split_for_parts()
-            .1
+impl Blueprint for ApiServerBlueprint {
+    type Actor = ApiServer;
+
+    fn instantiate(&self) -> Self::Actor {
+        ApiServer::new(self.clone())
     }
 }
 
-impl Default for ApiConfig {
+impl ApiServerBlueprint {
+    // fn generate_openapi() -> utoipa::openapi::OpenApi {
+    //     ApiServer::new(Self::default(), Pid::new(""))
+    //         .create_router()
+    //         .split_for_parts()
+    //         .1
+    // }
+
+    pub fn new(addr: SocketAddr) -> Self {
+        Self { addr }
+    }
+}
+
+impl Default for ApiServerBlueprint {
     fn default() -> Self {
         Self {
             addr: "127.0.0.1:8080".parse().unwrap(),
-            swagger_ui: true,
-            pid: Pid::new("api_server"),
         }
     }
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct ApiServer {
-    pub root_supervisor: Pid,
-    pub cfg: Arc<ApiConfig>,
+pub struct ApiServer {
+    pub cfg: Arc<ApiServerBlueprint>,
 }
 
 #[derive(Interface)]
 #[interface(path = "crate")]
-pub(super) enum ApiServerInterface {
+pub enum ApiServerInterface {
     Debug(Payload<GetDebug>),
     Children(Payload<GetChildren>),
 }
@@ -97,11 +103,8 @@ impl Actor for ApiServer {
 }
 
 impl ApiServer {
-    pub fn new(cfg: ApiConfig, root_supervisor: Pid) -> Self {
-        Self {
-            root_supervisor,
-            cfg: Arc::new(cfg),
-        }
+    pub fn new(cfg: ApiServerBlueprint) -> Self {
+        Self { cfg: Arc::new(cfg) }
     }
 
     fn create_router(&self) -> AutorouteApiRouter {
@@ -113,13 +116,10 @@ impl ApiServer {
     pub async fn run(self) -> Result<(), Report> {
         let (router, api) = self.create_router().split_for_parts();
 
-        let router = match self.cfg.swagger_ui {
-            true => router.merge(
-                utoipa_swagger_ui::SwaggerUi::new("/swagger-ui")
-                    .url("/api-docs/openapi.json", api.clone()),
-            ),
-            false => router,
-        };
+        let router = router.merge(
+            utoipa_swagger_ui::SwaggerUi::new("/swagger-ui")
+                .url("/api-docs/openapi.json", api.clone()),
+        );
 
         let listener = TcpListener::bind(self.cfg.addr).await?;
 
@@ -151,7 +151,6 @@ struct WithDebugParam {
 async fn get_tree(
     Query(include_debug): Query<WithDebugParam>,
     Query(pid): Query<StartTreeFrom>,
-    State(state): State<ApiServer>,
 ) -> _ {
     tracing::debug!(
         "Received request for supervision tree with PID: {:?} and query: {:?}",
@@ -161,7 +160,9 @@ async fn get_tree(
 
     let include_debug = include_debug.include_debug.unwrap_or(false);
 
-    let pid = pid.pid.unwrap_or_else(|| state.root_supervisor.clone());
+    let Some(pid) = pid.pid.or_else(|| Node::root_supervisor_pid().cloned()) else {
+        return "No PID provided and no root supervisor PID found".into_500();
+    };
 
     let address = Registry::local().get(&pid);
     if address.is_none() {
@@ -170,7 +171,7 @@ async fn get_tree(
 
     let tree = SupervisionTree::new(ChildDescription {
         pid,
-        cfg: SuperviseeConfig {
+        cfg: ChildConfig {
             restart_mode: RestartMode::Always,
             abort_timeout: Duration::from_secs(10),
             init_timeout: Duration::from_secs(10),

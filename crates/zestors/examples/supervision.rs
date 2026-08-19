@@ -8,7 +8,7 @@ use std::{convert::Infallible, time::Duration};
 use zestors::{
     HandlerInterface,
     handler::{Handle, HandledBy, Handler, HandlerState, ShutdownReason},
-    node::{ApiConfig, Node},
+    node::{ApiServerBlueprint, Node},
     prelude::*,
     signals::RestartMode,
     supervision::{ChildSpec, RestartIntensity, Supervisor},
@@ -107,16 +107,15 @@ async fn main() -> Result<(), Report> {
     let actor_d = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new("D")));
 
     let _root = Node::new(ChildSpec::new(
-        "RootSupervisor",
+        "root-supervisor",
         Supervisor::blueprint()
-            .with_child(ChildSpec::new("SupervisorA", supervisor_a))
-            .with_child(ChildSpec::new("SupervisorB", supervisor_b)),
+            .with_child(ChildSpec::new("supervisor-A", supervisor_a))
+            .with_child(ChildSpec::new("supervisor-B", supervisor_b))
+            .with_child(ChildSpec::new(
+                "api-server",
+                ApiServerBlueprint::new("127.0.0.1:8080".parse().unwrap()),
+            )),
     ))
-    .with_api(ApiConfig {
-        addr: "127.0.0.1:8080".parse()?,
-        swagger_ui: true,
-        ..Default::default()
-    })
     .start()?;
 
     join_all([

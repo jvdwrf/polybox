@@ -1,12 +1,10 @@
-use rootcause::prelude::ResultExt;
-
 use crate::{_prelude::*, node::ApiServer};
-use std::time::Duration;
+use rootcause::{prelude::ResultExt, report};
+use std::{sync::OnceLock, time::Duration};
 
 pub struct Node {
     restart_intensity: RestartIntensity,
     supervisor_spec: ChildSpec<SupervisorBlueprint>,
-    api_cfg: Option<ApiConfig>,
 }
 
 struct NodeActor {
@@ -15,18 +13,18 @@ struct NodeActor {
     supervisor_spec: ChildSpec<SupervisorBlueprint>,
 }
 
+static ROOT_SUPERVISOR_PID: OnceLock<Pid> = OnceLock::new();
+
 impl Node {
+    pub fn root_supervisor_pid() -> Option<&'static Pid> {
+        ROOT_SUPERVISOR_PID.get()
+    }
+
     pub fn new(supervisor_spec: ChildSpec<SupervisorBlueprint>) -> Self {
         Self {
             restart_intensity: RestartIntensity::new(3, Duration::from_secs(120)),
             supervisor_spec,
-            api_cfg: None,
         }
-    }
-
-    pub fn with_api(mut self, api_cfg: ApiConfig) -> Self {
-        self.api_cfg = Some(api_cfg);
-        self
     }
 
     pub fn with_restart_intensity(mut self, intensity: RestartIntensity) -> Self {
@@ -37,18 +35,12 @@ impl Node {
     pub fn start(self) -> Result<Address<SupervisorInterface>, Report> {
         let Self {
             restart_intensity,
-            mut supervisor_spec,
-            api_cfg,
+            supervisor_spec,
         } = self;
 
-        if let Some(api_cfg) = api_cfg {
-            let supervisor_pid = supervisor_spec.pid().clone();
-
-            supervisor_spec.blueprint_mut().add_child(ChildSpec::new(
-                api_cfg.pid.clone(),
-                ApiServer::new(api_cfg, supervisor_pid),
-            ));
-        }
+        ROOT_SUPERVISOR_PID
+            .set(supervisor_spec.pid().clone())
+            .map_err(|_| report!("Root Node can only be started once."))?;
 
         let supervisor_child = supervisor_spec.spawn()?;
         let supervisor_address = supervisor_child.address().clone();
