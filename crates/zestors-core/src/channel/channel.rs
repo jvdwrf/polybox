@@ -12,7 +12,7 @@ pub(super) const BACKPRESSURE_LIMIT: usize = 100;
 const KEEP_N_SPAWNS: usize = 5;
 const KEEP_N_EXITS: usize = 5;
 
-#[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ChannelSnapshot {
     pub pid: Pid,
     pub status: ActorStatus,

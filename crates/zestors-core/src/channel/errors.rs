@@ -123,18 +123,7 @@ impl<T> From<NotAccepted<T>> for SendCheckedError<T> {
     }
 }
 
-#[derive(
-    Debug,
-    thiserror::Error,
-    Clone,
-    PartialEq,
-    Eq,
-    Hash,
-    Serialize,
-    Deserialize,
-    utoipa::ToSchema,
-    Copy,
-)]
+#[derive(Debug, thiserror::Error, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Copy)]
 pub enum ExitError {
     #[error("Actor panicked")]
     Panic,
@@ -146,9 +135,7 @@ pub enum ExitError {
     UnhandledError,
 }
 
-#[derive(
-    Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema, Copy, Error,
-)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Copy, Error)]
 pub enum Exit {
     #[error("Actor exited normally")]
     Normal,

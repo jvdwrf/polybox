@@ -1,7 +1,7 @@
 use crate::_prelude::*;
 use std::collections::VecDeque;
 
-#[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SupervisionTree {
     pub description: ChildDescription,
     pub status: Option<ActorStatus>,
@@ -13,7 +13,6 @@ pub struct SupervisionTree {
     pub channel_state: Option<ChannelSnapshot>,
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    #[schema(no_recursion)]
     pub children: Vec<SupervisionTree>,
 }
 

@@ -1,20 +1,13 @@
 use super::*;
-use crate::schemas::DurationSchema;
 
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChildConfig {
     pub restart_mode: RestartMode,
-
-    #[schema(value_type = DurationSchema)]
-    #[serde(with = "DurationSchema")]
     pub abort_timeout: Duration,
-
-    #[schema(value_type = DurationSchema)]
-    #[serde(with = "DurationSchema")]
     pub init_timeout: Duration,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ChildDescription {
     pub pid: Pid,
     pub cfg: ChildConfig,

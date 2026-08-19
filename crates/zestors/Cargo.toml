@@ -21,15 +21,12 @@ rand.workspace = true
 bs58.workspace = true
 axum.workspace = true
 serde_json.workspace = true
-utoipa-axum.workspace = true
-# utoipa-swagger-ui.workspace = true
-utoipa.workspace = true
 axum-autoroute.workspace = true
 concurrent-queue.workspace = true
 eyeball.workspace = true
 zestors-core.workspace = true
-utoipa-swagger-ui.workspace = true
 anyhow.workspace = true
+axum-typed-routing.workspace = true
 
 [dev-dependencies]
 tracing-subscriber.workspace = true

@@ -17,5 +17,4 @@ serde.workspace = true
 eyeball.workspace = true
 tracing.workspace = true
 rand.workspace = true
-utoipa.workspace = true
 jiff.workspace = true

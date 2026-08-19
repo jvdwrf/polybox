@@ -29,8 +29,7 @@ impl SignalEvent {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, utoipa::ToSchema)]
-#[schema(value_type = String, format = "string", example = "MyActor is running")]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DebugState(SmolStr);
 
 impl DebugState {
@@ -51,7 +50,7 @@ impl Display for DebugState {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum RestartMode {
     Always,
     OnError,

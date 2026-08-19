@@ -16,14 +16,14 @@ impl Pid {
     }
 
     pub fn rand() -> Self {
-        let rand: [u8; 12] = rand::random();
+        let rand: [u8; 11] = rand::random();
 
-        let mut val = String::with_capacity(17);
+        let mut val = String::with_capacity(16);
         bs58::encode(rand)
             .with_alphabet(&Alphabet::BITCOIN)
             .onto(&mut val)
             .expect("Capacity is sufficient");
-        val.truncate(16);
+        val.truncate(14);
 
         Self::new(val)
     }
@@ -118,26 +118,5 @@ mod test {
         let pid1 = Pid::rand();
         let pid2 = Pid::rand();
         assert_ne!(pid1, pid2);
-    }
-}
-
-impl utoipa::PartialSchema for Pid {
-    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
-        <String as utoipa::PartialSchema>::schema()
-    }
-}
-
-impl utoipa::ToSchema for Pid {
-    fn name() -> Cow<'static, str> {
-        <String as utoipa::ToSchema>::name()
-    }
-
-    fn schemas(
-        schemas: &mut Vec<(
-            String,
-            utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
-        )>,
-    ) {
-        <String as utoipa::ToSchema>::schemas(schemas)
     }
 }

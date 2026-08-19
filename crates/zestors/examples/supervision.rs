@@ -8,7 +8,7 @@ use std::{convert::Infallible, time::Duration};
 use zestors::{
     HandlerInterface,
     handler::{Handle, HandledBy, Handler, HandlerState, ShutdownReason},
-    node::{ApiServerBlueprint, Node},
+    node::{ApiServer, ApiServerBlueprint, Node},
     prelude::*,
     signals::RestartMode,
     supervision::{ChildSpec, RestartIntensity, Supervisor},
@@ -113,7 +113,7 @@ async fn main() -> Result<(), Report> {
             .with_child(ChildSpec::new("supervisor-B", supervisor_b))
             .with_child(ChildSpec::new(
                 "api-server",
-                ApiServerBlueprint::new("127.0.0.1:8080".parse().unwrap()),
+                ApiServer::blueprint("127.0.0.1:8080".parse().unwrap()),
             )),
     ))
     .start()?;
