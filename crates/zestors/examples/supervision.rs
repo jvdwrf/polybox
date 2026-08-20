@@ -1,17 +1,13 @@
-use futures::{future::join_all, join};
-use rootcause::{
-    Report,
-    prelude::{IteratorExt as _, ResultExt},
-    report,
-};
-use std::{convert::Infallible, time::Duration};
+use futures::future::join_all;
+use rootcause::Report;
+use std::time::Duration;
 use zestors::{
     HandlerInterface,
-    handler::{Handle, HandledBy, Handler, HandlerState, ShutdownReason},
-    node::{ApiServer, ApiServerBlueprint, Node},
+    handler::{Handle, Handler, HandlerState, ShutdownReason},
+    node::{ApiServer, Node},
     prelude::*,
     signals::RestartMode,
-    supervision::{ChildSpec, RestartIntensity, Supervisor},
+    supervision::{ChildSpec, Supervisor, actor, blueprint},
 };
 
 #[derive(Interface, HandlerInterface)]
@@ -114,6 +110,14 @@ async fn main() -> Result<(), Report> {
             .with_child(ChildSpec::new(
                 "api-server",
                 ApiServer::blueprint("127.0.0.1:8080".parse().unwrap()),
+            ))
+            .with_child(ChildSpec::new(
+                "dyn-actor",
+                actor(async move |_: EventStream<MyInterface>| Ok(())),
+            ))
+            .with_child(ChildSpec::new(
+                "dyn-blueprint-actor",
+                blueprint(|| actor(async move |ev: EventStream<MyInterface>| Ok(()))),
             )),
     ))
     .start()?;

@@ -149,4 +149,86 @@ where
     }
 }
 
-//
+pub struct FnActor<F, Fut, I, E>
+where
+    F: FnOnce(EventStream<I>) -> Fut + Send + 'static,
+    Fut: Future<Output = Result<E, Report>> + Send + 'static,
+    I: Interface,
+    E: Send + 'static,
+{
+    f: F,
+    _phantom: std::marker::PhantomData<fn() -> (I, E, Fut)>,
+}
+
+impl<F, Fut, I, E> FnActor<F, Fut, I, E>
+where
+    F: FnOnce(EventStream<I>) -> Fut + Send + 'static,
+    Fut: Future<Output = Result<E, Report>> + Send + 'static,
+    I: Interface,
+    E: Send + 'static,
+{
+    pub fn new(f: F) -> Self {
+        Self {
+            f,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<F, Fut, I, E> Actor for FnActor<F, Fut, I, E>
+where
+    F: FnOnce(EventStream<I>) -> Fut + Send + 'static,
+    Fut: Future<Output = Result<E, Report>> + Send + 'static,
+    I: Interface,
+    E: Send + 'static,
+{
+    type Interface = I;
+    type Exit = E;
+
+    fn run(
+        self,
+        state: EventStream<Self::Interface>,
+    ) -> impl Future<Output = Result<Self::Exit, Report>> + Send + 'static {
+        (self.f)(state)
+    }
+}
+
+impl<F, Fut, I, E> Debug for FnActor<F, Fut, I, E>
+where
+    F: FnOnce(EventStream<I>) -> Fut + Send + 'static,
+    Fut: Future<Output = Result<E, Report>> + Send + 'static,
+    I: Interface,
+    E: Send + 'static,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FnActor")
+            .field("interface", &std::any::type_name::<I>())
+            .field("exit", &std::any::type_name::<E>())
+            .finish()
+    }
+}
+
+impl<F, Fut, I, E> Clone for FnActor<F, Fut, I, E>
+where
+    F: Clone + FnOnce(EventStream<I>) -> Fut + Send + 'static,
+    Fut: Future<Output = Result<E, Report>> + Send + 'static,
+    I: Interface,
+    E: Send + 'static,
+{
+    fn clone(&self) -> Self {
+        Self {
+            f: self.f.clone(),
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+pub fn actor<F, Fut, I, E>(f: F) -> FnActor<F, Fut, I, E>
+where
+    F: FnOnce(EventStream<I>) -> Fut + Send + 'static,
+    Fut: Future<Output = Result<E, Report>> + Send + 'static,
+    I: Interface,
+    E: Send + 'static,
+{
+    FnActor::new(f)
+}

@@ -63,3 +63,63 @@ impl<T: Blueprint> IntoBlueprint for T {
         self
     }
 }
+
+pub struct FnBlueprint<F, A>
+where
+    F: Fn() -> A + Send + Sync + 'static,
+    A: Actor,
+{
+    f: F,
+}
+
+impl<F, A> FnBlueprint<F, A>
+where
+    F: Fn() -> A + Send + Sync + 'static,
+    A: Actor,
+{
+    pub fn new(f: F) -> Self {
+        Self { f }
+    }
+}
+
+impl<F, A> Blueprint for FnBlueprint<F, A>
+where
+    F: Fn() -> A + Send + Sync + 'static,
+    A: Actor,
+{
+    type Actor = A;
+
+    fn instantiate(&self) -> Self::Actor {
+        (self.f)()
+    }
+}
+
+impl<F, A> Debug for FnBlueprint<F, A>
+where
+    F: Fn() -> A + Send + Sync + 'static,
+    A: Actor,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FnBlueprint")
+            .field("actor", &std::any::type_name::<A>())
+            .finish()
+    }
+}
+
+impl<F, A> Clone for FnBlueprint<F, A>
+where
+    F: Clone + Fn() -> A + Send + Sync + 'static,
+    A: Actor,
+{
+    fn clone(&self) -> Self {
+        Self { f: self.f.clone() }
+    }
+}
+
+pub fn blueprint<F, A>(f: F) -> FnBlueprint<F, A>
+where
+    F: Fn() -> A + Send + Sync + 'static,
+    A: Actor,
+{
+    FnBlueprint::new(f)
+}

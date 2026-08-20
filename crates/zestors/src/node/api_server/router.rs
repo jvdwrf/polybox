@@ -14,17 +14,13 @@ impl ApiServer {
 
 #[route(GET "/tree?pid&include_debug" with ApiServer)]
 async fn get_tree(pid: Option<Pid>, include_debug: Option<bool>) -> Response {
-    tracing::debug!(
-        "Received request for supervision tree with PID: {:?} and query: {:?}",
-        pid,
-        include_debug
-    );
+    tracing::debug!("Received request for supervision with {pid:?} and {include_debug:?}");
 
     let include_debug = include_debug.unwrap_or(false);
 
     let Some(pid) = pid.or_else(|| Node::root_supervisor_pid().cloned()) else {
         return (
-            StatusCode::BAD_REQUEST,
+            StatusCode::INTERNAL_SERVER_ERROR,
             "No PID provided and no root supervisor PID found",
         )
             .into_response();
