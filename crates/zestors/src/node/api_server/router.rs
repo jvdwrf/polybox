@@ -1,5 +1,3 @@
-use std::collections::{HashSet, VecDeque};
-
 use crate::_prelude::*;
 use axum::{
     Json, Router,
@@ -8,8 +6,7 @@ use axum::{
 };
 use axum_typed_routing::{TypedRouter, route};
 use futures::{StreamExt, stream};
-use futures::{future::join_all, stream::BufferUnordered};
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexMap;
 use rootcause::report;
 
 impl ApiServer {
@@ -17,6 +14,8 @@ impl ApiServer {
         Router::new()
             .typed_route(get_tree)
             .typed_route(get_processes)
+            .typed_route(get_channel_snapshots)
+            .typed_route(get_debug_info)
             .with_state(self.clone())
     }
 }
@@ -28,7 +27,7 @@ async fn get_tree(pid: Option<Pid>, include_debug: Option<bool>) -> ApiResult {
     let include_debug = include_debug.unwrap_or(false);
 
     let pid = pid
-        .or_else(|| Node::root_supervisor().cloned())
+        .or_else(|| Node::root_supervisor().map(|desc| desc.pid.clone()))
         .ok_or_else(|| report!("No PID provided and no root supervisor PID found"))?;
 
     let tree = SupervisionTree::new(ChildDescription {
@@ -117,7 +116,7 @@ async fn get_debug_info(Json(pids): Json<Vec<Pid>>) -> ApiResult<Json<Vec<Option
             _ => None,
         }
     }))
-    .buffer_unordered(10)
+    .buffered(10)
     .collect::<Vec<_>>()
     .await;
 

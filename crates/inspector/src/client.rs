@@ -1,6 +1,10 @@
 use reqwest::StatusCode;
 use rootcause::report;
-use zestors::supervision::SupervisionTree;
+use zestors::{
+    channel::{ChannelSnapshot, Pid},
+    signals::DebugInfo,
+    supervision::{ChildDescription, SupervisionTree},
+};
 
 pub struct Client {
     client: reqwest::Client,
@@ -25,6 +29,51 @@ impl Client {
                 Ok(Some(supervision_tree))
             }
             StatusCode::NOT_FOUND => Ok(None),
+            _ => Err(response_error(response).await),
+        }
+    }
+
+    pub async fn get_processes(&self) -> rootcause::Result<Vec<ChildDescription>> {
+        let url = self.base_url.join("/processes")?;
+        let response = self.client.get(url).send().await?;
+
+        match response.status() {
+            StatusCode::OK => {
+                let processes = response.json::<Vec<ChildDescription>>().await?;
+                Ok(processes)
+            }
+            _ => Err(response_error(response).await),
+        }
+    }
+
+    pub async fn get_channel_snapshots(
+        &self,
+        pids: Vec<Pid>,
+    ) -> rootcause::Result<Vec<Option<ChannelSnapshot>>> {
+        let url = self.base_url.join("/snapshots")?;
+        let response = self.client.post(url).json(&pids).send().await?;
+
+        match response.status() {
+            StatusCode::OK => {
+                let snapshots = response.json::<Vec<Option<ChannelSnapshot>>>().await?;
+                Ok(snapshots)
+            }
+            _ => Err(response_error(response).await),
+        }
+    }
+
+    pub async fn get_debug_infos(
+        &self,
+        pids: Vec<Pid>,
+    ) -> rootcause::Result<Vec<Option<DebugInfo>>> {
+        let url = self.base_url.join("/debug_info")?;
+        let response = self.client.post(url).json(&pids).send().await?;
+
+        match response.status() {
+            StatusCode::OK => {
+                let debug_info = response.json::<Vec<Option<DebugInfo>>>().await?;
+                Ok(debug_info)
+            }
             _ => Err(response_error(response).await),
         }
     }
