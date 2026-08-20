@@ -7,7 +7,7 @@ use zestors::{
     node::{ApiServer, Node},
     prelude::*,
     signals::RestartMode,
-    supervision::{ChildSpec, Supervisor, new_actor, new_blueprint},
+    supervision::{BlueprintExt, ChildSpec, Supervisor, new_actor, new_blueprint},
 };
 
 #[derive(Interface, HandlerInterface)]
@@ -90,53 +90,69 @@ async fn main() -> Result<(), Report> {
         .with_max_level(tracing::Level::DEBUG)
         .init();
 
-    let mut supervisor_a = Supervisor::blueprint();
+    let (spec_a, addr_a) = MyActor::new("A")
+        .with_pid("HelloActor")
+        .with_mode(RestartMode::Never)
+        .split();
 
-    let actor_a = supervisor_a
-        .add_child(ChildSpec::new("HelloActor", MyActor::new("A")).with_mode(RestartMode::Never));
-    let actor_b = supervisor_a
-        .add_child(ChildSpec::new("HelloActor2", MyActor::new("B")).with_mode(RestartMode::Always));
+    let (spec_b, addr_b) = MyActor::new("B")
+        .with_pid("HelloActor2")
+        .with_mode(RestartMode::Always)
+        .split();
 
-    let mut supervisor_b = Supervisor::blueprint();
+    let (super_spec_a, _) = Supervisor::blueprint()
+        .with_children([spec_a, spec_b])
+        .with_pid("SupervisorA")
+        .split();
 
-    let actor_c = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new("C")));
-    let actor_d = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new("D")));
+    let (spec_c, _) = MyActor::new("C")
+        .with_pid("HelloActor3")
+        .with_mode(RestartMode::Always)
+        .split();
 
-    let root = Node::new(ChildSpec::new(
-        "root-supervisor",
-        Supervisor::blueprint()
-            .with_child(ChildSpec::new("supervisor-A", supervisor_a))
-            .with_child(ChildSpec::new("supervisor-B", supervisor_b))
-            .with_child(ChildSpec::new(
-                "api-server",
-                ApiServer::blueprint("127.0.0.1:8080".parse().unwrap()),
-            ))
-            .with_child(ChildSpec::new(
-                "dyn-actor",
-                new_actor(async |_: EventStream<MyInterface>| Ok(())),
-            ))
-            .with_child(ChildSpec::new(
-                "dyn-blueprint-actor",
-                new_blueprint(|| new_actor(async |ev: EventStream<MyInterface>| Ok(()))),
-            ))
-            .with_child(ChildSpec::new(
-                "dyn-blueprint-actor2",
-                new_blueprint(|| MyActor::new("E")),
-            )),
-    ))
-    .start()?;
+    let (spec_d, _) = MyActor::new("D")
+        .with_pid("HelloActor4")
+        .with_mode(RestartMode::Always)
+        .split();
 
-    root.watch_start().await;
+    let (super_spec_b, _) = Supervisor::blueprint()
+        .with_children([spec_c, spec_d])
+        .with_pid("SupervisorB")
+        .split();
+
+    let (api_server_spec, _) = ApiServer::blueprint("127.0.0.1:8080".parse().unwrap())
+        .with_pid("ApiServer")
+        .split();
+
+    let (dyn_actor_spec, _) = new_actor(async |_: EventStream<MyInterface>| Ok(()))
+        .with_pid("DynActor")
+        .split();
+
+    let root_supervisor = Supervisor::blueprint()
+        .with_children([
+            super_spec_a,
+            super_spec_b,
+            api_server_spec,
+            dyn_actor_spec,
+            new_blueprint(|| new_actor(async |_: EventStream<MyInterface>| Ok(())))
+                .with_pid("DynBlueprintActor")
+                .into(),
+            new_blueprint(|| MyActor::new("E"))
+                .with_pid("DynBlueprintActor2")
+                .into(),
+        ])
+        .with_pid("RootSupervisor");
+
+    let root_address = Node::new(root_supervisor).start()?;
+
+    root_address.watch_start().await;
 
     tracing::info!("All actors started, sending messages...");
 
     loop {
         tokio::time::sleep(Duration::from_secs(5)).await;
 
-        actor_a.signal_shutdown();
-        actor_b.signal_shutdown();
+        addr_a.signal_shutdown();
+        addr_b.signal_shutdown();
     }
-
-    futures::future::pending::<()>().await;
-    Ok(())
 }

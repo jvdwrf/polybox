@@ -1,6 +1,6 @@
 use super::*;
 
-pub trait SpawnOn {
+pub trait SpawnOn: Into<DynRepeatSpawner> {
     type Inbox: ChannelKind;
     type Exit: Send + 'static;
 

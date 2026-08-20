@@ -47,6 +47,10 @@ pub trait BlueprintExt: Blueprint + Sized {
     fn supervisee_cfg(&self) -> ChildConfig {
         ChildConfig::for_blueprint(self)
     }
+
+    fn with_pid(self, pid: impl Into<Pid>) -> ChildSpec<Self> {
+        ChildSpec::new(pid, self)
+    }
 }
 impl<T: Blueprint> BlueprintExt for T {}
 

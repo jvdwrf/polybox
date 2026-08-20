@@ -397,6 +397,11 @@ impl Actor for Supervisor {
                         let children = self.get_child_descriptions();
                         tx.send(children).ok();
                     }
+
+                    SupervisorInterface::Health((_, tx)) => {
+                        // TODO: Check for recent restarts and determine health status accordingly
+                        tx.send(HealthStatus::Healthy).ok();
+                    }
                 },
             }
         }

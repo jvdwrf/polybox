@@ -4,6 +4,7 @@
 - [x] Fix that shutdown transfers through the whole supervision tree in the example
 - [x] Supervisor is only ready after all it's children are
 - [x] Add init method to handler
-- [ ] Fix DoubleSpawn error handling in supervisor
-- [ ] Fix children being aborted
-- [ ] Supervisors should have very high init/shutdown time
+- [x] Fix DoubleSpawn error handling in supervisor
+- [x] Fix children being aborted
+- [x] Supervisors should have very high init/shutdown time
+- [ ] Add `Health` signal

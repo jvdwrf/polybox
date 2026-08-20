@@ -15,4 +15,5 @@ pub enum SupervisorInterface {
     DeregisterChild(Payload<DeregisterChild>),
     Debug(Payload<GetDebug>),
     Children(Payload<GetChildren>),
+    Health(Payload<GetHealth>),
 }

@@ -16,14 +16,10 @@ const KEEP_N_EXITS: usize = 5;
 pub struct ChannelSnapshot {
     pub pid: Pid,
     pub status: ActorStatus,
-
     pub signal_len: usize,
     pub msg_len: usize,
-
     pub spawns: Vec<Zoned>,
-
     pub exits: Vec<(Zoned, Exit)>,
-
     pub created_at: Zoned,
 }
 

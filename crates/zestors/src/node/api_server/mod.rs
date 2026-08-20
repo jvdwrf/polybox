@@ -32,6 +32,7 @@ pub struct ApiServer {
 pub enum ApiServerInterface {
     Debug(Payload<GetDebug>),
     Children(Payload<GetChildren>),
+    Health(Payload<GetHealth>),
 }
 
 impl Actor for ApiServer {
@@ -77,6 +78,9 @@ impl Actor for ApiServer {
 
                     ApiServerInterface::Children((_, tx)) => {
                         tx.send(vec![]).ok();
+                    }
+                    ApiServerInterface::Health((_, tx)) => {
+                        tx.send(HealthStatus::Healthy).ok();
                     }
                 },
             }

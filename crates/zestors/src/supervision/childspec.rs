@@ -53,12 +53,9 @@ impl<T: Blueprint> ChildSpec<T> {
         supervisor.add_child(self)
     }
 
-    pub fn into_dyn(self) -> ChildSpec {
-        ChildSpec {
-            cfg: self.cfg,
-            blueprint: self.blueprint.into(),
-            channel: self.channel.into_dyn(),
-        }
+    pub fn split(self) -> (ChildSpec, Address<<T::Actor as Actor>::Interface>) {
+        let address = self.channel.address().clone();
+        (self.into_dyn(), address)
     }
 }
 
@@ -99,6 +96,14 @@ impl<T: SpawnOn> ChildSpec<T> {
 
     pub fn spawn(&self) -> Result<Child<T::Exit, T::Inbox>, SpawnError> {
         self.blueprint.spawn_on(self.channel.clone())
+    }
+
+    pub fn into_dyn(self) -> ChildSpec {
+        ChildSpec {
+            cfg: self.cfg,
+            blueprint: self.blueprint.into(),
+            channel: self.channel.into_dyn(),
+        }
     }
 }
 
