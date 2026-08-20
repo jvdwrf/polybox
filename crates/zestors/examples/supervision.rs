@@ -7,7 +7,7 @@ use zestors::{
     node::{ApiServer, Node},
     prelude::*,
     signals::RestartMode,
-    supervision::{ChildSpec, Supervisor, actor, blueprint},
+    supervision::{ChildSpec, Supervisor, new_actor, new_blueprint},
 };
 
 #[derive(Interface, HandlerInterface)]
@@ -102,7 +102,7 @@ async fn main() -> Result<(), Report> {
     let actor_c = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new("C")));
     let actor_d = supervisor_b.add_child(ChildSpec::new(Pid::rand(), MyActor::new("D")));
 
-    let _root = Node::new(ChildSpec::new(
+    let root = Node::new(ChildSpec::new(
         "root-supervisor",
         Supervisor::blueprint()
             .with_child(ChildSpec::new("supervisor-A", supervisor_a))
@@ -113,22 +113,20 @@ async fn main() -> Result<(), Report> {
             ))
             .with_child(ChildSpec::new(
                 "dyn-actor",
-                actor(async move |_: EventStream<MyInterface>| Ok(())),
+                new_actor(async |_: EventStream<MyInterface>| Ok(())),
             ))
             .with_child(ChildSpec::new(
                 "dyn-blueprint-actor",
-                blueprint(|| actor(async move |ev: EventStream<MyInterface>| Ok(()))),
+                new_blueprint(|| new_actor(async |ev: EventStream<MyInterface>| Ok(()))),
+            ))
+            .with_child(ChildSpec::new(
+                "dyn-blueprint-actor2",
+                new_blueprint(|| MyActor::new("E")),
             )),
     ))
     .start()?;
 
-    join_all([
-        actor_a.watch_start(),
-        actor_b.watch_start(),
-        actor_c.watch_start(),
-        actor_d.watch_start(),
-    ])
-    .await;
+    root.watch_start().await;
 
     tracing::info!("All actors started, sending messages...");
 

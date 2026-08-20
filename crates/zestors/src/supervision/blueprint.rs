@@ -116,7 +116,7 @@ where
     }
 }
 
-pub fn blueprint<F, A>(f: F) -> FnBlueprint<F, A>
+pub fn new_blueprint<F, A>(f: F) -> FnBlueprint<F, A>
 where
     F: Fn() -> A + Send + Sync + 'static,
     A: Actor,

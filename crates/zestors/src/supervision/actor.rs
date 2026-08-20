@@ -223,7 +223,7 @@ where
     }
 }
 
-pub fn actor<F, Fut, I, E>(f: F) -> FnActor<F, Fut, I, E>
+pub fn new_actor<F, Fut, I, E>(f: F) -> FnActor<F, Fut, I, E>
 where
     F: FnOnce(EventStream<I>) -> Fut + Send + 'static,
     Fut: Future<Output = Result<E, Report>> + Send + 'static,
