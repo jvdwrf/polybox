@@ -2,7 +2,7 @@ use super::*;
 use crate::signals::{self, Event};
 use eyeball::SharedObservable;
 use jiff::{SignedDuration, Timestamp, Zoned, tz::TimeZone};
-use std::{any::TypeId, fmt::Debug, marker::PhantomData, sync::RwLock};
+use std::{any::TypeId, fmt::Debug, hash::Hash, marker::PhantomData, sync::RwLock};
 use tokio::{select, time::Instant};
 use type_sets::{Contains, Set, TypeSet};
 
@@ -321,7 +321,7 @@ where
     T: TypeSet + Contains<M> + 'static,
 {
     async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
-        match self.send_checked(msg).await {
+        match self.send_dyn(msg).await {
             Ok(output) => Ok(output),
             Err(SendCheckedError::Closed(msg)) => Err(SendError(msg)),
             Err(SendCheckedError::NotAccepted(_)) => {
@@ -335,7 +335,7 @@ where
     }
 
     fn try_send(&self, msg: M) -> Result<M::Output, TrySendError<M>> {
-        match self.try_send_checked(msg) {
+        match self.try_send_dyn(msg) {
             Ok(output) => Ok(output),
             Err(TrySendCheckedError::Closed(msg)) => Err(TrySendError::Closed(msg)),
             Err(TrySendCheckedError::Full(msg)) => Err(TrySendError::Full(msg)),
@@ -350,7 +350,7 @@ where
     }
 
     fn send_now(&self, msg: M) -> Result<M::Output, SendError<M>> {
-        match self.send_now_checked(msg) {
+        match self.send_now_dyn(msg) {
             Ok(output) => Ok(output),
             Err(SendCheckedError::Closed(msg)) => Err(SendError(msg)),
             Err(SendCheckedError::NotAccepted(_)) => {
@@ -420,7 +420,7 @@ where
 
             output
         } else {
-            match self.force_send_checked(msg) {
+            match self.force_send_dyn(msg) {
                 Ok(output) => output,
                 Err(NotAccepted(_)) => {
                     panic!(
@@ -438,28 +438,28 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
     type ChannelKind = C;
     type Set = C::Set;
 
-    async fn send_checked<M: Message>(&self, msg: M) -> Result<M::Output, SendCheckedError<M>> {
+    async fn send_dyn<M: Message>(&self, msg: M) -> Result<M::Output, SendCheckedError<M>> {
         self.delay_for_backpressure().await;
-        self.send_now_checked(msg)
+        self.send_now_dyn(msg)
     }
 
-    fn try_send_checked<M: Message>(&self, msg: M) -> Result<M::Output, TrySendCheckedError<M>> {
+    fn try_send_dyn<M: Message>(&self, msg: M) -> Result<M::Output, TrySendCheckedError<M>> {
         if self.reached_backpressure() {
             return Err(TrySendCheckedError::Full(msg));
         }
 
-        self.send_now_checked(msg).map_err(Into::into)
+        self.send_now_dyn(msg).map_err(Into::into)
     }
 
-    fn send_now_checked<M: Message>(&self, msg: M) -> Result<M::Output, SendCheckedError<M>> {
+    fn send_now_dyn<M: Message>(&self, msg: M) -> Result<M::Output, SendCheckedError<M>> {
         if !self.status().accepts_messages() {
             return Err(SendCheckedError::Closed(msg));
         }
 
-        self.force_send_checked(msg).map_err(Into::into)
+        self.force_send_dyn(msg).map_err(Into::into)
     }
 
-    fn force_send_checked<M: Message>(&self, msg: M) -> Result<M::Output, NotAccepted<M>> {
+    fn force_send_dyn<M: Message>(&self, msg: M) -> Result<M::Output, NotAccepted<M>> {
         match self.inner.msg_queue.try_push_msg(msg) {
             Ok(output) => {
                 self.inner.msg_notifier.notify_one();
@@ -469,11 +469,8 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
         }
     }
 
-    async fn request_checked<M: Message>(
-        &self,
-        msg: M,
-    ) -> Result<M::Reply, RequestCheckedError<M>> {
-        Ok(self.send_checked(msg).await?.receive().await?)
+    async fn request_dyn<M: Message>(&self, msg: M) -> Result<M::Reply, RequestCheckedError<M>> {
+        Ok(self.send_dyn(msg).await?.receive().await?)
     }
 
     fn pid(&self) -> &Pid {
@@ -657,6 +654,18 @@ impl<T: ChannelKind> Clone for Channel<T> {
             inner: self.inner.clone(),
             _marker: PhantomData,
         }
+    }
+}
+
+impl<T: ChannelKind> PartialEq for Channel<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner.pid == other.inner.pid
+    }
+}
+impl<T: ChannelKind> Eq for Channel<T> {}
+impl<T: ChannelKind> Hash for Channel<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.inner.pid.hash(state);
     }
 }
 

@@ -1,8 +1,8 @@
 use super::*;
 
 #[derive(Message, Debug)]
-#[msg(path = "crate", reply = DebugState)]
-pub struct GetDebug;
+#[msg(path = "crate", reply = DebugInfo)]
+pub struct GetDebugInfo;
 
 #[derive(Message, Debug)]
 #[msg(path = "crate", reply = "Vec<ChildDescription>")]

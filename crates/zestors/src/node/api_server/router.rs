@@ -1,3 +1,5 @@
+use std::collections::{HashSet, VecDeque};
+
 use crate::_prelude::*;
 use axum::{
     Json, Router,
@@ -5,31 +7,29 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_typed_routing::{TypedRouter, route};
+use futures::{StreamExt, stream};
+use futures::{future::join_all, stream::BufferUnordered};
+use indexmap::{IndexMap, IndexSet};
+use rootcause::report;
 
 impl ApiServer {
     pub(super) fn create_router(&self) -> Router {
-        Router::new().typed_route(get_tree).with_state(self.clone())
+        Router::new()
+            .typed_route(get_tree)
+            .typed_route(get_processes)
+            .with_state(self.clone())
     }
 }
 
 #[route(GET "/tree?pid&include_debug" with ApiServer)]
-async fn get_tree(pid: Option<Pid>, include_debug: Option<bool>) -> Response {
+async fn get_tree(pid: Option<Pid>, include_debug: Option<bool>) -> ApiResult {
     tracing::debug!("Received request for supervision with {pid:?} and {include_debug:?}");
 
     let include_debug = include_debug.unwrap_or(false);
 
-    let Some(pid) = pid.or_else(|| Node::root_supervisor_pid().cloned()) else {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "No PID provided and no root supervisor PID found",
-        )
-            .into_response();
-    };
-
-    let address = Registry::local().get(&pid);
-    if address.is_none() {
-        return (StatusCode::NOT_FOUND, "PID not found in registry").into_response();
-    }
+    let pid = pid
+        .or_else(|| Node::root_supervisor().cloned())
+        .ok_or_else(|| report!("No PID provided and no root supervisor PID found"))?;
 
     let tree = SupervisionTree::new(ChildDescription {
         pid,
@@ -49,5 +49,81 @@ async fn get_tree(pid: Option<Pid>, include_debug: Option<bool>) -> Response {
         tree
     };
 
-    (StatusCode::OK, Json(tree)).into_response()
+    Ok((StatusCode::OK, Json(tree)).into_response())
 }
+
+#[route(GET "/processes" with ApiServer)]
+async fn get_processes() -> ApiResult<Json<Vec<ChildDescription>>> {
+    let root_desc = Node::root_supervisor()
+        .ok_or_else(|| report!("No root supervisor"))?
+        .clone();
+
+    let mut pending = Vec::from_iter([root_desc.pid.clone()]);
+    let mut found = IndexMap::<Pid, _>::from_iter([(root_desc.pid.clone(), root_desc)]);
+
+    while !pending.is_empty() {
+        let new_children = stream::iter(pending.drain(..))
+            .map(|pid| async move {
+                let Some(address) = Registry::local().get(&pid) else {
+                    return None;
+                };
+
+                match timeout(Duration::from_millis(50), address.request_dyn(GetChildren)).await {
+                    Ok(Ok(children)) => Some(children),
+                    _ => None,
+                }
+            })
+            .buffer_unordered(10)
+            .collect::<Vec<_>>()
+            .await;
+
+        for child in new_children.into_iter().flatten().flatten() {
+            let child_pid = child.pid.clone();
+
+            if found.insert(child_pid.clone(), child).is_none() {
+                pending.push(child_pid);
+            }
+        }
+    }
+
+    Ok(Json(found.into_values().collect()))
+}
+
+#[route(GET "/snapshots" with ApiServer)]
+async fn get_channel_snapshots(
+    Json(pids): Json<Vec<Pid>>,
+) -> ApiResult<Json<Vec<Option<ChannelSnapshot>>>> {
+    let results = pids
+        .into_iter()
+        .map(|pid| {
+            Registry::local()
+                .get(&pid)
+                .map(|address| address.snapshot())
+        })
+        .collect::<Vec<_>>();
+
+    Ok(Json(results))
+}
+
+#[route(GET "/debug_info" with ApiServer)]
+async fn get_debug_info(Json(pids): Json<Vec<Pid>>) -> ApiResult<Json<Vec<Option<DebugInfo>>>> {
+    let results = stream::iter(pids.into_iter().map(|pid| async move {
+        let Some(address) = Registry::local().get(&pid) else {
+            return None;
+        };
+
+        match timeout(Duration::from_millis(50), address.request_dyn(GetDebugInfo)).await {
+            Ok(Ok(debug_info)) => Some(debug_info),
+            _ => None,
+        }
+    }))
+    .buffer_unordered(10)
+    .collect::<Vec<_>>()
+    .await;
+
+    Ok(Json(results))
+}
+
+use error::*;
+use tokio::time::timeout;
+mod error;

@@ -30,21 +30,21 @@ impl SignalEvent {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct DebugState(SmolStr);
+pub struct DebugInfo(SmolStr);
 
-impl DebugState {
+impl DebugInfo {
     pub fn new(description: impl Into<SmolStr>) -> Self {
         Self(description.into())
     }
 }
 
-impl<T: Into<SmolStr>> From<T> for DebugState {
+impl<T: Into<SmolStr>> From<T> for DebugInfo {
     fn from(description: T) -> Self {
         Self::new(description)
     }
 }
 
-impl Display for DebugState {
+impl Display for DebugInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }

@@ -30,7 +30,7 @@ pub struct ApiServer {
 #[derive(Interface)]
 #[interface(path = "crate")]
 pub enum ApiServerInterface {
-    Debug(Payload<GetDebug>),
+    Debug(Payload<GetDebugInfo>),
     Children(Payload<GetChildren>),
     Health(Payload<GetHealth>),
 }

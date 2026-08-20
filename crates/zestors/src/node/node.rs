@@ -13,10 +13,10 @@ struct NodeActor {
     supervisor_spec: ChildSpec<SupervisorBlueprint>,
 }
 
-static ROOT_SUPERVISOR_PID: OnceLock<Pid> = OnceLock::new();
+static ROOT_SUPERVISOR_PID: OnceLock<ChildDescription> = OnceLock::new();
 
 impl Node {
-    pub fn root_supervisor_pid() -> Option<&'static Pid> {
+    pub fn root_supervisor() -> Option<&'static ChildDescription> {
         ROOT_SUPERVISOR_PID.get()
     }
 
@@ -39,7 +39,10 @@ impl Node {
         } = self;
 
         ROOT_SUPERVISOR_PID
-            .set(supervisor_spec.pid().clone())
+            .set(ChildDescription {
+                pid: supervisor_spec.pid().clone(),
+                cfg: supervisor_spec.cfg().clone(),
+            })
             .map_err(|_| report!("Root Node can only be started once."))?;
 
         let supervisor_child = supervisor_spec.spawn()?;

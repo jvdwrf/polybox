@@ -5,7 +5,7 @@ use zestors::{
     handler::{Handle, HandledBy, Handler, HandlerState, ShutdownReason},
     prelude::*,
     spawn,
-    supervision::{ActorRunnerExt as _, GetChildren, GetDebug},
+    supervision::{ActorRunnerExt as _, GetChildren, GetDebugInfo},
 };
 
 #[tokio::main]
@@ -70,7 +70,7 @@ impl MyActor {
 enum MyInterface {
     Add(Payload<u32>),
     Print(Payload<String>),
-    Debug(Payload<GetDebug>),
+    Debug(Payload<GetDebugInfo>),
     Children(Payload<GetChildren>),
 }
 
@@ -137,11 +137,11 @@ impl Handle<IntervalTick> for MyActor {
     }
 }
 
-impl Handle<GetDebug> for MyActor {
+impl Handle<GetDebugInfo> for MyActor {
     async fn handle(
         &mut self,
         _: &mut HandlerState<Self>,
-        (_, tx): Payload<GetDebug>,
+        (_, tx): Payload<GetDebugInfo>,
     ) -> Result<(), Self::Error> {
         tx.send("MyActor is running".into()).ok();
         Ok(())

@@ -1,5 +1,5 @@
 use crate::_prelude::*;
-use std::fmt::Debug;
+use std::{fmt::Debug, hash::Hash};
 
 #[repr(transparent)]
 pub struct Address<T: ChannelKind = Set!()> {
@@ -51,6 +51,17 @@ impl<T: ChannelKind> Debug for Address<T> {
         f.debug_struct("Address")
             .field("channel", &self.channel)
             .finish()
+    }
+}
+impl<T: ChannelKind> PartialEq for Address<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.channel == other.channel
+    }
+}
+impl<T: ChannelKind> Eq for Address<T> {}
+impl<T: ChannelKind> Hash for Address<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.channel.hash(state);
     }
 }
 

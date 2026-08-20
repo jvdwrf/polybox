@@ -7,7 +7,7 @@ pub struct SupervisionTree {
     pub status: Option<ActorStatus>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub debug_state: Option<DebugState>,
+    pub debug_state: Option<DebugInfo>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel_state: Option<ChannelSnapshot>,
@@ -52,22 +52,21 @@ impl SupervisionTree {
             return;
         };
 
-        let children =
-            match tokio::time::timeout(timeout, address.request_checked(GetChildren)).await {
-                Ok(Ok(children)) => children,
-                Ok(Err(err)) => {
-                    tracing::warn!(
-                        "Failed to get children for PID {}: {}",
-                        self.description.pid,
-                        err
-                    );
-                    vec![]
-                }
-                Err(_) => {
-                    tracing::warn!("Timeout getting children for PID {}", self.description.pid);
-                    vec![]
-                }
-            };
+        let children = match tokio::time::timeout(timeout, address.request_dyn(GetChildren)).await {
+            Ok(Ok(children)) => children,
+            Ok(Err(err)) => {
+                tracing::warn!(
+                    "Failed to get children for PID {}: {}",
+                    self.description.pid,
+                    err
+                );
+                vec![]
+            }
+            Err(_) => {
+                tracing::warn!("Timeout getting children for PID {}", self.description.pid);
+                vec![]
+            }
+        };
 
         for child in children {
             self.children.push(SupervisionTree::new(child));
@@ -87,7 +86,7 @@ impl SupervisionTree {
             };
 
             let Ok(Ok(debug_state)) =
-                tokio::time::timeout(timeout, address.request_checked(GetDebug)).await
+                tokio::time::timeout(timeout, address.request_dyn(GetDebugInfo)).await
             else {
                 continue;
             };

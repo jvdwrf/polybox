@@ -7,21 +7,21 @@ pub trait ActorRef {
     type Set: 'static;
 
     /// Same as [`Sends::send`], but checks whether the message type is accepted by the channel.
-    fn send_checked<M: Message>(
+    fn send_dyn<M: Message>(
         &self,
         msg: M,
     ) -> impl Future<Output = Result<M::Output, SendCheckedError<M>>> + Send;
 
     /// Same as [`Sends::try_send`], but checks whether the message type is accepted by the channel.
-    fn try_send_checked<M: Message>(&self, msg: M) -> Result<M::Output, TrySendCheckedError<M>>;
+    fn try_send_dyn<M: Message>(&self, msg: M) -> Result<M::Output, TrySendCheckedError<M>>;
 
     /// Same as [`Sends::send_now`], but checks whether the message type is accepted by the channel.
-    fn send_now_checked<M: Message>(&self, msg: M) -> Result<M::Output, SendCheckedError<M>>;
+    fn send_now_dyn<M: Message>(&self, msg: M) -> Result<M::Output, SendCheckedError<M>>;
 
     /// Same as [`Sends::force_send`], but checks whether the message type is accepted by the channel.
-    fn force_send_checked<M: Message>(&self, msg: M) -> Result<M::Output, NotAccepted<M>>;
+    fn force_send_dyn<M: Message>(&self, msg: M) -> Result<M::Output, NotAccepted<M>>;
 
-    fn request_checked<M: Message>(
+    fn request_dyn<M: Message>(
         &self,
         msg: M,
     ) -> impl Future<Output = Result<M::Reply, RequestCheckedError<M>>> + Send;
@@ -107,30 +107,30 @@ impl<T: AsActorRef> ActorRef for T {
     type Set = <T::QueueType as ChannelKind>::Set;
     type ChannelKind = T::QueueType;
 
-    fn send_checked<M: Message>(
+    fn send_dyn<M: Message>(
         &self,
         msg: M,
     ) -> impl Future<Output = Result<M::Output, SendCheckedError<M>>> + Send {
-        self.as_channel().send_checked(msg)
+        self.as_channel().send_dyn(msg)
     }
 
-    fn try_send_checked<M: Message>(&self, msg: M) -> Result<M::Output, TrySendCheckedError<M>> {
-        self.as_channel().try_send_checked(msg)
+    fn try_send_dyn<M: Message>(&self, msg: M) -> Result<M::Output, TrySendCheckedError<M>> {
+        self.as_channel().try_send_dyn(msg)
     }
 
-    fn send_now_checked<M: Message>(&self, msg: M) -> Result<M::Output, SendCheckedError<M>> {
-        self.as_channel().send_now_checked(msg)
+    fn send_now_dyn<M: Message>(&self, msg: M) -> Result<M::Output, SendCheckedError<M>> {
+        self.as_channel().send_now_dyn(msg)
     }
 
-    fn force_send_checked<M: Message>(&self, msg: M) -> Result<M::Output, NotAccepted<M>> {
-        self.as_channel().force_send_checked(msg)
+    fn force_send_dyn<M: Message>(&self, msg: M) -> Result<M::Output, NotAccepted<M>> {
+        self.as_channel().force_send_dyn(msg)
     }
 
-    fn request_checked<M: Message>(
+    fn request_dyn<M: Message>(
         &self,
         msg: M,
     ) -> impl Future<Output = Result<M::Reply, RequestCheckedError<M>>> + Send {
-        self.as_channel().request_checked(msg)
+        self.as_channel().request_dyn(msg)
     }
 
     fn pid(&self) -> &Pid {

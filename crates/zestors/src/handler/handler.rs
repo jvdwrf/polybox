@@ -60,7 +60,7 @@ pub trait Handler: Debug + Sized + Send + Sync + 'static {
         async { Ok(()) }
     }
 
-    fn debug_state(&self, _address: &Address<Self::Interface>) -> DebugState {
+    fn debug_state(&self, _address: &Address<Self::Interface>) -> DebugInfo {
         format_smolstr!("{self:?}").into()
     }
 

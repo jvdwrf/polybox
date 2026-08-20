@@ -1,9 +1,9 @@
 use crate::theme::Theme;
 use crate::utils::format_duration;
 use egui::{CornerRadius, Frame, Margin, RichText, Stroke, Ui};
-use zestors::{channel::Pid, signals::DebugState};
+use zestors::{channel::Pid, signals::DebugInfo};
 
-pub fn render_debug_card(ui: &mut Ui, pid: &Pid, debug: &DebugState) {
+pub fn render_debug_card(ui: &mut Ui, pid: &Pid, debug: &DebugInfo) {
     Frame::canvas(ui.style())
         .fill(Theme::INNER_CARD_BG)
         .stroke(Stroke::new(1.0, Theme::BORDER_COLOR))
