@@ -1,10 +1,8 @@
-use std::collections::HashSet;
-
 use crate::components::SupervisionNodeWidget;
-use crate::theme::Theme;
 use crate::{api::ApiMessage, app::process_map::ProcessMap};
 use egui::{Color32, RichText};
 use indexmap::IndexMap;
+use std::collections::HashSet;
 use tokio::{sync::mpsc, time::Instant};
 use zestors::{
     channel::{ActorStatus, ChannelSnapshot, Pid},
@@ -18,9 +16,6 @@ pub struct MyApp {
     pub map: ProcessMap,
     pub error_message: Option<String>,
 }
-
-mod process_map;
-pub use process_map::*;
 
 impl Default for MyApp {
     fn default() -> Self {
@@ -88,3 +83,6 @@ impl eframe::App for MyApp {
         });
     }
 }
+
+mod process_map;
+pub use process_map::*;

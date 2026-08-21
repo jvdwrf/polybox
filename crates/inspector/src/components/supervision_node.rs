@@ -1,10 +1,7 @@
 use super::debug_card::render_debug_card;
 use super::status_badge::render_actor_status_badge;
-
 use crate::{app::ProcessTree, theme::Theme, utils::format_duration};
-
 use egui::{CornerRadius, Frame, Margin, RichText, Stroke, Ui, collapsing_header::CollapsingState};
-use std::time::Duration;
 
 pub struct SupervisionNodeWidget<'a> {
     tree: &'a ProcessTree<'a>,

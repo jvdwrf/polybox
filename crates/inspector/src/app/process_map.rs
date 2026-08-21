@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use super::*;
 
 #[derive(Default, Debug)]
@@ -31,26 +33,43 @@ impl ProcessMap {
     }
 
     pub fn tree(&self) -> Vec<ProcessTree<'_>> {
+        let now = Instant::now();
+
+        let is_visible = |entry: &ProcessMapEntry| {
+            entry
+                .outdated_since
+                .is_none_or(|since| now.duration_since(since) <= Duration::from_secs(10))
+        };
+
         let child_pids: HashSet<_> = self
             .map
             .values()
+            .filter(|entry| is_visible(entry))
             .flat_map(|entry| entry.children.iter().cloned())
             .collect();
 
         self.map
-            .keys()
-            .filter(|pid| !child_pids.contains(*pid))
-            .filter_map(|pid| self.build_tree(pid))
+            .iter()
+            .filter(|(_, entry)| is_visible(entry))
+            .filter(|(pid, _)| !child_pids.contains(*pid))
+            .filter_map(|(pid, _)| self.build_tree(pid, now))
             .collect()
     }
 
-    fn build_tree(&self, pid: &Pid) -> Option<ProcessTree<'_>> {
+    fn build_tree(&self, pid: &Pid, now: Instant) -> Option<ProcessTree<'_>> {
         let process = self.map.get(pid)?;
+
+        if process
+            .outdated_since
+            .is_some_and(|since| now.duration_since(since) > Duration::from_secs(10))
+        {
+            return None;
+        }
 
         let children = process
             .children
             .iter()
-            .filter_map(|child_pid| self.build_tree(child_pid))
+            .filter_map(|child_pid| self.build_tree(child_pid, now))
             .collect();
 
         Some(ProcessTree {
