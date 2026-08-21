@@ -1,8 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod api;
+mod api_client;
 mod app;
-mod client;
 mod components;
 mod theme;
 mod utils;

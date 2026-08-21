@@ -1,15 +1,26 @@
-use crate::api::ApiMessage;
+use std::collections::HashSet;
+
 use crate::components::SupervisionNodeWidget;
 use crate::theme::Theme;
+use crate::{api::ApiMessage, app::process_map::ProcessMap};
 use egui::{Color32, RichText};
-use tokio::sync::mpsc;
-use zestors::supervision::SupervisionTree;
+use indexmap::IndexMap;
+use tokio::{sync::mpsc, time::Instant};
+use zestors::{
+    channel::{ActorStatus, ChannelSnapshot, Pid},
+    signals::DebugInfo,
+    supervision::ChildConfig,
+};
 
 pub struct MyApp {
     pub sender: mpsc::Sender<ApiMessage>,
     pub receiver: mpsc::Receiver<ApiMessage>,
-    pub tree: Option<rootcause::Result<Option<SupervisionTree>>>,
+    pub map: ProcessMap,
+    pub error_message: Option<String>,
 }
+
+mod process_map;
+pub use process_map::*;
 
 impl Default for MyApp {
     fn default() -> Self {
@@ -17,7 +28,8 @@ impl Default for MyApp {
         Self {
             sender: tx,
             receiver: rx,
-            tree: None,
+            map: ProcessMap::default(),
+            error_message: None,
         }
     }
 }
@@ -26,9 +38,16 @@ impl MyApp {
     fn handle_incoming_messages(&mut self) {
         while let Ok(msg) = self.receiver.try_recv() {
             match msg {
-                ApiMessage::NewTree(supervision_tree) => {
-                    self.tree = Some(supervision_tree);
-                }
+                ApiMessage::ProcessesUpdate(processes) => match processes {
+                    Ok(processes) => {
+                        self.error_message = None;
+                        self.map.merge(processes);
+                    }
+                    Err(e) => {
+                        self.error_message = Some(format!("Error updating processes: {:#?}", e));
+                        eprintln!("Error updating processes: {:#?}", e);
+                    }
+                },
             }
         }
     }
@@ -52,28 +71,20 @@ impl eframe::App for MyApp {
 
         egui::CentralPanel::default().show(ui, |ui| {
             self.render_header(ui);
-
-            if let Some(tree_result) = &self.tree {
-                match tree_result {
-                    Ok(Some(tree)) => {
-                        egui::ScrollArea::both()
-                            .auto_shrink([false, false])
-                            .show(ui, |ui| {
-                                SupervisionNodeWidget::new(tree, true).show(ui);
-                            });
-                    }
-                    Ok(None) => {
-                        ui.label(
-                            RichText::new("No supervision tree found.").color(Theme::LABEL_MUTED),
-                        );
-                    }
-                    Err(e) => {
-                        ui.colored_label(Theme::ERROR_RED, format!("Error loading tree: {:#?}", e));
-                    }
-                }
-            } else {
-                ui.label(RichText::new("No tree data yet...").color(Theme::LABEL_MUTED));
+            if let Some(error) = &self.error_message {
+                ui.colored_label(Color32::from_rgb(255, 100, 100), error);
+                ui.add_space(4.0);
             }
+
+            let tree = self.map.tree();
+            egui::ScrollArea::both()
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    for tree in &tree {
+                        SupervisionNodeWidget::new(tree, true).show(ui);
+                        ui.add_space(4.0);
+                    }
+                });
         });
     }
 }

@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use axum::{
     Json, Router,
     http::StatusCode,
@@ -9,8 +7,9 @@ use axum_typed_routing::{TypedRouter, route};
 use futures::{StreamExt, stream};
 use indexmap::IndexMap;
 use rootcause::report;
+use std::time::Duration;
 use zestors_core::{
-    channel::ChannelSnapshot,
+    channel::{ActorStatus, ChannelKind, ChannelSnapshot},
     node::Node,
     prelude::*,
     registry::Registry,
@@ -60,41 +59,54 @@ async fn get_tree(pid: Option<Pid>, include_debug: Option<bool>) -> ApiResult {
     Ok((StatusCode::OK, Json(tree)).into_response())
 }
 
+/// Returns all processes in the tree, with their actor-status and child-configuration
 #[route(GET "/processes" with ApiServer)]
-async fn get_processes() -> ApiResult<Json<Vec<ChildDescription>>> {
+async fn get_processes() -> ApiResult<Json<IndexMap<Pid, (ChildConfig, ActorStatus, Vec<Pid>)>>> {
     let root_desc = Node::root_supervisor()
         .ok_or_else(|| report!("No root supervisor"))?
         .clone();
+    let root_address = Registry::local()
+        .get(&root_desc.pid)
+        .ok_or_else(|| report!("Root supervisor not found in registry"))?;
 
-    let mut pending = Vec::from_iter([root_desc.pid.clone()]);
-    let mut found = IndexMap::<Pid, _>::from_iter([(root_desc.pid.clone(), root_desc)]);
+    let mut pending = Vec::from_iter([(root_address, root_desc)]);
+    let mut results = IndexMap::new();
 
     while !pending.is_empty() {
         let new_children = stream::iter(pending.drain(..))
-            .map(|pid| async move {
-                let Some(address) = Registry::local().get(&pid) else {
-                    return None;
-                };
-
-                match timeout(Duration::from_millis(50), address.request_dyn(GetChildren)).await {
-                    Ok(Ok(children)) => Some(children),
-                    _ => None,
-                }
+            .map(|(address, desc)| async move {
+                let children = get_children(&address).await.unwrap_or_default();
+                ((address, desc), children)
             })
-            .buffer_unordered(10)
+            .buffered(10)
             .collect::<Vec<_>>()
             .await;
 
-        for child in new_children.into_iter().flatten().flatten() {
-            let child_pid = child.pid.clone();
+        for ((address, desc), children) in new_children {
+            let child_pids = children.iter().map(|c| c.pid.clone()).collect();
+            let existing = results.insert(desc.pid, (desc.cfg, address.status(), child_pids));
 
-            if found.insert(child_pid.clone(), child).is_none() {
-                pending.push(child_pid);
+            if let Some(duplicate_process) = &existing {
+                return Err(report!("Supervision tree is circular or changed during traversal. Circle contains {duplicate_process:?}").into());
+            }
+
+            for child in children {
+                let Some(child_address) = Registry::local().get(&child.pid) else {
+                    continue;
+                };
+
+                pending.push((child_address, child));
             }
         }
     }
 
-    Ok(Json(found.into_values().collect()))
+    Ok(Json(results))
+}
+
+async fn get_children(
+    address: &Address<impl ChannelKind>,
+) -> rootcause::Result<Vec<ChildDescription>> {
+    Ok(timeout(Duration::from_millis(50), address.request_dyn(GetChildren)).await??)
 }
 
 #[route(GET "/snapshots" with ApiServer)]

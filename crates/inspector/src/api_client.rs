@@ -1,9 +1,10 @@
+use indexmap::IndexMap;
 use reqwest::StatusCode;
 use rootcause::report;
 use zestors::{
-    channel::{ChannelSnapshot, Pid},
+    channel::{ActorStatus, ChannelSnapshot, Pid},
     signals::DebugInfo,
-    supervision::{ChildDescription, SupervisionTree},
+    supervision::{ChildConfig, ChildDescription, SupervisionTree},
 };
 
 pub struct Client {
@@ -33,15 +34,14 @@ impl Client {
         }
     }
 
-    pub async fn get_processes(&self) -> rootcause::Result<Vec<ChildDescription>> {
+    pub async fn get_processes(
+        &self,
+    ) -> rootcause::Result<IndexMap<Pid, (ChildConfig, ActorStatus, Vec<Pid>)>> {
         let url = self.base_url.join("/processes")?;
         let response = self.client.get(url).send().await?;
 
         match response.status() {
-            StatusCode::OK => {
-                let processes = response.json::<Vec<ChildDescription>>().await?;
-                Ok(processes)
-            }
+            StatusCode::OK => Ok(response.json().await?),
             _ => Err(response_error(response).await),
         }
     }

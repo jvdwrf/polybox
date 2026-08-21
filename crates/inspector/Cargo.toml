@@ -17,6 +17,7 @@ rootcause = { workspace = true }
 futures = { workspace = true }
 zestors = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
+indexmap = { workspace = true }
 
 [features]
 _ra = []

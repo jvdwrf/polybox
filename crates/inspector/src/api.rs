@@ -1,9 +1,13 @@
+use indexmap::IndexMap;
 use std::sync::LazyLock;
 use std::time::Duration;
 use tokio::sync::mpsc;
-use zestors::supervision::SupervisionTree;
+use zestors::{
+    channel::{ActorStatus, Pid},
+    supervision::ChildConfig,
+};
 
-use crate::client::Client;
+use crate::api_client::Client;
 
 static CLIENT: LazyLock<Client> =
     LazyLock::new(|| Client::new("http://localhost:8080").expect("Failed to create API client"));
@@ -11,14 +15,17 @@ static CLIENT: LazyLock<Client> =
 const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 
 pub enum ApiMessage {
-    NewTree(rootcause::Result<Option<SupervisionTree>>),
+    ProcessesUpdate(rootcause::Result<IndexMap<Pid, (ChildConfig, ActorStatus, Vec<Pid>)>>),
 }
 
 pub async fn run_tree_poller(sender: mpsc::Sender<ApiMessage>, ctx: egui::Context) {
     loop {
-        let tree = CLIENT.get_tree().await;
+        let processes = CLIENT.get_processes().await;
 
-        sender.send(ApiMessage::NewTree(tree)).await.ok();
+        sender
+            .send(ApiMessage::ProcessesUpdate(processes))
+            .await
+            .ok();
 
         ctx.request_repaint();
         tokio::time::sleep(SLEEP_INTERVAL).await;

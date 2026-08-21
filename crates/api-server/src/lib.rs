@@ -7,6 +7,8 @@ use zestors_core::{
     supervision::{GetChildren, GetDebugInfo, GetHealth, HealthStatus},
 };
 
+mod router;
+
 #[derive(Clone, Debug)]
 pub struct ApiServerBlueprint {
     pub addr: SocketAddr,
@@ -113,5 +115,3 @@ impl ApiServer {
         Ok(())
     }
 }
-
-mod router;
