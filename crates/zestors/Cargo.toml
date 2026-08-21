@@ -4,32 +4,16 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-zestors-codegen.workspace = true
-tokio.workspace = true
 futures.workspace = true
 tracing.workspace = true
 rootcause.workspace = true
-thiserror.workspace = true
-indexmap.workspace = true
-async-channel.workspace = true
-smol_str.workspace = true
-type-sets.workspace = true
-serde.workspace = true
-dashmap.workspace = true
-arc-swap.workspace = true
-rand.workspace = true
-bs58.workspace = true
-axum.workspace = true
-serde_json.workspace = true
-axum-autoroute.workspace = true
-concurrent-queue.workspace = true
-eyeball.workspace = true
 zestors-core.workspace = true
-anyhow.workspace = true
-axum-typed-routing.workspace = true
+zestors-api-server.workspace = true
 
 [dev-dependencies]
 tracing-subscriber.workspace = true
+tokio.workspace = true
+serde.workspace = true
 
 [features]
 _ra = []

@@ -1,3 +1,5 @@
+use rootcause::Report;
+
 use super::*;
 
 pub(super) type ApiResult<T = Response> = Result<T, ApiError>;

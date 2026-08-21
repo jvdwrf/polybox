@@ -1,7 +1,11 @@
-use crate::_prelude::*;
+use rootcause::Report;
 use smol_str::format_smolstr;
-use std::{net::SocketAddr, pin::pin};
+use std::{net::SocketAddr, pin::pin, sync::Arc};
 use tokio::net::TcpListener;
+use zestors_core::{
+    prelude::*,
+    supervision::{GetChildren, GetDebugInfo, GetHealth, HealthStatus},
+};
 
 #[derive(Clone, Debug)]
 pub struct ApiServerBlueprint {
@@ -28,7 +32,7 @@ pub struct ApiServer {
 }
 
 #[derive(Interface)]
-#[interface(path = "crate")]
+#[interface(path = "zestors_core")]
 pub enum ApiServerInterface {
     Debug(Payload<GetDebugInfo>),
     Children(Payload<GetChildren>),
