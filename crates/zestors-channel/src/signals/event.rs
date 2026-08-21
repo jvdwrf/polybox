@@ -62,3 +62,14 @@ impl Default for RestartMode {
         RestartMode::OnError
     }
 }
+
+impl RestartMode {
+    pub fn should_restart(&self, exit: &Exit) -> bool {
+        match (self, exit) {
+            (RestartMode::Always, _) => true,
+            (RestartMode::Never, _) => false,
+            (RestartMode::OnError, Exit::Error(_)) => true,
+            (RestartMode::OnError, Exit::Normal) => false,
+        }
+    }
+}

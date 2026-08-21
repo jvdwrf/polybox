@@ -12,17 +12,6 @@ pub(super) const BACKPRESSURE_LIMIT: usize = 100;
 const KEEP_N_SPAWNS: usize = 5;
 const KEEP_N_EXITS: usize = 5;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ChannelSnapshot {
-    pub pid: Pid,
-    pub status: ActorStatus,
-    pub signal_len: usize,
-    pub msg_len: usize,
-    pub spawns: Vec<Zoned>,
-    pub exits: Vec<(Zoned, Exit)>,
-    pub created_at: Zoned,
-}
-
 pub trait ChannelKind: 'static {
     type Set: TypeSet + 'static;
 }
@@ -83,7 +72,7 @@ impl<T: ChannelKind> Channel<T> {
     }
 
     pub(super) fn register_spawn(&self) {
-        tracing::debug!("Process initializing");
+        tracing::debug!("Process spawned");
 
         let mut spawned_at = self.inner.spawns.write().unwrap();
 
@@ -112,7 +101,7 @@ impl<T: ChannelKind> Channel<T> {
     }
 
     pub(super) fn register_initialized(&self) {
-        tracing::debug!("Process started");
+        tracing::debug!("Process initialized");
         self.set_status(ActorStatus::Running);
     }
 
@@ -692,4 +681,15 @@ impl Clock {
     fn zoned_at(self, instant: Instant) -> Zoned {
         self.timestamp_at(instant).to_zoned(TimeZone::UTC)
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ChannelSnapshot {
+    pub pid: Pid,
+    pub status: ActorStatus,
+    pub signal_len: usize,
+    pub msg_len: usize,
+    pub spawns: Vec<Zoned>,
+    pub exits: Vec<(Zoned, Exit)>,
+    pub created_at: Zoned,
 }

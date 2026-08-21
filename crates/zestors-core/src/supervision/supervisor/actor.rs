@@ -128,10 +128,21 @@ impl Supervisor {
             }
 
             _ = async {
-                while let Some(signal) = stream.next_signal().await {
-                    match signal {
-                        SignalEvent::Resume | SignalEvent::Suspend | SignalEvent::Shutdown => {
-                            tracing::debug!("Ignoring signal {:?} while shutting down supervisees", signal);
+                while let Some(msg) = stream.next().await {
+                    match msg {
+                        Event::Signal(signal) => match signal {
+                            SignalEvent::Shutdown | SignalEvent::Resume | SignalEvent::Suspend => {
+                                tracing::debug!("Ignoring signal {:?} while shutting down supervisees", signal);
+                            }
+                        },
+                        Event::Message(message) => match message {
+                            SupervisorInterface::Debug((_, tx)) => {
+                                tx.send("Exiting...".into()).ok();
+                            },
+                            SupervisorInterface::Children((_, tx)) => {
+                                tx.send(child_descriptions.clone()).ok();
+                            },
+                            SupervisorInterface::Health((_, _tx)) => todo!("Implement health check during shutdown"),
                         }
                     }
                 }
@@ -188,6 +199,7 @@ impl Supervisor {
             }
         }
 
+        println!("RESTART REQUIRED: Child {} exited with {:?}", id, exit,);
         // Restart the affected children
         self.restart_affected_children(id, stream).await;
 
@@ -223,12 +235,26 @@ impl Supervisor {
     async fn wait_for_children(&mut self) -> Result<(), Report> {
         let futures = self.supervisees.values().map(|supervisee| async move {
             tokio::select! {
-                exit = supervisee.watch_initialization() => {
-                    exit
-                        .attach_with(|| {
-                            format!("Child {} failed to start", supervisee.spec.pid())
-                        })
-                        .map_err(Into::into)
+                init_result = supervisee.watch_initialization() => {
+                    let Err(exit) = init_result else {
+                        return Ok(());
+                    };
+
+                    if supervisee.spec.cfg().restart_mode.should_restart(&exit) {
+                        init_result
+                            .attach_with(|| {
+                                format!("Child {} failed to start", supervisee.spec.pid())
+                            })
+                            .map_err(Into::into)
+                    } else {
+                        tracing::warn!(
+                            "Child {} exited with {:?} during initialization, but restart is not required (mode: {:?})",
+                            supervisee.spec.pid(),
+                            init_result,
+                            supervisee.spec.cfg().restart_mode
+                        );
+                        Ok(())
+                    }
                 }
 
                 () = tokio::time::sleep(supervisee.spec.cfg().init_timeout) => {
@@ -327,13 +353,25 @@ impl Actor for Supervisor {
             }
 
             _shutdown_signal_received = async {
-                while let Some(signal) = stream.next_signal().await {
-                    match signal {
-                        SignalEvent::Shutdown => {
-                            break;
-                        }
-                        SignalEvent::Resume | SignalEvent::Suspend => {
-                            tracing::debug!("Ignoring signal {:?} while initializing", signal);
+                while let Some(msg) = stream.next().await {
+                    match msg {
+                        Event::Signal(signal) => match signal {
+                            SignalEvent::Shutdown => {
+                                tracing::info!("Shutdown signal received during initialization. Shutting down supervisees.");
+                                break;
+                            }
+                            SignalEvent::Resume | SignalEvent::Suspend => {
+                                tracing::debug!("Ignoring signal {:?} while initializing", signal);
+                            }
+                        },
+                        Event::Message(message) => match message {
+                            SupervisorInterface::Debug((_, tx)) => {
+                                tx.send("Exiting...".into()).ok();
+                            },
+                            SupervisorInterface::Children((_, tx)) => {
+                                tx.send(child_descriptions.clone()).ok();
+                            },
+                            SupervisorInterface::Health((_, _tx)) => todo!("Implement health check during initialization"),
                         }
                     }
                 }
@@ -378,17 +416,16 @@ impl Actor for Supervisor {
                     SignalEvent::Suspend => (),
                 },
                 Event::Message(message) => match message {
-                    SupervisorInterface::RegisterChild(RegisterChild(spec)) => {
-                        tracing::trace!("Registering child: {:?}", spec.pid());
-                        self.add_dyn_child(spec);
-                    }
+                    // SupervisorInterface::RegisterChild(RegisterChild(spec)) => {
+                    //     tracing::trace!("Registering child: {:?}", spec.pid());
+                    //     self.add_dyn_child(spec);
+                    // }
 
-                    SupervisorInterface::DeregisterChild((DeregisterChild(id), tx)) => {
-                        tracing::trace!("Deregistering child: {:?}", id);
-                        let supervisee = self.supervisees.shift_remove(&id);
-                        tx.send(supervisee.map(|s| s.spec)).ok();
-                    }
-
+                    // SupervisorInterface::DeregisterChild((DeregisterChild(id), tx)) => {
+                    //     tracing::trace!("Deregistering child: {:?}", id);
+                    //     let supervisee = self.supervisees.shift_remove(&id);
+                    //     tx.send(supervisee.map(|s| s.spec)).ok();
+                    // }
                     SupervisorInterface::Debug((_, tx)) => {
                         let _ = tx.send(format_smolstr!("{self:?}").into());
                     }

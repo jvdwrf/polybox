@@ -150,9 +150,9 @@ async fn main() -> Result<(), Report> {
     tracing::info!("All actors started, sending messages...");
 
     loop {
-        tokio::time::sleep(Duration::from_secs(5)).await;
+        tokio::time::sleep(Duration::from_secs(10)).await;
 
-        addr_a.signal_shutdown();
-        addr_b.signal_shutdown();
+        // addr_a.signal_shutdown();
+        // addr_b.signal_shutdown();
     }
 }

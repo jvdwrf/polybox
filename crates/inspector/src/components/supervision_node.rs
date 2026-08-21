@@ -4,7 +4,7 @@ use super::status_badge::render_actor_status_badge;
 use crate::{app::ProcessTree, theme::Theme, utils::format_duration};
 
 use egui::{CornerRadius, Frame, Margin, RichText, Stroke, Ui, collapsing_header::CollapsingState};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 pub struct SupervisionNodeWidget<'a> {
     tree: &'a ProcessTree<'a>,
@@ -20,9 +20,7 @@ impl<'a> SupervisionNodeWidget<'a> {
         let process = self.tree.entry;
         let node_id = ui.make_persistent_id(("process", &process.pid));
 
-        let is_recently_outdated = process
-            .outdated_since
-            .is_some_and(|since| since.elapsed() < Duration::from_secs(60));
+        let is_recently_outdated = process.outdated_since.is_some();
 
         let text_color = if is_recently_outdated {
             Theme::LABEL_MUTED
