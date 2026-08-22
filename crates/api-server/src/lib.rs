@@ -1,10 +1,9 @@
 use rootcause::Report;
-use smol_str::format_smolstr;
 use std::{net::SocketAddr, pin::pin, sync::Arc};
 use tokio::net::TcpListener;
 use zestors_core::{
     prelude::*,
-    supervision::{GetChildren, GetDebugInfo, GetHealth, HealthStatus},
+    supervision::{GetChildren, GetHealth, HealthStatus},
 };
 
 mod router;
@@ -36,7 +35,6 @@ pub struct ApiServer {
 #[derive(Interface)]
 #[interface(path = "zestors_core")]
 pub enum ApiServerInterface {
-    Debug(Payload<GetDebugInfo>),
     Children(Payload<GetChildren>),
     Health(Payload<GetHealth>),
 }
@@ -78,15 +76,11 @@ impl Actor for ApiServer {
                 },
 
                 Event::Message(msg) => match msg {
-                    ApiServerInterface::Debug((_, tx)) => {
-                        let _ = tx.send(format_smolstr!("{self:?}").into());
-                    }
-
                     ApiServerInterface::Children((_, tx)) => {
                         tx.send(vec![]).ok();
                     }
                     ApiServerInterface::Health((_, tx)) => {
-                        tx.send(HealthStatus::Healthy).ok();
+                        tx.send(HealthStatus::Healthy.with_debug_repr("TODO")).ok();
                     }
                 },
             }

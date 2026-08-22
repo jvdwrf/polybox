@@ -6,7 +6,6 @@ use std::collections::HashSet;
 use tokio::{sync::mpsc, time::Instant};
 use zestors::{
     channel::{ActorStatus, ChannelSnapshot, Pid},
-    signals::DebugInfo,
     supervision::ChildConfig,
 };
 

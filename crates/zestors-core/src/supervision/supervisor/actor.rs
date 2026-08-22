@@ -136,9 +136,6 @@ impl Supervisor {
                             }
                         },
                         Event::Message(message) => match message {
-                            SupervisorInterface::Debug((_, tx)) => {
-                                tx.send("Exiting...".into()).ok();
-                            },
                             SupervisorInterface::Children((_, tx)) => {
                                 tx.send(child_descriptions.clone()).ok();
                             },
@@ -365,9 +362,6 @@ impl Actor for Supervisor {
                             }
                         },
                         Event::Message(message) => match message {
-                            SupervisorInterface::Debug((_, tx)) => {
-                                tx.send("Exiting...".into()).ok();
-                            },
                             SupervisorInterface::Children((_, tx)) => {
                                 tx.send(child_descriptions.clone()).ok();
                             },
@@ -426,10 +420,6 @@ impl Actor for Supervisor {
                     //     let supervisee = self.supervisees.shift_remove(&id);
                     //     tx.send(supervisee.map(|s| s.spec)).ok();
                     // }
-                    SupervisorInterface::Debug((_, tx)) => {
-                        let _ = tx.send(format_smolstr!("{self:?}").into());
-                    }
-
                     SupervisorInterface::Children((_, tx)) => {
                         let children = self.get_child_descriptions();
                         tx.send(children).ok();
@@ -437,7 +427,7 @@ impl Actor for Supervisor {
 
                     SupervisorInterface::Health((_, tx)) => {
                         // TODO: Check for recent restarts and determine health status accordingly
-                        tx.send(HealthStatus::Healthy).ok();
+                        tx.send(HealthStatus::Healthy.with_debug_repr("TODO")).ok();
                     }
                 },
             }

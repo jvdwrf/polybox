@@ -1,6 +1,4 @@
 use super::*;
-use smol_str::SmolStr;
-use std::fmt::Display;
 
 #[derive(Debug)]
 pub enum Event<M> {
@@ -26,27 +24,6 @@ impl SignalEvent {
 
     pub fn is_suspend(&self) -> bool {
         matches!(self, SignalEvent::Suspend)
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct DebugInfo(SmolStr);
-
-impl DebugInfo {
-    pub fn new(description: impl Into<SmolStr>) -> Self {
-        Self(description.into())
-    }
-}
-
-impl<T: Into<SmolStr>> From<T> for DebugInfo {
-    fn from(description: T) -> Self {
-        Self::new(description)
-    }
-}
-
-impl Display for DebugInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
     }
 }
 

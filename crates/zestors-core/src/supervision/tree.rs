@@ -7,7 +7,7 @@ pub struct SupervisionTree {
     pub status: Option<ActorStatus>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub debug_state: Option<DebugInfo>,
+    pub health: Option<Health>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel_state: Option<ChannelSnapshot>,
@@ -23,7 +23,7 @@ impl SupervisionTree {
                 .get(&description.pid)
                 .map(|address| address.status()),
             description,
-            debug_state: None,
+            health: None,
             channel_state: None,
             children: Vec::new(),
         }
@@ -73,36 +73,36 @@ impl SupervisionTree {
         }
     }
 
-    pub async fn populate_debug_state(&mut self, timeout: Duration) {
-        let mut queue = VecDeque::new();
-        queue.push_back(self);
+    // pub async fn populate_health(&mut self, timeout: Duration) {
+    //     let mut queue = VecDeque::new();
+    //     queue.push_back(self);
 
-        while let Some(node) = queue.pop_front() {
-            let address = match Registry::local().get(&node.description.pid) {
-                Some(address) => address,
-                None => {
-                    continue;
-                }
-            };
+    //     while let Some(node) = queue.pop_front() {
+    //         let address = match Registry::local().get(&node.description.pid) {
+    //             Some(address) => address,
+    //             None => {
+    //                 continue;
+    //             }
+    //         };
 
-            let Ok(Ok(debug_state)) =
-                tokio::time::timeout(timeout, address.request_dyn(GetDebugInfo)).await
-            else {
-                continue;
-            };
+    //         let Ok(Ok(debug_state)) =
+    //             tokio::time::timeout(timeout, address.request_dyn(GetDebugInfo)).await
+    //         else {
+    //             continue;
+    //         };
 
-            node.debug_state = Some(debug_state);
+    //         node.health = Some(debug_state);
 
-            for child in &mut node.children {
-                queue.push_back(child);
-            }
-        }
-    }
+    //         for child in &mut node.children {
+    //             queue.push_back(child);
+    //         }
+    //     }
+    // }
 
-    pub async fn populated_debug_state(mut self, timeout: Duration) -> Self {
-        self.populate_debug_state(timeout).await;
-        self
-    }
+    // pub async fn populated_debug_state(mut self, timeout: Duration) -> Self {
+    //     self.populate_health(timeout).await;
+    //     self
+    // }
 
     pub fn populate_channel_snapshots(&mut self) {
         let mut queue = VecDeque::new();

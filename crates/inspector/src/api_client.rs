@@ -3,8 +3,7 @@ use reqwest::StatusCode;
 use rootcause::report;
 use zestors::{
     channel::{ActorStatus, ChannelSnapshot, Pid},
-    signals::DebugInfo,
-    supervision::{ChildConfig, ChildDescription, SupervisionTree},
+    supervision::{ChildConfig, Health, SupervisionTree},
 };
 
 pub struct Client {
@@ -62,16 +61,13 @@ impl Client {
         }
     }
 
-    pub async fn get_debug_infos(
-        &self,
-        pids: Vec<Pid>,
-    ) -> rootcause::Result<Vec<Option<DebugInfo>>> {
+    pub async fn get_health(&self, pids: Vec<Pid>) -> rootcause::Result<Vec<Option<Health>>> {
         let url = self.base_url.join("/debug_info")?;
         let response = self.client.get(url).json(&pids).send().await?;
 
         match response.status() {
             StatusCode::OK => {
-                let debug_info = response.json::<Vec<Option<DebugInfo>>>().await?;
+                let debug_info = response.json::<Vec<Option<Health>>>().await?;
                 Ok(debug_info)
             }
             _ => Err(response_error(response).await),

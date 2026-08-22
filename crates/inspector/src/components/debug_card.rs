@@ -1,9 +1,8 @@
 use crate::theme::Theme;
-use crate::utils::format_duration;
 use egui::{CornerRadius, Frame, Margin, RichText, Stroke, Ui};
-use zestors::{channel::Pid, signals::DebugInfo};
+use zestors::{channel::Pid, supervision::Health};
 
-pub fn render_debug_card(ui: &mut Ui, pid: &Pid, debug: &DebugInfo) {
+pub fn render_health_card(ui: &mut Ui, pid: &Pid, health: &Health) {
     Frame::canvas(ui.style())
         .fill(Theme::INNER_CARD_BG)
         .stroke(Stroke::new(1.0, Theme::BORDER_COLOR))
@@ -34,7 +33,7 @@ pub fn render_debug_card(ui: &mut Ui, pid: &Pid, debug: &DebugInfo) {
                     ui.label(RichText::new("Description:").color(Theme::LABEL_MUTED));
                     ui.add(
                         egui::Label::new(
-                            RichText::new(debug.to_string()).color(egui::Color32::LIGHT_GRAY),
+                            RichText::new(health.to_string()).color(egui::Color32::LIGHT_GRAY),
                         )
                         .wrap(),
                     );

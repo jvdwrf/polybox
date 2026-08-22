@@ -1,4 +1,4 @@
-use super::debug_card::render_debug_card;
+use super::debug_card::render_health_card;
 use super::status_badge::render_actor_status_badge;
 use crate::{app::ProcessTree, theme::Theme, utils::format_duration};
 use egui::{CornerRadius, Frame, Margin, RichText, Stroke, Ui, collapsing_header::CollapsingState};
@@ -201,12 +201,12 @@ where
             );
         }
 
-        if let Some(debug) = &process.debug {
+        if let Some(debug) = &process.health {
             if process.snapshot.is_some() {
                 ui.add_space(8.0);
             }
 
-            render_debug_card(ui, &process.pid, debug);
+            render_health_card(ui, &process.pid, debug);
         }
     }
 }

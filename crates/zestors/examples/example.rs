@@ -5,7 +5,7 @@ use zestors::{
     handler::{Handle, HandledBy, Handler, HandlerState, ShutdownReason},
     prelude::*,
     spawn,
-    supervision::{ActorRunnerExt as _, GetChildren, GetDebugInfo},
+    supervision::{ActorRunnerExt as _, GetChildren, GetHealth, Health, HealthStatus},
 };
 
 #[tokio::main]
@@ -30,8 +30,8 @@ async fn main() {
                         MyInterface::Print(payload) => {
                             println!("Received message: {:?}", payload);
                         }
-                        MyInterface::Debug((_, tx)) => {
-                            tx.send("MyActor is running".into()).ok();
+                        MyInterface::Health((_, tx)) => {
+                            tx.send(Health::new(HealthStatus::Healthy, "Child")).ok();
                         }
                         MyInterface::Children((_, tx)) => {
                             tx.send(vec![]).ok();
@@ -70,7 +70,7 @@ impl MyActor {
 enum MyInterface {
     Add(Payload<u32>),
     Print(Payload<String>),
-    Debug(Payload<GetDebugInfo>),
+    Health(Payload<GetHealth>),
     Children(Payload<GetChildren>),
 }
 
@@ -137,13 +137,13 @@ impl Handle<IntervalTick> for MyActor {
     }
 }
 
-impl Handle<GetDebugInfo> for MyActor {
+impl Handle<GetHealth> for MyActor {
     async fn handle(
         &mut self,
         _: &mut HandlerState<Self>,
-        (_, tx): Payload<GetDebugInfo>,
+        (_, tx): Payload<GetHealth>,
     ) -> Result<(), Self::Error> {
-        tx.send("MyActor is running".into()).ok();
+        tx.send(Health::new(HealthStatus::Healthy, self)).ok();
         Ok(())
     }
 }

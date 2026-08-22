@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use zestors::supervision::Health;
+
 use super::*;
 
 #[derive(Default, Debug)]
@@ -101,7 +103,7 @@ pub struct ProcessMapEntry {
     pub status: ActorStatus,
     pub children: Vec<Pid>,
     pub snapshot: Option<ChannelSnapshot>,
-    pub debug: Option<DebugInfo>,
+    pub health: Option<Health>,
     pub outdated_since: Option<Instant>,
 }
 
@@ -113,7 +115,7 @@ impl ProcessMapEntry {
             status,
             children,
             snapshot: None,
-            debug: None,
+            health: None,
             outdated_since: None,
         }
     }

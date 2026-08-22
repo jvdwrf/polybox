@@ -13,8 +13,8 @@ use zestors_core::{
     node::Node,
     prelude::*,
     registry::Registry,
-    signals::{DebugInfo, RestartMode},
-    supervision::{ChildConfig, ChildDescription, GetChildren, GetDebugInfo, SupervisionTree},
+    signals::RestartMode,
+    supervision::{ChildConfig, ChildDescription, GetChildren, GetHealth, Health, SupervisionTree},
 };
 
 impl ApiServer {
@@ -23,7 +23,7 @@ impl ApiServer {
             .typed_route(get_tree)
             .typed_route(get_processes)
             .typed_route(get_channel_snapshots)
-            .typed_route(get_debug_info)
+            .typed_route(get_health)
             .with_state(self.clone())
     }
 }
@@ -32,31 +32,32 @@ impl ApiServer {
 async fn get_tree(pid: Option<Pid>, include_debug: Option<bool>) -> ApiResult {
     tracing::debug!("Received request for supervision with {pid:?} and {include_debug:?}");
 
-    let include_debug = include_debug.unwrap_or(false);
+    // let include_debug = include_debug.unwrap_or(false);
 
-    let pid = pid
-        .or_else(|| Node::root_supervisor().map(|desc| desc.pid.clone()))
-        .ok_or_else(|| report!("No PID provided and no root supervisor PID found"))?;
+    // let pid = pid
+    //     .or_else(|| Node::root_supervisor().map(|desc| desc.pid.clone()))
+    //     .ok_or_else(|| report!("No PID provided and no root supervisor PID found"))?;
 
-    let tree = SupervisionTree::new(ChildDescription {
-        pid,
-        cfg: ChildConfig {
-            restart_mode: RestartMode::Always,
-            abort_timeout: Duration::from_secs(10),
-            init_timeout: Duration::from_secs(10),
-        },
-    })
-    .populated(Duration::from_millis(50))
-    .await
-    .populated_channel_snapshots();
+    // let tree = SupervisionTree::new(ChildDescription {
+    //     pid,
+    //     cfg: ChildConfig {
+    //         restart_mode: RestartMode::Always,
+    //         abort_timeout: Duration::from_secs(10),
+    //         init_timeout: Duration::from_secs(10),
+    //     },
+    // })
+    // .populated(Duration::from_millis(50))
+    // .await
+    // .populated_channel_snapshots();
 
-    let tree = if include_debug {
-        tree.populated_debug_state(Duration::from_millis(50)).await
-    } else {
-        tree
-    };
+    // let tree = if include_debug {
+    //     tree.populated_debug_state(Duration::from_millis(50)).await
+    // } else {
+    //     tree
+    // };
 
-    Ok((StatusCode::OK, Json(tree)).into_response())
+    // Ok((StatusCode::OK, Json(tree)).into_response())
+    unimplemented!()
 }
 
 /// Returns all processes in the tree, with their actor-status and child-configuration
@@ -125,15 +126,15 @@ async fn get_channel_snapshots(
     Ok(Json(results))
 }
 
-#[route(GET "/debug_info" with ApiServer)]
-async fn get_debug_info(Json(pids): Json<Vec<Pid>>) -> ApiResult<Json<Vec<Option<DebugInfo>>>> {
+#[route(GET "/health" with ApiServer)]
+async fn get_health(Json(pids): Json<Vec<Pid>>) -> ApiResult<Json<Vec<Option<Health>>>> {
     let results = stream::iter(pids.into_iter().map(|pid| async move {
         let Some(address) = Registry::local().get(&pid) else {
             return None;
         };
 
-        match timeout(Duration::from_millis(50), address.request_dyn(GetDebugInfo)).await {
-            Ok(Ok(debug_info)) => Some(debug_info),
+        match timeout(Duration::from_millis(50), address.request_dyn(GetHealth)).await {
+            Ok(Ok(health)) => Some(health),
             _ => None,
         }
     }))
