@@ -372,7 +372,7 @@ where
 impl<M, I> Sends<M> for Channel<I>
 where
     M: Message,
-    I: Interface + TryIntoEnvelope<M> + FromEnvelope<M> + Send + 'static,
+    I: Interface + TryInto<Envelope<M>> + From<Envelope<M>> + Send + 'static,
 {
     async fn send(&self, msg: M) -> Result<MessageReceipt<M>, SendError<M>> {
         self.delay_for_backpressure().await;
@@ -401,7 +401,7 @@ where
         // This is currently not guaranteed by the type system.
         if let Some(queue) = self.raw_queue() {
             let (resolver, receipt) = <M::Mode as Mode<M::Outcome>>::new();
-            let interface = I::from_envelope(Envelope::new(msg, resolver));
+            let interface = I::from(Envelope::new(msg, resolver));
 
             if let Err(_e) = queue.push_item(interface) {
                 panic!("Queue was full or empty {}", std::any::type_name::<Self>());

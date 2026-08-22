@@ -6,14 +6,6 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Fields, Type};
 
-/// Derives the `Interface` trait for an enum, allowing it to be used as a message
-/// interface in the Polybox framework.
-///
-/// Under the hood, this macro generates implementations for the `Interface`, `Message`, and `TypeSet` traits,
-/// as well as `FromEnvelope` and `TryIntoEnvelope` for each variant of the enum.
-///
-/// The macro expects the enum variants to be of the form `Variant(Envelope<T>)`,
-/// where `T` is a type that implements the `Message` trait.
 #[proc_macro_derive(Interface, attributes(interface))]
 pub fn derive_interface_polybox(input: TokenStream) -> TokenStream {
     derive_interface(input, "::zestors")
@@ -86,14 +78,16 @@ fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
                 });
 
                 from_impls.push(quote! {
-                    impl #msg_path::FromEnvelope<#inner_type> for #enum_name {
-                        fn from_envelope(envelope: #msg_path::Envelope<#inner_type>) -> Self {
+                    impl From<#msg_path::Envelope<#inner_type>> for #enum_name {
+                        fn from(envelope: #msg_path::Envelope<#inner_type>) -> Self {
                             Self::#variant_name(envelope)
                         }
                     }
 
-                    impl #msg_path::TryIntoEnvelope<#inner_type> for #enum_name {
-                        fn try_into_envelope(self) -> Result<#msg_path::Envelope<#inner_type>, Self> {
+                    impl TryInto<#msg_path::Envelope<#inner_type>> for #enum_name {
+                        type Error = Self;
+
+                        fn try_into(self) -> Result<#msg_path::Envelope<#inner_type>, Self> {
                             if let #enum_name::#variant_name(envelope) = self {
                                 Ok(envelope)
                             } else {
@@ -136,19 +130,18 @@ fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
             type Mode = #msg_path::FireAndForget;
         }
 
-        // impl #polybox_path::type_sets::TypeSet for #enum_name {
-        //     type Set = #polybox_path::type_sets::Set![#(#inner_types),*];
-        // }
 
-        impl #msg_path::TryIntoEnvelope<#enum_name> for #enum_name {
-            fn try_into_envelope(self) -> Result<#msg_path::Envelope<#enum_name>, Self> {
-                Ok(#msg_path::Envelope::new(self, ()))
+        impl From<#msg_path::Envelope<#enum_name>> for #enum_name {
+            fn from(envelope: #msg_path::Envelope<#enum_name>) -> Self {
+                envelope.msg
             }
         }
 
-        impl #msg_path::FromEnvelope<#enum_name> for #enum_name {
-            fn from_envelope(envelope: #msg_path::Envelope<#enum_name>) -> Self {
-                envelope.msg
+        impl TryInto<#msg_path::Envelope<#enum_name>> for #enum_name {
+            type Error = Self;
+
+            fn try_into(self) -> Result<#msg_path::Envelope<#enum_name>, Self> {
+                Ok(#msg_path::Envelope::new(self, ()))
             }
         }
 

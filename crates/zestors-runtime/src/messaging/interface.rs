@@ -7,7 +7,12 @@ use type_sets::{Set, TypeSet};
 ///
 /// It defines conversion methods to and from a boxed envelope, which is used for dynamic dispatch of messages.
 pub trait Interface:
-    Message<Mode = FireAndForget> + TryIntoEnvelope<Self> + FromEnvelope<Self> + Sized + Send + 'static
+    Message<Mode = FireAndForget, Outcome = ()>
+    + TryInto<Envelope<Self>>
+    + From<Envelope<Self>>
+    + Sized
+    + Send
+    + 'static
 {
     /// The [set](TypeSet) of messages that this interface can handle.
     type Set: TypeSet;
@@ -17,14 +22,6 @@ pub trait Interface:
 
     /// Convert the inner envelope of this interface into a boxed envelope.
     fn into_boxed_envelope(self) -> BoxedEnvelope;
-}
-
-pub trait FromEnvelope<M: Message> {
-    fn from_envelope(envelope: Envelope<M>) -> Self;
-}
-
-pub trait TryIntoEnvelope<M: Message>: Sized {
-    fn try_into_envelope(self) -> Result<Envelope<M>, Self>;
 }
 
 impl Interface for () {
@@ -39,13 +36,16 @@ impl Interface for () {
     }
 }
 
-impl FromEnvelope<()> for () {
-    fn from_envelope(_envelope: Envelope<()>) -> Self {
+impl From<Envelope<()>> for () {
+    fn from(_envelope: Envelope<()>) -> Self {
         ()
     }
 }
-impl TryIntoEnvelope<()> for () {
-    fn try_into_envelope(self) -> Result<Envelope<()>, Self> {
+
+impl TryInto<Envelope<()>> for () {
+    type Error = Self;
+
+    fn try_into(self) -> Result<Envelope<()>, Self> {
         Ok(Envelope::new((), ()))
     }
 }
@@ -62,13 +62,16 @@ impl Interface for Infallible {
     }
 }
 
-impl FromEnvelope<Infallible> for Infallible {
-    fn from_envelope(_envelope: Envelope<Infallible>) -> Self {
+impl From<Envelope<Infallible>> for Infallible {
+    fn from(_envelope: Envelope<Infallible>) -> Self {
         unreachable!()
     }
 }
-impl TryIntoEnvelope<Infallible> for Infallible {
-    fn try_into_envelope(self) -> Result<Envelope<Infallible>, Self> {
+
+impl TryInto<Envelope<Infallible>> for Infallible {
+    type Error = Self;
+
+    fn try_into(self) -> Result<Envelope<Infallible>, Self> {
         unreachable!()
     }
 }
