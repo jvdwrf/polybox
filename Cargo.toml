@@ -5,7 +5,7 @@ members = [
     "crates/type-sets",
     "crates/zestors",
     "crates/inspector",
-    "crates/zestors-channel",
+    "crates/zestors-runtime",
     "crates/api-server",
     "crates/zestors-core",
 ]
@@ -14,7 +14,7 @@ members = [
 zestors-codegen = { path = "crates/codegen", version = "0.0.2" }
 zestors = { path = "crates/zestors", version = "0.1.0" }
 type-sets = { path = "crates/type-sets" }
-zestors-channel = { path = "crates/zestors-channel" }
+zestors-runtime = { path = "crates/zestors-runtime" }
 zestors-inspector = { path = "crates/inspector" }
 zestors-api-server = { path = "crates/api-server" }
 zestors-core = { path = "crates/zestors-core" }

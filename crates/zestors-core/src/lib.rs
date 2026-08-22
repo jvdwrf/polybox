@@ -1,7 +1,7 @@
 use crate::_prelude::*;
 use std::sync::Arc;
 
-pub use zestors_channel::*;
+pub use zestors_runtime::*;
 
 pub mod handler;
 pub mod node;
@@ -12,7 +12,7 @@ pub use zestors_codegen::{HandlerInterface, Interface, Message};
 pub(crate) mod _prelude {
     #![allow(unused_imports)]
     pub(crate) use crate::{handler::*, node::*, registry::*, supervision::*, *};
-    pub(crate) use zestors_channel::{
+    pub(crate) use zestors_runtime::{
         channel::{errors::*, *},
         messaging::*,
         signals::*,
@@ -26,13 +26,13 @@ pub(crate) mod _prelude {
 
     pub(crate) use rootcause::Report;
     pub(crate) use type_sets::Set;
-    pub(crate) use zestors_channel::*;
+    pub(crate) use zestors_runtime::*;
 }
 
 pub(crate) mod schemas;
 
 pub mod prelude {
     pub use crate::supervision::{Actor, Blueprint};
-    pub use zestors_channel::prelude::*;
     pub use zestors_codegen::{Interface, Message};
+    pub use zestors_runtime::prelude::*;
 }
