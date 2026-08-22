@@ -427,7 +427,7 @@ impl Actor for Supervisor {
 
                     SupervisorInterface::Health((_, tx)) => {
                         // TODO: Check for recent restarts and determine health status accordingly
-                        tx.send(HealthStatus::Healthy.with_debug_repr("TODO")).ok();
+                        tx.send(HealthStatus::Healthy.into_health()).ok();
                     }
                 },
             }

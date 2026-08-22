@@ -3,7 +3,7 @@ use std::{net::SocketAddr, pin::pin, sync::Arc};
 use tokio::net::TcpListener;
 use zestors_core::{
     prelude::*,
-    supervision::{GetChildren, GetHealth, HealthStatus},
+    supervision::{GetChildren, GetHealth, Health, HealthStatus},
 };
 
 mod router;
@@ -80,7 +80,7 @@ impl Actor for ApiServer {
                         tx.send(vec![]).ok();
                     }
                     ApiServerInterface::Health((_, tx)) => {
-                        tx.send(HealthStatus::Healthy.with_debug_repr("TODO")).ok();
+                        tx.send(Health::healthy()).ok();
                     }
                 },
             }

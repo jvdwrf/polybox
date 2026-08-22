@@ -31,7 +31,7 @@ async fn main() {
                             println!("Received message: {:?}", payload);
                         }
                         MyInterface::Health((_, tx)) => {
-                            tx.send(Health::new(HealthStatus::Healthy, "Child")).ok();
+                            tx.send(Health::healthy()).ok();
                         }
                         MyInterface::Children((_, tx)) => {
                             tx.send(vec![]).ok();
@@ -143,7 +143,7 @@ impl Handle<GetHealth> for MyActor {
         _: &mut HandlerState<Self>,
         (_, tx): Payload<GetHealth>,
     ) -> Result<(), Self::Error> {
-        tx.send(Health::new(HealthStatus::Healthy, self)).ok();
+        tx.send(Health::healthy().with_debug_repr(self)).ok();
         Ok(())
     }
 }

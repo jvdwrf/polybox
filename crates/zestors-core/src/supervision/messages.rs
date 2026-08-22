@@ -12,19 +12,40 @@ pub struct GetHealth;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Health {
     pub status: HealthStatus,
-    pub debug_repr: SmolStr,
+    pub debug_repr: Option<SmolStr>,
     pub message: Option<SmolStr>,
     pub details: Vec<HealthDetail>,
 }
 
 impl Health {
-    pub fn new(status: HealthStatus, debug_repr: impl Debug) -> Self {
+    pub fn new(status: HealthStatus) -> Self {
         Self {
             status,
-            debug_repr: format_smolstr!("{:?}", debug_repr),
+            debug_repr: None,
             message: None,
             details: Vec::new(),
         }
+    }
+
+    pub fn healthy() -> Self {
+        Self::new(HealthStatus::Healthy)
+    }
+
+    pub fn degraded() -> Self {
+        Self::new(HealthStatus::Degraded)
+    }
+
+    pub fn unhealthy() -> Self {
+        Self::new(HealthStatus::Unhealthy)
+    }
+
+    pub fn add_debug_repr(&mut self, debug_repr: impl Debug) {
+        self.debug_repr = Some(format_smolstr!("{:?}", debug_repr));
+    }
+
+    pub fn with_debug_repr(mut self, debug_repr: impl Debug) -> Self {
+        self.add_debug_repr(debug_repr);
+        self
     }
 
     pub fn add_message(&mut self, message: impl Into<SmolStr>) -> Option<SmolStr> {
@@ -46,6 +67,15 @@ impl Health {
         self.add_detail(detail);
         self
     }
+
+    pub fn add_details(&mut self, details: impl IntoIterator<Item = HealthDetail>) {
+        self.details.extend(details);
+    }
+
+    pub fn with_details(mut self, details: impl IntoIterator<Item = HealthDetail>) -> Self {
+        self.add_details(details);
+        self
+    }
 }
 
 impl Display for Health {
@@ -57,6 +87,12 @@ impl Display for Health {
         }
 
         Ok(())
+    }
+}
+
+impl From<HealthStatus> for Health {
+    fn from(status: HealthStatus) -> Self {
+        Health::new(status)
     }
 }
 
@@ -94,8 +130,8 @@ impl HealthStatus {
         }
     }
 
-    pub fn with_debug_repr(self, value: impl Debug) -> Health {
-        Health::new(self, format_smolstr!("{:?}", value))
+    pub fn into_health(self) -> Health {
+        Health::new(self)
     }
 }
 
