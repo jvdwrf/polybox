@@ -19,7 +19,7 @@ pub trait Sends<M: Message>: Sync {
     ///
     /// Unlike [`Sends::try_send`], this method waits rather than returning
     /// immediately when backpressure is active.
-    fn send(&self, msg: M) -> impl Future<Output = Result<M::Output, SendError<M>>> + Send;
+    fn send(&self, msg: M) -> impl Future<Output = Result<M::Receipt, SendError<M>>> + Send;
 
     /// Attempts to send a message without waiting.
     ///
@@ -29,7 +29,7 @@ pub trait Sends<M: Message>: Sync {
     ///
     /// Unlike [`Sends::send`], this method never waits for backpressure to
     /// subside.
-    fn try_send(&self, msg: M) -> Result<M::Output, TrySendError<M>>;
+    fn try_send(&self, msg: M) -> Result<M::Receipt, TrySendError<M>>;
 
     /// Sends a message immediately if the channel is open.
     ///
@@ -38,7 +38,7 @@ pub trait Sends<M: Message>: Sync {
     ///
     /// Use [`Sends::force_send`] when the channel status should also be
     /// ignored.
-    fn send_now(&self, msg: M) -> Result<M::Output, SendError<M>>;
+    fn send_now(&self, msg: M) -> Result<M::Receipt, SendError<M>>;
 
     /// Sends a message immediately, ignoring backpressure and channel status.
     ///
@@ -47,13 +47,13 @@ pub trait Sends<M: Message>: Sync {
     ///
     /// If the underlying queue is at capacity, the message is dropped and the
     /// implementation may log the overflow.
-    fn force_send(&self, msg: M) -> M::Output;
+    fn force_send(&self, msg: M) -> M::Receipt;
 
     /// Sends a message and waits for a reply.
     ///
-    /// This is the same as [`Sends::send`] with [`MessageOutput::receive`] called on the result. The resulting value is therefore [`Message::Reply`] instead of
+    /// This is the same as [`Sends::send`] with [`MessageOutput::receive`] called on the result. The resulting value is therefore [`Message::Output`] instead of
     /// [`Message::Output`].
-    fn request(&self, msg: M) -> impl Future<Output = Result<M::Reply, RequestError<M>>> + Send {
+    fn request(&self, msg: M) -> impl Future<Output = Result<M::Output, RequestError<M>>> + Send {
         async move { Ok(self.send(msg).await?.receive().await?) }
     }
 }
@@ -64,19 +64,19 @@ where
     M: Message,
     Channel<T::QueueType>: Sends<M>,
 {
-    async fn send(&self, msg: M) -> Result<<M as Message>::Output, SendError<M>> {
+    async fn send(&self, msg: M) -> Result<<M as Message>::Receipt, SendError<M>> {
         self.as_channel().send(msg).await
     }
 
-    fn try_send(&self, msg: M) -> Result<<M as Message>::Output, TrySendError<M>> {
+    fn try_send(&self, msg: M) -> Result<<M as Message>::Receipt, TrySendError<M>> {
         self.as_channel().try_send(msg)
     }
 
-    fn send_now(&self, msg: M) -> Result<<M as Message>::Output, SendError<M>> {
+    fn send_now(&self, msg: M) -> Result<<M as Message>::Receipt, SendError<M>> {
         self.as_channel().send_now(msg)
     }
 
-    fn force_send(&self, msg: M) -> <M as Message>::Output {
+    fn force_send(&self, msg: M) -> <M as Message>::Receipt {
         self.as_channel().force_send(msg)
     }
 }

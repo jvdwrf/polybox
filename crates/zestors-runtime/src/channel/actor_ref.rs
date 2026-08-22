@@ -10,21 +10,21 @@ pub trait ActorRef {
     fn send_dyn<M: Message>(
         &self,
         msg: M,
-    ) -> impl Future<Output = Result<M::Output, SendCheckedError<M>>> + Send;
+    ) -> impl Future<Output = Result<M::Receipt, SendCheckedError<M>>> + Send;
 
     /// Same as [`Sends::try_send`], but checks whether the message type is accepted by the channel.
-    fn try_send_dyn<M: Message>(&self, msg: M) -> Result<M::Output, TrySendCheckedError<M>>;
+    fn try_send_dyn<M: Message>(&self, msg: M) -> Result<M::Receipt, TrySendCheckedError<M>>;
 
     /// Same as [`Sends::send_now`], but checks whether the message type is accepted by the channel.
-    fn send_now_dyn<M: Message>(&self, msg: M) -> Result<M::Output, SendCheckedError<M>>;
+    fn send_now_dyn<M: Message>(&self, msg: M) -> Result<M::Receipt, SendCheckedError<M>>;
 
     /// Same as [`Sends::force_send`], but checks whether the message type is accepted by the channel.
-    fn force_send_dyn<M: Message>(&self, msg: M) -> Result<M::Output, NotAccepted<M>>;
+    fn force_send_dyn<M: Message>(&self, msg: M) -> Result<M::Receipt, NotAccepted<M>>;
 
     fn request_dyn<M: Message>(
         &self,
         msg: M,
-    ) -> impl Future<Output = Result<M::Reply, RequestCheckedError<M>>> + Send;
+    ) -> impl Future<Output = Result<M::Output, RequestCheckedError<M>>> + Send;
 
     fn pid(&self) -> &Pid;
 
@@ -110,26 +110,26 @@ impl<T: AsActorRef> ActorRef for T {
     fn send_dyn<M: Message>(
         &self,
         msg: M,
-    ) -> impl Future<Output = Result<M::Output, SendCheckedError<M>>> + Send {
+    ) -> impl Future<Output = Result<M::Receipt, SendCheckedError<M>>> + Send {
         self.as_channel().send_dyn(msg)
     }
 
-    fn try_send_dyn<M: Message>(&self, msg: M) -> Result<M::Output, TrySendCheckedError<M>> {
+    fn try_send_dyn<M: Message>(&self, msg: M) -> Result<M::Receipt, TrySendCheckedError<M>> {
         self.as_channel().try_send_dyn(msg)
     }
 
-    fn send_now_dyn<M: Message>(&self, msg: M) -> Result<M::Output, SendCheckedError<M>> {
+    fn send_now_dyn<M: Message>(&self, msg: M) -> Result<M::Receipt, SendCheckedError<M>> {
         self.as_channel().send_now_dyn(msg)
     }
 
-    fn force_send_dyn<M: Message>(&self, msg: M) -> Result<M::Output, NotAccepted<M>> {
+    fn force_send_dyn<M: Message>(&self, msg: M) -> Result<M::Receipt, NotAccepted<M>> {
         self.as_channel().force_send_dyn(msg)
     }
 
     fn request_dyn<M: Message>(
         &self,
         msg: M,
-    ) -> impl Future<Output = Result<M::Reply, RequestCheckedError<M>>> + Send {
+    ) -> impl Future<Output = Result<M::Output, RequestCheckedError<M>>> + Send {
         self.as_channel().request_dyn(msg)
     }
 

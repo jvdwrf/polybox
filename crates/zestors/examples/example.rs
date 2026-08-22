@@ -5,7 +5,7 @@ use zestors::{
     handler::{Handle, HandledBy, Handler, HandlerState, ShutdownReason},
     prelude::*,
     spawn,
-    supervision::{ActorRunnerExt as _, GetChildren, GetHealth, Health, HealthStatus},
+    supervision::{ActorRunnerExt as _, GetChildren, GetHealth, Health},
 };
 
 #[tokio::main]
@@ -30,11 +30,11 @@ async fn main() {
                         MyInterface::Print(envelope) => {
                             println!("Received message: {:?}", envelope);
                         }
-                        MyInterface::Health((_, tx)) => {
-                            tx.send(Health::healthy()).ok();
+                        MyInterface::Health(env) => {
+                            env.handle.send(Health::healthy()).ok();
                         }
-                        MyInterface::Children((_, tx)) => {
-                            tx.send(vec![]).ok();
+                        MyInterface::Children(env) => {
+                            env.handle.send(vec![]).ok();
                         }
                     },
                 }
@@ -101,7 +101,7 @@ impl Handle<u32> for MyActor {
     async fn handle(
         &mut self,
         state: &mut HandlerState<Self>,
-        msg: Envelope<u32>,
+        Envelope { msg, handle }: Envelope<u32>,
     ) -> Result<(), Self::Error> {
         println!("Received message: {:?}", msg);
 
@@ -141,9 +141,9 @@ impl Handle<GetHealth> for MyActor {
     async fn handle(
         &mut self,
         _: &mut HandlerState<Self>,
-        (_, tx): Envelope<GetHealth>,
+        Envelope { msg: _, handle }: Envelope<GetHealth>,
     ) -> Result<(), Self::Error> {
-        tx.send(Health::healthy().with_debug_repr(self)).ok();
+        handle.send(Health::healthy().with_debug_repr(self)).ok();
         Ok(())
     }
 }
@@ -152,9 +152,9 @@ impl Handle<GetChildren> for MyActor {
     async fn handle(
         &mut self,
         _: &mut HandlerState<Self>,
-        (_, tx): Envelope<GetChildren>,
+        Envelope { msg: _, handle }: Envelope<GetChildren>,
     ) -> Result<(), Self::Error> {
-        tx.send(vec![]).ok();
+        handle.send(vec![]).ok();
         Ok(())
     }
 }

@@ -7,7 +7,7 @@ use type_sets::{Set, TypeSet};
 ///
 /// It defines conversion methods to and from a boxed envelope, which is used for dynamic dispatch of messages.
 pub trait Interface:
-    Message<Output = ()> + TryIntoEnvelope<Self> + FromEnvelope<Self> + Sized + Send + 'static
+    Message<Receipt = ()> + TryIntoEnvelope<Self> + FromEnvelope<Self> + Sized + Send + 'static
 {
     /// The [set](TypeSet) of messages that this interface can handle.
     type Set: TypeSet;
@@ -20,33 +20,33 @@ pub trait Interface:
 }
 
 pub trait FromEnvelope<M: Message> {
-    fn from_envelope(envelope: M::Envelope) -> Self;
+    fn from_envelope(envelope: Envelope<M>) -> Self;
 }
 
 pub trait TryIntoEnvelope<M: Message>: Sized {
-    fn try_into_envelope(self) -> Result<M::Envelope, Self>;
+    fn try_into_envelope(self) -> Result<Envelope<M>, Self>;
 }
 
 impl Interface for () {
     type Set = Set!();
 
     fn try_from_boxed_envelope(envelope: BoxedEnvelope) -> Result<Self, BoxedEnvelope> {
-        envelope.downcast::<()>()
+        envelope.downcast::<()>().map(|env| env.msg)
     }
 
     fn into_boxed_envelope(self) -> BoxedEnvelope {
-        BoxedEnvelope::new::<()>(())
+        BoxedEnvelope::new::<()>(Envelope::new(self, ()))
     }
 }
 
 impl FromEnvelope<()> for () {
-    fn from_envelope(_envelope: ()) -> Self {
+    fn from_envelope(_envelope: Envelope<()>) -> Self {
         ()
     }
 }
 impl TryIntoEnvelope<()> for () {
-    fn try_into_envelope(self) -> Result<(), Self> {
-        Ok(())
+    fn try_into_envelope(self) -> Result<Envelope<()>, Self> {
+        Ok(Envelope::new((), ()))
     }
 }
 
@@ -63,12 +63,12 @@ impl Interface for Infallible {
 }
 
 impl FromEnvelope<Infallible> for Infallible {
-    fn from_envelope(_envelope: Infallible) -> Self {
+    fn from_envelope(_envelope: Envelope<Infallible>) -> Self {
         unreachable!()
     }
 }
 impl TryIntoEnvelope<Infallible> for Infallible {
-    fn try_into_envelope(self) -> Result<Infallible, Self> {
+    fn try_into_envelope(self) -> Result<Envelope<Infallible>, Self> {
         unreachable!()
     }
 }

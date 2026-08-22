@@ -282,8 +282,8 @@ impl<I: Interface> Channel<I> {
                     Some(SignalEvent::Resume)
                 }
             }
-            SignalInterface::Ping((_, tx)) => {
-                let _ = tx.send(());
+            SignalInterface::Ping(envelope) => {
+                let _ = envelope.handle.send(());
                 None
             }
         }
@@ -309,7 +309,7 @@ where
     M: Message,
     T: TypeSet + Contains<M> + 'static,
 {
-    async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
+    async fn send(&self, msg: M) -> Result<M::Receipt, SendError<M>> {
         match self.send_dyn(msg).await {
             Ok(output) => Ok(output),
             Err(SendCheckedError::Closed(msg)) => Err(SendError(msg)),
@@ -323,7 +323,7 @@ where
         }
     }
 
-    fn try_send(&self, msg: M) -> Result<M::Output, TrySendError<M>> {
+    fn try_send(&self, msg: M) -> Result<M::Receipt, TrySendError<M>> {
         match self.try_send_dyn(msg) {
             Ok(output) => Ok(output),
             Err(TrySendCheckedError::Closed(msg)) => Err(TrySendError::Closed(msg)),
@@ -338,7 +338,7 @@ where
         }
     }
 
-    fn send_now(&self, msg: M) -> Result<M::Output, SendError<M>> {
+    fn send_now(&self, msg: M) -> Result<M::Receipt, SendError<M>> {
         match self.send_now_dyn(msg) {
             Ok(output) => Ok(output),
             Err(SendCheckedError::Closed(msg)) => Err(SendError(msg)),
@@ -352,7 +352,7 @@ where
         }
     }
 
-    fn force_send(&self, msg: M) -> M::Output {
+    fn force_send(&self, msg: M) -> M::Receipt {
         match self.inner.msg_queue.try_push_msg(msg) {
             Ok(output) => {
                 self.inner.msg_notifier.notify_one();
@@ -374,12 +374,12 @@ where
     M: Message,
     I: Interface + TryIntoEnvelope<M> + FromEnvelope<M> + Send + 'static,
 {
-    async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
+    async fn send(&self, msg: M) -> Result<M::Receipt, SendError<M>> {
         self.delay_for_backpressure().await;
         self.send_now(msg)
     }
 
-    fn try_send(&self, msg: M) -> Result<M::Output, TrySendError<M>> {
+    fn try_send(&self, msg: M) -> Result<M::Receipt, TrySendError<M>> {
         if self.reached_backpressure() {
             return Err(TrySendError::Full(msg));
         }
@@ -387,7 +387,7 @@ where
         self.send_now(msg).map_err(Into::into)
     }
 
-    fn send_now(&self, msg: M) -> Result<M::Output, SendError<M>> {
+    fn send_now(&self, msg: M) -> Result<M::Receipt, SendError<M>> {
         if !self.status().accepts_messages() {
             return Err(SendError(msg));
         }
@@ -395,7 +395,7 @@ where
         Ok(self.force_send(msg))
     }
 
-    fn force_send(&self, msg: M) -> M::Output {
+    fn force_send(&self, msg: M) -> M::Receipt {
         // Raw-queue could just be a raw pointer cast, but that requires that a
         // Channel<I: Interface> always has a ConcurrentQueue<I> as its msg_queue,
         // This is currently not guaranteed by the type system.
@@ -427,12 +427,12 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
     type ChannelKind = C;
     type Set = C::Set;
 
-    async fn send_dyn<M: Message>(&self, msg: M) -> Result<M::Output, SendCheckedError<M>> {
+    async fn send_dyn<M: Message>(&self, msg: M) -> Result<M::Receipt, SendCheckedError<M>> {
         self.delay_for_backpressure().await;
         self.send_now_dyn(msg)
     }
 
-    fn try_send_dyn<M: Message>(&self, msg: M) -> Result<M::Output, TrySendCheckedError<M>> {
+    fn try_send_dyn<M: Message>(&self, msg: M) -> Result<M::Receipt, TrySendCheckedError<M>> {
         if self.reached_backpressure() {
             return Err(TrySendCheckedError::Full(msg));
         }
@@ -440,7 +440,7 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
         self.send_now_dyn(msg).map_err(Into::into)
     }
 
-    fn send_now_dyn<M: Message>(&self, msg: M) -> Result<M::Output, SendCheckedError<M>> {
+    fn send_now_dyn<M: Message>(&self, msg: M) -> Result<M::Receipt, SendCheckedError<M>> {
         if !self.status().accepts_messages() {
             return Err(SendCheckedError::Closed(msg));
         }
@@ -448,7 +448,7 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
         self.force_send_dyn(msg).map_err(Into::into)
     }
 
-    fn force_send_dyn<M: Message>(&self, msg: M) -> Result<M::Output, NotAccepted<M>> {
+    fn force_send_dyn<M: Message>(&self, msg: M) -> Result<M::Receipt, NotAccepted<M>> {
         match self.inner.msg_queue.try_push_msg(msg) {
             Ok(output) => {
                 self.inner.msg_notifier.notify_one();
@@ -458,7 +458,7 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
         }
     }
 
-    async fn request_dyn<M: Message>(&self, msg: M) -> Result<M::Reply, RequestCheckedError<M>> {
+    async fn request_dyn<M: Message>(&self, msg: M) -> Result<M::Output, RequestCheckedError<M>> {
         Ok(self.send_dyn(msg).await?.receive().await?)
     }
 
@@ -484,20 +484,26 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
     }
 
     fn signal_shutdown(&self) {
-        self.signal(SignalInterface::Shutdown(signals::Shutdown));
+        self.signal(SignalInterface::Shutdown(Envelope::new(
+            signals::Shutdown,
+            (),
+        )));
     }
 
     fn signal_suspend(&self) {
-        self.signal(SignalInterface::Suspend(signals::Suspend));
+        self.signal(SignalInterface::Suspend(Envelope::new(
+            signals::Suspend,
+            (),
+        )));
     }
 
     fn signal_resume(&self) {
-        self.signal(SignalInterface::Resume(signals::Resume));
+        self.signal(SignalInterface::Resume(Envelope::new(signals::Resume, ())));
     }
 
     fn ping(&self) -> Rx<()> {
         let (tx, rx) = new_request();
-        self.signal(SignalInterface::Ping((signals::Ping, tx)));
+        self.signal(SignalInterface::Ping(Envelope::new(signals::Ping, tx)));
         rx
     }
 

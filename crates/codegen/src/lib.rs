@@ -132,9 +132,9 @@ fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
 
 
         impl #msg_path::Message for #enum_name {
+            type Receipt = ();
             type Output = ();
-            type Reply = ();
-            type Envelope = Self;
+            type Completer = ();
         }
 
         // impl #polybox_path::type_sets::TypeSet for #enum_name {
@@ -143,13 +143,13 @@ fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
 
         impl #msg_path::TryIntoEnvelope<#enum_name> for #enum_name {
             fn try_into_envelope(self) -> Result<#msg_path::Envelope<#enum_name>, Self> {
-                Ok(self)
+                Ok(#msg_path::Envelope::new(self, ()))
             }
         }
 
         impl #msg_path::FromEnvelope<#enum_name> for #enum_name {
             fn from_envelope(envelope: #msg_path::Envelope<#enum_name>) -> Self {
-                envelope
+                envelope.msg
             }
         }
 
@@ -230,7 +230,7 @@ pub fn derive_actor_interface(input: TokenStream) -> TokenStream {
 ///
 /// #[derive(Message)]
 /// #[msg(reply = u32)]
-/// struct MessageWithReply;
+/// struct MessageWithOutput;
 /// ```
 #[proc_macro_derive(Message, attributes(msg))]
 pub fn derive_message(input: TokenStream) -> TokenStream {
@@ -253,21 +253,26 @@ fn _derive_message(input: TokenStream, base: &str) -> TokenStream {
     let name = &input.ident;
 
     let base_path: syn::Path = attrs.path.unwrap_or_else(|| syn::parse_str(base).unwrap());
-    let output_type = if let Some(reply_type) = attrs.reply {
-        quote!( #base_path::messaging::oneshot::Rx<#reply_type> )
-    } else {
-        quote!(())
-    };
-
-    // Handle generics if the struct/enum is generic
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
-    let expanded = quote! {
-        impl #impl_generics #base_path::messaging::Message for #name #ty_generics #where_clause {
-            type Output = #output_type;
-            type Reply = <Self::Output as #base_path::messaging::MessageOutput<Self>>::Reply;
-            type Envelope = <Self::Output as #base_path::messaging::MessageOutput<Self>>::Envelope;
-        }
+    let expanded = if let Some(reply_type) = attrs.reply {
+        quote!(
+            impl #impl_generics #base_path::messaging::Message for #name #ty_generics #where_clause
+            {
+                type Receipt = #base_path::messaging::oneshot::Rx<#reply_type>;
+                type Output = #reply_type;
+                type Completer = #base_path::messaging::oneshot::Tx<#reply_type>;
+            }
+        )
+    } else {
+        quote!(
+            impl #impl_generics #base_path::messaging::Message for #name #ty_generics #where_clause
+            {
+                type Receipt = ();
+                type Output = ();
+                type Completer = ();
+            }
+        )
     };
 
     TokenStream::from(expanded)

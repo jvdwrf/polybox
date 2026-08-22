@@ -136,10 +136,10 @@ impl Supervisor {
                             }
                         },
                         Event::Message(message) => match message {
-                            SupervisorInterface::Children((_, tx)) => {
-                                tx.send(child_descriptions.clone()).ok();
+                            SupervisorInterface::Children(env) => {
+                                env.handle.send(child_descriptions.clone()).ok();
                             },
-                            SupervisorInterface::Health((_, _tx)) => todo!("Implement health check during shutdown"),
+                            SupervisorInterface::Health(env) => todo!("Implement health check during shutdown"),
                         }
                     }
                 }
@@ -362,10 +362,10 @@ impl Actor for Supervisor {
                             }
                         },
                         Event::Message(message) => match message {
-                            SupervisorInterface::Children((_, tx)) => {
-                                tx.send(child_descriptions.clone()).ok();
+                            SupervisorInterface::Children(env) => {
+                                env.handle.send(child_descriptions.clone()).ok();
                             },
-                            SupervisorInterface::Health((_, _tx)) => todo!("Implement health check during initialization"),
+                            SupervisorInterface::Health(env) => todo!("Implement health check during initialization"),
                         }
                     }
                 }
@@ -420,14 +420,14 @@ impl Actor for Supervisor {
                     //     let supervisee = self.supervisees.shift_remove(&id);
                     //     tx.send(supervisee.map(|s| s.spec)).ok();
                     // }
-                    SupervisorInterface::Children((_, tx)) => {
+                    SupervisorInterface::Children(env) => {
                         let children = self.get_child_descriptions();
-                        tx.send(children).ok();
+                        env.handle.send(children).ok();
                     }
 
-                    SupervisorInterface::Health((_, tx)) => {
+                    SupervisorInterface::Health(env) => {
                         // TODO: Check for recent restarts and determine health status accordingly
-                        tx.send(HealthStatus::Healthy.into_health()).ok();
+                        env.handle.send(HealthStatus::Healthy.into_health()).ok();
                     }
                 },
             }

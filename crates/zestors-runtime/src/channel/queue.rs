@@ -111,7 +111,7 @@ impl Queue for dyn IsDynQueue {
 }
 
 impl dyn IsDynQueue {
-    pub(super) fn try_push_msg<M: Message>(&self, msg: M) -> Result<M::Output, NotAccepted<M>> {
+    pub(super) fn try_push_msg<M: Message>(&self, msg: M) -> Result<M::Receipt, NotAccepted<M>> {
         let (envelope, output) = <M as MessageExt>::build_envelope(msg);
         let envelope = BoxedEnvelope::new::<M>(envelope);
 
