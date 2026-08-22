@@ -22,8 +22,8 @@ struct PongMessage(pub u64);
 #[derive(Debug, Interface)]
 #[interface(path = "crate")]
 enum TestInterface {
-    Ping(Payload<PingMessage>),
-    Pong(Payload<PongMessage>),
+    Ping(Envelope<PingMessage>),
+    Pong(Envelope<PongMessage>),
 }
 
 #[derive(Debug, Interface)]

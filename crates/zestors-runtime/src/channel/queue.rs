@@ -23,12 +23,12 @@ pub(crate) trait Queue: Send + 'static {
 pub(crate) trait IsDynQueue: Any + Send + Sync + 'static {
     fn len(&self) -> usize;
 
-    fn push_boxed_payload_checked(
+    fn push_boxed_envelope_checked(
         &self,
-        msg: BoxedPayload,
-    ) -> Result<(), NotAccepted<BoxedPayload>>;
+        msg: BoxedEnvelope,
+    ) -> Result<(), NotAccepted<BoxedEnvelope>>;
 
-    fn pop_boxed_payload(&self) -> Result<BoxedPayload, PopError>;
+    fn pop_boxed_envelope(&self) -> Result<BoxedEnvelope, PopError>;
 
     fn members(&self) -> &'static [TypeId];
 }
@@ -61,15 +61,15 @@ impl<I: Interface> IsDynQueue for ConcurrentQueue<I> {
         self.len()
     }
 
-    fn push_boxed_payload_checked(
+    fn push_boxed_envelope_checked(
         &self,
-        msg: BoxedPayload,
-    ) -> Result<(), NotAccepted<BoxedPayload>> {
-        let payload = msg
+        msg: BoxedEnvelope,
+    ) -> Result<(), NotAccepted<BoxedEnvelope>> {
+        let envelope = msg
             .try_into_interface::<I>()
-            .map_err(|payload| NotAccepted(payload))?;
+            .map_err(|envelope| NotAccepted(envelope))?;
 
-        self.push_item(payload).map_err(|e| match e {
+        self.push_item(envelope).map_err(|e| match e {
             TrySendError::Closed(_) => unreachable!("Should never be closed"),
             TrySendError::Full(_) => {
                 panic!("Queue is full: {:?}", std::any::type_name::<Self>());
@@ -77,9 +77,9 @@ impl<I: Interface> IsDynQueue for ConcurrentQueue<I> {
         })
     }
 
-    fn pop_boxed_payload(&self) -> Result<BoxedPayload, PopError> {
+    fn pop_boxed_envelope(&self) -> Result<BoxedEnvelope, PopError> {
         self.pop_item()
-            .map(|interface| interface.into_boxed_payload())
+            .map(|interface| interface.into_boxed_envelope())
     }
 
     fn members(&self) -> &'static [TypeId] {
@@ -88,18 +88,18 @@ impl<I: Interface> IsDynQueue for ConcurrentQueue<I> {
 }
 
 impl Queue for dyn IsDynQueue {
-    type Item = BoxedPayload;
+    type Item = BoxedEnvelope;
 
     fn len(&self) -> usize {
         <dyn IsDynQueue as IsDynQueue>::len(self)
     }
 
     fn pop_item(&self) -> Result<Self::Item, PopError> {
-        <dyn IsDynQueue as IsDynQueue>::pop_boxed_payload(self)
+        <dyn IsDynQueue as IsDynQueue>::pop_boxed_envelope(self)
     }
 
     fn push_item(&self, msg: Self::Item) -> Result<(), TrySendError<Self::Item>> {
-        if let Err(NotAccepted(_msg)) = self.push_boxed_payload_checked(msg) {
+        if let Err(NotAccepted(_msg)) = self.push_boxed_envelope_checked(msg) {
             panic!(
                 "Message type not accepted by channel {:?}",
                 std::any::type_name::<Self>()
@@ -112,17 +112,17 @@ impl Queue for dyn IsDynQueue {
 
 impl dyn IsDynQueue {
     pub(super) fn try_push_msg<M: Message>(&self, msg: M) -> Result<M::Output, NotAccepted<M>> {
-        let (payload, output) = <M as MessageExt>::build_payload(msg);
-        let payload = BoxedPayload::new::<M>(payload);
+        let (envelope, output) = <M as MessageExt>::build_envelope(msg);
+        let envelope = BoxedEnvelope::new::<M>(envelope);
 
-        if let Err(NotAccepted(payload)) =
-            <dyn IsDynQueue as IsDynQueue>::push_boxed_payload_checked(self, payload)
+        if let Err(NotAccepted(envelope)) =
+            <dyn IsDynQueue as IsDynQueue>::push_boxed_envelope_checked(self, envelope)
         {
-            let payload = payload
+            let envelope = envelope
                 .downcast::<M>()
-                .expect("Failed to convert payload back");
+                .expect("Failed to convert envelope back");
 
-            return Err(NotAccepted(M::destroy_payload(payload)));
+            return Err(NotAccepted(M::destroy_envelope(envelope)));
         }
 
         Ok(output)

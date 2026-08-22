@@ -148,7 +148,7 @@ mod tests {
     #[derive(Interface, HandlerInterface)]
     #[interface(path = "crate")]
     pub enum MyInterface {
-        A(Payload<u32>),
+        A(Envelope<u32>),
     }
 
     #[derive(Debug, Clone)]
@@ -172,7 +172,7 @@ mod tests {
         async fn handle(
             &mut self,
             _state: &mut HandlerState<Self>,
-            msg: Payload<u32>,
+            msg: Envelope<u32>,
         ) -> Result<(), Self::Error> {
             println!("Received message: {:?}", msg);
             Ok(())

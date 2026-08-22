@@ -24,11 +24,11 @@ async fn main() {
                     },
 
                     Event::Message(message) => match message {
-                        MyInterface::Add(payload) => {
-                            println!("Received message: {:?}", payload);
+                        MyInterface::Add(envelope) => {
+                            println!("Received message: {:?}", envelope);
                         }
-                        MyInterface::Print(payload) => {
-                            println!("Received message: {:?}", payload);
+                        MyInterface::Print(envelope) => {
+                            println!("Received message: {:?}", envelope);
                         }
                         MyInterface::Health((_, tx)) => {
                             tx.send(Health::healthy()).ok();
@@ -68,10 +68,10 @@ impl MyActor {
 
 #[derive(Interface, HandlerInterface)]
 enum MyInterface {
-    Add(Payload<u32>),
-    Print(Payload<String>),
-    Health(Payload<GetHealth>),
-    Children(Payload<GetChildren>),
+    Add(Envelope<u32>),
+    Print(Envelope<String>),
+    Health(Envelope<GetHealth>),
+    Children(Envelope<GetChildren>),
 }
 
 #[derive(Message)]
@@ -101,7 +101,7 @@ impl Handle<u32> for MyActor {
     async fn handle(
         &mut self,
         state: &mut HandlerState<Self>,
-        msg: Payload<u32>,
+        msg: Envelope<u32>,
     ) -> Result<(), Self::Error> {
         println!("Received message: {:?}", msg);
 
@@ -119,7 +119,7 @@ impl Handle<String> for MyActor {
     async fn handle(
         &mut self,
         _: &mut HandlerState<Self>,
-        msg: Payload<String>,
+        msg: Envelope<String>,
     ) -> Result<(), Self::Error> {
         println!("Received message: {:?}", msg);
         Ok(())
@@ -130,7 +130,7 @@ impl Handle<IntervalTick> for MyActor {
     async fn handle(
         &mut self,
         _: &mut HandlerState<Self>,
-        _: Payload<IntervalTick>,
+        _: Envelope<IntervalTick>,
     ) -> Result<(), Self::Error> {
         println!("Interval tick: {}", self.nr);
         Ok(())
@@ -141,7 +141,7 @@ impl Handle<GetHealth> for MyActor {
     async fn handle(
         &mut self,
         _: &mut HandlerState<Self>,
-        (_, tx): Payload<GetHealth>,
+        (_, tx): Envelope<GetHealth>,
     ) -> Result<(), Self::Error> {
         tx.send(Health::healthy().with_debug_repr(self)).ok();
         Ok(())
@@ -152,7 +152,7 @@ impl Handle<GetChildren> for MyActor {
     async fn handle(
         &mut self,
         _: &mut HandlerState<Self>,
-        (_, tx): Payload<GetChildren>,
+        (_, tx): Envelope<GetChildren>,
     ) -> Result<(), Self::Error> {
         tx.send(vec![]).ok();
         Ok(())

@@ -12,8 +12,8 @@ use zestors::{
 
 #[derive(Interface, HandlerInterface)]
 enum MyInterface {
-    Add(Payload<u32>),
-    Print(Payload<String>),
+    Add(Envelope<u32>),
+    Print(Envelope<String>),
 }
 
 #[derive(Debug, Clone)]
@@ -66,7 +66,7 @@ impl Handle<u32> for MyActor {
     async fn handle(
         &mut self,
         _state: &mut HandlerState<Self>,
-        msg: Payload<u32>,
+        msg: Envelope<u32>,
     ) -> Result<(), Self::Error> {
         println!("Received message: {:?}", msg);
         Ok(())
@@ -77,7 +77,7 @@ impl Handle<String> for MyActor {
     async fn handle(
         &mut self,
         _state: &mut HandlerState<Self>,
-        msg: Payload<String>,
+        msg: Envelope<String>,
     ) -> Result<(), Self::Error> {
         println!("Received message: {:?}", msg);
         Ok(())

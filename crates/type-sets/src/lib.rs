@@ -1,4 +1,4 @@
-use std::{any::TypeId, fmt::Debug, marker::PhantomData};
+use std::{any::TypeId, convert::Infallible, fmt::Debug, marker::PhantomData};
 
 pub struct Set<T>(PhantomData<fn() -> T>);
 
@@ -75,3 +75,14 @@ mod generate_sets;
 use generate_sets::*;
 
 mod set_macro;
+
+impl TypeSet for Infallible {
+    type Set = ();
+
+    fn members() -> &'static [TypeId]
+    where
+        Self: 'static,
+    {
+        &[]
+    }
+}

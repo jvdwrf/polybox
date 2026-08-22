@@ -15,7 +15,7 @@ Check out the example below and docs.rs for more details.
 # Example
 ```rust
 use polybox::{
-    DynInbox, Interface, Message, Payload, PolyboxExt as _, Sends, SendsExt as _,
+    DynInbox, Interface, Message, Envelope, PolyboxExt as _, Sends, SendsExt as _,
     inboxes::{FlumeInbox, TokioInbox},
     type_sets::Set,
 };
@@ -52,10 +52,10 @@ pub struct Print(&'static str);
 /// A simple actor that adds numbers and can report its total.
 #[derive(Interface, Debug)]
 pub enum NumberAdder {
-    Health(Payload<GetHealth>),
-    Exit(Payload<Exit>),
-    Add(Payload<AddNumber>),
-    Get(Payload<GetNumber>),
+    Health(Envelope<GetHealth>),
+    Exit(Envelope<Exit>),
+    Add(Envelope<AddNumber>),
+    Get(Envelope<GetNumber>),
 }
 
 impl NumberAdder {
@@ -73,8 +73,8 @@ impl NumberAdder {
                     NumberAdder::Exit(Exit) => {
                         break;
                     }
-                    NumberAdder::Add(payload) => {
-                        total += payload.0;
+                    NumberAdder::Add(envelope) => {
+                        total += envelope.0;
                     }
                     NumberAdder::Get((GetNumber, tx)) => {
                         let _ = tx.send(total);
@@ -90,9 +90,9 @@ impl NumberAdder {
 /// A simple actor that prints messages.
 #[derive(Interface, Debug)]
 pub enum Printer {
-    Health(Payload<GetHealth>),
-    Exit(Payload<Exit>),
-    Print(Payload<Print>),
+    Health(Envelope<GetHealth>),
+    Exit(Envelope<Exit>),
+    Print(Envelope<Print>),
 }
 
 impl Printer {
@@ -108,8 +108,8 @@ impl Printer {
                     Printer::Exit(Exit) => {
                         break;
                     }
-                    Printer::Print(payload) => {
-                        println!("Printer received: {}", payload.0);
+                    Printer::Print(envelope) => {
+                        println!("Printer received: {}", envelope.0);
                     }
                 }
             }

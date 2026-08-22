@@ -5,9 +5,9 @@ use std::convert::Infallible;
 ///
 /// It defines the kind of the message, which can be either [`Request<T>`] or [`FireAndForget`].
 pub trait Message: Send + 'static + Sized {
-    type Output: MessageOutput<Self, Payload = Self::Payload, Reply = Self::Reply> + Send;
+    type Output: MessageOutput<Self, Envelope = Self::Envelope, Reply = Self::Reply> + Send;
     type Reply: Send + 'static;
-    type Payload: Send + 'static;
+    type Envelope: Send + 'static;
 }
 
 /// A trait for types that can be used as the output of a [`Message`].
@@ -18,7 +18,7 @@ pub trait Message: Send + 'static + Sized {
 pub trait MessageOutput<M>: Sized + sealed::Sealed {
     /// The reply type of the message.
     type Reply;
-    type Payload;
+    type Envelope;
 
     /// Receive the reply of the message.
     fn receive(self) -> impl Future<Output = Result<Self::Reply, RxError>> + Send;
@@ -28,27 +28,27 @@ pub trait MessageOutput<M>: Sized + sealed::Sealed {
         futures::executor::block_on(self.receive())
     }
 
-    /// Convert a message into its payload and output.
-    fn into_payload(msg: M) -> (Self::Payload, Self);
+    /// Convert a message into its envelope and output.
+    fn into_envelope(msg: M) -> (Self::Envelope, Self);
 
-    /// Convert a payload back into the message.
-    fn from_payload(payload: Self::Payload) -> M;
+    /// Convert a envelope back into the message.
+    fn from_envelope(envelope: Self::Envelope) -> M;
 }
 
 impl<M> MessageOutput<M> for () {
     type Reply = ();
-    type Payload = M;
+    type Envelope = M;
 
     async fn receive(self) -> Result<Self::Reply, RxError> {
         Ok(())
     }
 
-    fn into_payload(msg: M) -> (M, Self) {
+    fn into_envelope(msg: M) -> (M, Self) {
         (msg, ())
     }
 
-    fn from_payload(payload: M) -> M {
-        payload
+    fn from_envelope(envelope: M) -> M {
+        envelope
     }
 }
 
@@ -58,40 +58,40 @@ where
     R: Send + 'static,
 {
     type Reply = R;
-    type Payload = (M, Tx<R>);
+    type Envelope = (M, Tx<R>);
 
     async fn receive(self) -> Result<Self::Reply, RxError> {
         self.await
     }
 
-    fn into_payload(msg: M) -> ((M, Tx<R>), Self) {
+    fn into_envelope(msg: M) -> ((M, Tx<R>), Self) {
         let (tx, rx) = new_request();
         ((msg, tx), rx)
     }
 
-    fn from_payload(payload: (M, Tx<R>)) -> M {
-        let (msg, _tx) = payload;
+    fn from_envelope(envelope: (M, Tx<R>)) -> M {
+        let (msg, _tx) = envelope;
         msg
     }
 }
 
-/// A helper type for the payload of a [`Message`].
-pub type Payload<T> = <T as Message>::Payload;
+/// A helper type for the envelope of a [`Message`].
+pub type Envelope<T> = <T as Message>::Envelope;
 
 /// A trait that extends [`Message`] with some helper methods.
 pub trait MessageExt: Message {
-    fn build_payload(self) -> (Self::Payload, Self::Output)
+    fn build_envelope(self) -> (Self::Envelope, Self::Output)
     where
         Self: Sized,
     {
-        <Self::Output as MessageOutput<Self>>::into_payload(self)
+        <Self::Output as MessageOutput<Self>>::into_envelope(self)
     }
 
-    fn destroy_payload(payload: Self::Payload) -> Self
+    fn destroy_envelope(envelope: Self::Envelope) -> Self
     where
         Self: Sized,
     {
-        <Self::Output as MessageOutput<Self>>::from_payload(payload)
+        <Self::Output as MessageOutput<Self>>::from_envelope(envelope)
     }
 }
 impl<I> MessageExt for I where I: Message {}
@@ -115,7 +115,7 @@ macro_rules! implement_message_for_base_types {
             impl Message for $ty {
                 type Reply = ();
                 type Output = ();
-                type Payload = Self;
+                type Envelope = Self;
             }
         )*
     };
@@ -138,7 +138,7 @@ macro_rules! implement_message_for_wrappers {
             {
                 type Reply = ();
                 type Output = ();
-                type Payload = Self;
+                type Envelope = Self;
             }
         )*
     };
@@ -161,7 +161,7 @@ macro_rules! implement_message_kind_and_message_for_tuples {
             {
                 type Reply = ();
                 type Output = ();
-                type Payload = Self;
+                type Envelope = Self;
             }
         )*
     };

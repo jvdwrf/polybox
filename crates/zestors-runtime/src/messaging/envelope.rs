@@ -1,23 +1,23 @@
 use super::*;
 use std::any::Any;
 
-/// Holds a [`MessageSpecifier::Payload`]
+/// Holds a [`MessageSpecifier::Envelope`]
 #[derive(Debug)]
-pub struct BoxedPayload(Box<dyn Any + Send>);
+pub struct BoxedEnvelope(Box<dyn Any + Send>);
 
-impl BoxedPayload {
-    pub fn new<T>(payload: Payload<T>) -> Self
+impl BoxedEnvelope {
+    pub fn new<T>(envelope: Envelope<T>) -> Self
     where
         T: Message,
-        Payload<T>: Send + 'static,
+        Envelope<T>: Send + 'static,
     {
-        Self(Box::new(payload))
+        Self(Box::new(envelope))
     }
 
-    pub fn downcast<T>(self) -> Result<Payload<T>, Self>
+    pub fn downcast<T>(self) -> Result<Envelope<T>, Self>
     where
         T: Message,
-        Payload<T>: 'static,
+        Envelope<T>: 'static,
     {
         match self.0.downcast() {
             Ok(cast) => Ok(*cast),
@@ -29,6 +29,6 @@ impl BoxedPayload {
     where
         T: Interface,
     {
-        T::try_from_boxed_payload(self)
+        T::try_from_boxed_envelope(self)
     }
 }

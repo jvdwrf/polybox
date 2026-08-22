@@ -106,7 +106,7 @@ pub trait Handle<M: Message>: Handler {
     fn handle(
         &mut self,
         state: &mut HandlerState<Self>,
-        msg: Payload<M>,
+        msg: Envelope<M>,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
 
@@ -114,13 +114,13 @@ impl<H: Handler> Handle<Infallible> for H {
     fn handle(
         &mut self,
         _state: &mut HandlerState<Self>,
-        _msg: Payload<Infallible>,
+        _msg: Envelope<Infallible>,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send {
         async { unreachable!("Infallible message should never be sent") }
     }
 }
 
-pub trait HandledBy<H: Handler>: Message<Payload = Self> {
+pub trait HandledBy<H: Handler>: Message<Envelope = Self> {
     fn handle(
         self,
         state: &mut HandlerState<H>,
@@ -131,7 +131,7 @@ pub trait HandledBy<H: Handler>: Message<Payload = Self> {
 impl<H, M> HandledBy<H> for M
 where
     H: Handle<M>,
-    M: Message<Payload = Self>,
+    M: Message<Envelope = Self>,
 {
     fn handle(
         self,

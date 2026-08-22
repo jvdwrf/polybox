@@ -7,12 +7,10 @@ pub use message::*;
 pub mod oneshot;
 pub(crate) use oneshot::*;
 
-mod payload;
-pub use payload::*;
+mod envelope;
+pub use envelope::*;
 
 mod sends;
 pub use sends::*;
 
 pub use type_sets;
-
-pub(crate) use type_sets::*;

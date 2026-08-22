@@ -11,9 +11,9 @@ pub struct DeregisterChild(pub Pid);
 #[derive(Interface, Debug)]
 #[interface(path = "crate")]
 pub enum SupervisorInterface {
-    // RegisterChild(Payload<RegisterChild>),
-    // DeregisterChild(Payload<DeregisterChild>),
-    // Debug(Payload<GetDebugInfo>),
-    Children(Payload<GetChildren>),
-    Health(Payload<GetHealth>),
+    // RegisterChild(Envelope<RegisterChild>),
+    // DeregisterChild(Envelope<DeregisterChild>),
+    // Debug(Envelope<GetDebugInfo>),
+    Children(Envelope<GetChildren>),
+    Health(Envelope<GetHealth>),
 }

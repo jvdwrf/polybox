@@ -72,7 +72,7 @@ mod tests {
     #[derive(Interface)]
     #[interface(path = "crate")]
     pub enum MyInterface {
-        A(Payload<u32>),
+        A(Envelope<u32>),
     }
 
     #[tokio::test]

@@ -35,8 +35,8 @@ pub struct ApiServer {
 #[derive(Interface)]
 #[interface(path = "zestors_core")]
 pub enum ApiServerInterface {
-    Children(Payload<GetChildren>),
-    Health(Payload<GetHealth>),
+    Children(Envelope<GetChildren>),
+    Health(Envelope<GetHealth>),
 }
 
 impl Actor for ApiServer {

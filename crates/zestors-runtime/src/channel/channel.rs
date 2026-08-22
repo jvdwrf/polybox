@@ -17,7 +17,7 @@ pub trait ChannelKind: 'static {
 }
 
 impl<I: Interface> ChannelKind for I {
-    type Set = <I as Interface>::Set;
+    type Set = I::Set;
 }
 
 impl<S: TypeSet + 'static> ChannelKind for Set<S> {
@@ -372,7 +372,7 @@ where
 impl<M, I> Sends<M> for Channel<I>
 where
     M: Message,
-    I: Interface + TryIntoPayload<M> + FromPayload<M> + Send + 'static,
+    I: Interface + TryIntoEnvelope<M> + FromEnvelope<M> + Send + 'static,
 {
     async fn send(&self, msg: M) -> Result<M::Output, SendError<M>> {
         self.delay_for_backpressure().await;
@@ -400,8 +400,8 @@ where
         // Channel<I: Interface> always has a ConcurrentQueue<I> as its msg_queue,
         // This is currently not guaranteed by the type system.
         if let Some(queue) = self.raw_queue() {
-            let (payload, output) = <M as MessageExt>::build_payload(msg);
-            let interface = <I as FromPayload<M>>::from_payload(payload);
+            let (envelope, output) = <M as MessageExt>::build_envelope(msg);
+            let interface = <I as FromEnvelope<M>>::from_envelope(envelope);
 
             if let Err(_e) = queue.push_item(interface) {
                 panic!("Queue was full or empty {}", std::any::type_name::<Self>());
