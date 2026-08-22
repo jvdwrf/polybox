@@ -120,7 +120,7 @@ impl<H: Handler> Handle<Infallible> for H {
     }
 }
 
-pub trait HandledBy<H: Handler>: Message<Receipt = (), Completer = ()> {
+pub trait HandledBy<H: Handler>: Message<Receipt = (), Resolver = ()> {
     fn handle(
         self,
         state: &mut HandlerState<H>,
@@ -131,7 +131,7 @@ pub trait HandledBy<H: Handler>: Message<Receipt = (), Completer = ()> {
 impl<H, M> HandledBy<H> for M
 where
     H: Handle<M>,
-    M: Message<Receipt = (), Completer = ()>,
+    M: Message<Receipt = (), Resolver = ()>,
 {
     fn handle(
         self,

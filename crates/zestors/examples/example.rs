@@ -30,11 +30,11 @@ async fn main() {
                         MyInterface::Print(envelope) => {
                             println!("Received message: {:?}", envelope);
                         }
-                        MyInterface::Health(env) => {
-                            env.handle.send(Health::healthy()).ok();
+                        MyInterface::Health(Envelope { handle, .. }) => {
+                            handle.send(Health::healthy()).ok();
                         }
-                        MyInterface::Children(env) => {
-                            env.handle.send(vec![]).ok();
+                        MyInterface::Children(Envelope { handle, .. }) => {
+                            handle.send(vec![]).ok();
                         }
                     },
                 }

@@ -458,8 +458,8 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
         }
     }
 
-    async fn request_dyn<M: Message>(&self, msg: M) -> Result<M::Output, RequestCheckedError<M>> {
-        Ok(self.send_dyn(msg).await?.receive().await?)
+    async fn request_dyn<M: Message>(&self, msg: M) -> Result<M::Outcome, RequestCheckedError<M>> {
+        Ok(self.send_dyn(msg).await?.resolve().await?)
     }
 
     fn pid(&self) -> &Pid {

@@ -1,47 +1,51 @@
 use crate::_prelude::*;
 use std::convert::Infallible;
 
-/// Defines how a message is sent, and what kind of reply it expects.
+/// Defines how a message is sent and whether its processing produces an outcome.
 ///
 /// There are two kinds of messages:
-/// - Fire-and-forget: The sender does not expect a reply, and the message is sent without any acknowledgment. The [`Receipt`] type for this kind of message is `()`.
-/// - Request: The sender expects a reply, and the message is sent with a [`Receipt`] that can be used to receive the reply. The [`Receipt`] type for this kind of message is [`Rx<R>`], where `R` is the type of the reply.
+///
+/// - **Fire-and-forget:** The sender does not expect an outcome. Its [`Receipt`]
+///   and [`Outcome`] are both `()`.
+/// - **Request:** The sender expects an outcome. Its [`Receipt`] is [`Rx<R>`],
+///   which receives an outcome of type `R`.
 pub trait Message: Send + 'static + Sized {
-    /// The immediate output of the message after sending. (`()` or `Rx<R>`)
+    /// A handle held by the sender to observe the message's outcome.
     type Receipt: Receipt<Self>;
 
-    /// The output of the message after resolving the [`Receipt`]. (`()` or `R`)
-    type Output: Send + 'static;
+    /// A capability held by the receiver to produce the message's outcome.
+    type Resolver: Send + 'static;
 
-    type Completer: Send + 'static;
+    /// The value produced by the receiver when the receipt is resolved.
+    type Outcome: Send + 'static;
 }
 
-/// A trait for types that can be used as the Receipt of a [`Message`].
+/// A handle for observing the outcome of a [`Message`].
 ///
 /// This trait is sealed and cannot be implemented outside of this crate.
-/// It is implemented for [`Rx<T>`] and `()`, which are the Receipt types of
-/// request and fire-and-forget messages, respectively.
+/// It is implemented for [`Rx<T>`] and `()`, the receipt types for request
+/// and fire-and-forget messages, respectively.
 pub trait Receipt<M: Message>: Send + Sized + sealed::Sealed {
-    /// Receive the reply of the message.
-    fn receive(self) -> impl Future<Output = Result<M::Output, RxError>> + Send;
+    /// Waits for the message's receipt to resolve.
+    fn resolve(self) -> impl Future<Output = Result<M::Outcome, RxError>> + Send;
 
-    /// Same as [`Self::receive`], but blocks the current thread until the reply is received.
-    fn receive_blocking(self) -> Result<M::Output, RxError> {
-        futures::executor::block_on(self.receive())
+    /// Waits for the message's receipt to resolve, blocking the current thread.
+    fn resolve_blocking(self) -> Result<M::Outcome, RxError> {
+        futures::executor::block_on(self.resolve())
     }
 
-    /// Convert a message into its envelope and Receipt.
+    /// Converts a message into its envelope and receipt.
     fn into_envelope(msg: M) -> (Envelope<M>, Self);
 
-    /// Convert a envelope back into the message.
+    /// Extracts the message from its envelope.
     fn from_envelope(envelope: Envelope<M>) -> M;
 }
 
 impl<M> Receipt<M> for ()
 where
-    M: Message<Completer: Default, Output: Default>,
+    M: Message<Resolver: Default, Outcome: Default>,
 {
-    async fn receive(self) -> Result<M::Output, RxError> {
+    async fn resolve(self) -> Result<M::Outcome, RxError> {
         Ok(Default::default())
     }
 
@@ -63,9 +67,9 @@ where
 impl<M, O> Receipt<M> for Rx<O>
 where
     O: Send + 'static,
-    M: Message<Completer = Tx<O>, Output = O>,
+    M: Message<Resolver = Tx<O>, Outcome = O>,
 {
-    async fn receive(self) -> Result<O, RxError> {
+    async fn resolve(self) -> Result<O, RxError> {
         self.await
     }
 
@@ -82,11 +86,11 @@ where
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
 pub struct Envelope<M: Message> {
     pub msg: M,
-    pub handle: M::Completer,
+    pub handle: M::Resolver,
 }
 
 impl<M: Message> Envelope<M> {
-    pub fn new(msg: M, handle: M::Completer) -> Self {
+    pub fn new(msg: M, handle: M::Resolver) -> Self {
         Self { msg, handle }
     }
 }
@@ -126,9 +130,9 @@ macro_rules! implement_message_for_base_types {
     ),*) => {
         $(
             impl Message for $ty {
-                type Output = ();
+                type Outcome = ();
                 type Receipt = ();
-                type Completer = ();
+                type Resolver = ();
             }
         )*
     };
@@ -149,9 +153,9 @@ macro_rules! implement_message_for_wrappers {
             impl<M> Message for $wrapper
                 where M: Send + 'static + $($where +)*
             {
-                type Output = ();
+                type Outcome = ();
                 type Receipt = ();
-                type Completer = ();
+                type Resolver = ();
             }
         )*
     };
@@ -172,9 +176,9 @@ macro_rules! implement_message_kind_and_message_for_tuples {
             where
                 $($id: Message + Send + 'static,)*
             {
-                type Output = ();
+                type Outcome = ();
                 type Receipt = ();
-                type Completer = ();
+                type Resolver = ();
             }
         )*
     };

@@ -133,8 +133,8 @@ fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
 
         impl #msg_path::Message for #enum_name {
             type Receipt = ();
-            type Output = ();
-            type Completer = ();
+            type Outcome = ();
+            type Resolver = ();
         }
 
         // impl #polybox_path::type_sets::TypeSet for #enum_name {
@@ -230,7 +230,7 @@ pub fn derive_actor_interface(input: TokenStream) -> TokenStream {
 ///
 /// #[derive(Message)]
 /// #[msg(reply = u32)]
-/// struct MessageWithOutput;
+/// struct MessageWithOutcome;
 /// ```
 #[proc_macro_derive(Message, attributes(msg))]
 pub fn derive_message(input: TokenStream) -> TokenStream {
@@ -260,8 +260,8 @@ fn _derive_message(input: TokenStream, base: &str) -> TokenStream {
             impl #impl_generics #base_path::messaging::Message for #name #ty_generics #where_clause
             {
                 type Receipt = #base_path::messaging::oneshot::Rx<#reply_type>;
-                type Output = #reply_type;
-                type Completer = #base_path::messaging::oneshot::Tx<#reply_type>;
+                type Outcome = #reply_type;
+                type Resolver = #base_path::messaging::oneshot::Tx<#reply_type>;
             }
         )
     } else {
@@ -269,8 +269,8 @@ fn _derive_message(input: TokenStream, base: &str) -> TokenStream {
             impl #impl_generics #base_path::messaging::Message for #name #ty_generics #where_clause
             {
                 type Receipt = ();
-                type Output = ();
-                type Completer = ();
+                type Outcome = ();
+                type Resolver = ();
             }
         )
     };

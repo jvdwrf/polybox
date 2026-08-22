@@ -53,8 +53,8 @@ pub trait Sends<M: Message>: Sync {
     ///
     /// This is the same as [`Sends::send`] with [`MessageOutput::receive`] called on the result. The resulting value is therefore [`Message::Output`] instead of
     /// [`Message::Output`].
-    fn request(&self, msg: M) -> impl Future<Output = Result<M::Output, RequestError<M>>> + Send {
-        async move { Ok(self.send(msg).await?.receive().await?) }
+    fn request(&self, msg: M) -> impl Future<Output = Result<M::Outcome, RequestError<M>>> + Send {
+        async move { Ok(self.send(msg).await?.resolve().await?) }
     }
 }
 

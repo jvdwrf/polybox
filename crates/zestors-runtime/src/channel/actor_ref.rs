@@ -24,7 +24,7 @@ pub trait ActorRef {
     fn request_dyn<M: Message>(
         &self,
         msg: M,
-    ) -> impl Future<Output = Result<M::Output, RequestCheckedError<M>>> + Send;
+    ) -> impl Future<Output = Result<M::Outcome, RequestCheckedError<M>>> + Send;
 
     fn pid(&self) -> &Pid;
 
@@ -129,7 +129,7 @@ impl<T: AsActorRef> ActorRef for T {
     fn request_dyn<M: Message>(
         &self,
         msg: M,
-    ) -> impl Future<Output = Result<M::Output, RequestCheckedError<M>>> + Send {
+    ) -> impl Future<Output = Result<M::Outcome, RequestCheckedError<M>>> + Send {
         self.as_channel().request_dyn(msg)
     }
 
