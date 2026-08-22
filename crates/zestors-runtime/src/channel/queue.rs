@@ -111,8 +111,11 @@ impl Queue for dyn IsDynQueue {
 }
 
 impl dyn IsDynQueue {
-    pub(super) fn try_push_msg<M: Message>(&self, msg: M) -> Result<M::Receipt, NotAccepted<M>> {
-        let (receipt, resolver) = <M::Receipt as Receipt<M::Outcome>>::new();
+    pub(super) fn try_push_msg<M: Message>(
+        &self,
+        msg: M,
+    ) -> Result<MessageReceipt<M>, NotAccepted<M>> {
+        let (resolver, receipt) = <M::Mode as Mode<M::Outcome>>::new();
 
         let envelope = BoxedEnvelope::new::<M>(Envelope::new(msg, resolver));
 

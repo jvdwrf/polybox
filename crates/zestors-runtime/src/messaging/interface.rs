@@ -7,7 +7,7 @@ use type_sets::{Set, TypeSet};
 ///
 /// It defines conversion methods to and from a boxed envelope, which is used for dynamic dispatch of messages.
 pub trait Interface:
-    Message<Receipt = ()> + TryIntoEnvelope<Self> + FromEnvelope<Self> + Sized + Send + 'static
+    Message<Mode = FireAndForget> + TryIntoEnvelope<Self> + FromEnvelope<Self> + Sized + Send + 'static
 {
     /// The [set](TypeSet) of messages that this interface can handle.
     type Set: TypeSet;

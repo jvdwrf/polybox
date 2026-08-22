@@ -132,8 +132,8 @@ fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
 
 
         impl #msg_path::Message for #enum_name {
-            type Receipt = ();
             type Outcome = ();
+            type Mode = #msg_path::FireAndForget;
         }
 
         // impl #polybox_path::type_sets::TypeSet for #enum_name {
@@ -258,7 +258,7 @@ fn _derive_message(input: TokenStream, base: &str) -> TokenStream {
         quote!(
             impl #impl_generics #base_path::messaging::Message for #name #ty_generics #where_clause
             {
-                type Receipt = #base_path::messaging::oneshot::Rx<#reply_type>;
+                type Mode = #base_path::messaging::Request;
                 type Outcome = #reply_type;
             }
         )
@@ -266,7 +266,7 @@ fn _derive_message(input: TokenStream, base: &str) -> TokenStream {
         quote!(
             impl #impl_generics #base_path::messaging::Message for #name #ty_generics #where_clause
             {
-                type Receipt = ();
+                type Mode = #base_path::messaging::FireAndForget;
                 type Outcome = ();
             }
         )

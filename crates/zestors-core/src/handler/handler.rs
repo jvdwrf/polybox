@@ -120,7 +120,7 @@ impl<H: Handler> Handle<Infallible> for H {
     }
 }
 
-pub trait HandledBy<H: Handler>: Message<Receipt = ()> {
+pub trait HandledBy<H: Handler>: Message<Mode = FireAndForget, Outcome = ()> {
     fn handle(
         self,
         state: &mut HandlerState<H>,
@@ -131,13 +131,13 @@ pub trait HandledBy<H: Handler>: Message<Receipt = ()> {
 impl<H, M> HandledBy<H> for M
 where
     H: Handle<M>,
-    M: Message<Receipt = (), Outcome: Default>,
+    M: Message<Mode = FireAndForget, Outcome = ()>,
 {
     fn handle(
         self,
         state: &mut HandlerState<H>,
         actor: &mut H,
     ) -> impl Future<Output = Result<(), H::Error>> + Send {
-        actor.handle(state, Envelope::new(self, Default::default()))
+        actor.handle(state, Envelope::new(self, ()))
     }
 }

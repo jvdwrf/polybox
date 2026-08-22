@@ -1,76 +1,116 @@
 use crate::_prelude::*;
 use std::{convert::Infallible, fmt::Debug};
 
-/// Defines how a message is sent and whether its processing produces an outcome.
+/// Defines how a message is sent and what kind of reply is expected.
 ///
-/// There are two kinds of messages:
+/// There are two [modes](`Mode`) for the message that can be specified:
+/// 1. [`FireAndForget`] mode: The sender does not expect a reply. Therefore
+/// the [`Receipt`] == [`Message::Outcome`].
+/// 2. [`Request`] mode: The sender expects a reply. Therefore the [`Receipt`]
+/// == [`Rx<Self::Outcome>`](Rx), which resolves to the [`Message::Outcome`].
 ///
-/// - **Fire-and-forget:** The sender does not expect an outcome. Its [`Receipt`]
-///   and [`Outcome`] are both `()`.
-/// - **Request:** The sender expects an outcome. Its [`Receipt`] is [`Rx<R>`],
-///   which receives an outcome of type `R`.
+/// In either case, the outcome is the value that is received when the receipt is resolved.
+///
+/// Derive this trait using the [`derive@Message`] macro.
 pub trait Message: Send + 'static + Sized {
-    /// The value produced by the receiver when the receipt is resolved.
+    /// The value produced when the message is resolved.
     type Outcome: Send + 'static;
 
-    /// A handle held by the sender to observe the message's outcome.
-    type Receipt: Receipt<Self::Outcome>;
+    /// The [`Mode`] of the message.
+    type Mode: Mode<Self::Outcome>;
 }
 
-pub type Resolver<M> = <<M as Message>::Receipt as Receipt<<M as Message>::Outcome>>::Resolver;
+/// Defines mode of a [`Message`], either [`FireAndForget`] or [`Request`].
+pub trait Mode<O>: sealed::Sealed {
+    /// The receipt associated with the output of a message.
+    type Receipt: Receipt<O>;
+
+    /// The resolver associated with the output of a message.
+    type Resolver: Debug + Send + 'static;
+
+    /// Creates a new resolver/receipt pair.
+    fn new() -> (Self::Resolver, Self::Receipt);
+}
 
 /// A handle for observing the outcome of a [`Message`].
 ///
-/// This trait is sealed and cannot be implemented outside of this crate.
-/// It is implemented for [`Rx<T>`] and `()`, the receipt types for request
-/// and fire-and-forget messages, respectively.
-pub trait Receipt<O>: Send + Sized + sealed::Sealed {
-    type Resolver: Debug + Send + 'static;
+/// A receipt is held by the sender and can be used to wait for the receiver
+/// to resolve the message. This trait is sealed and cannot be implemented
+/// outside of this crate.
+pub trait Receipt<O>: Debug + Send + Sized {
+    /// Waits for the message's outcome.
+    fn wait(self) -> impl Future<Output = Result<O, RxError>> + Send;
 
-    /// Waits for the message's receipt to resolve.
-    fn resolved(self) -> impl Future<Output = Result<O, RxError>> + Send;
-
-    /// Waits for the message's receipt to resolve, blocking the current thread.
-    fn resolved_blocking(self) -> Result<O, RxError> {
-        futures::executor::block_on(self.resolved())
+    /// Waits for the message's outcome, blocking the current thread.
+    fn wait_blocking(self) -> Result<O, RxError> {
+        futures::executor::block_on(self.wait())
     }
-
-    fn new() -> (Self, Self::Resolver);
 }
 
-impl<O: Default> Receipt<O> for () {
+/// The resolver associated with a [`Message`].
+pub type MessageResolver<M> = <<M as Message>::Mode as Mode<<M as Message>::Outcome>>::Resolver;
+
+/// The [`Receipt`] associated with a [`Message`].
+pub type MessageReceipt<M> = <<M as Message>::Mode as Mode<<M as Message>::Outcome>>::Receipt;
+
+/// A message mode where the sender does not expect an outcome.
+///
+/// The receipt and resolver are both `()`, and no value is sent between
+/// the sender and receiver.
+pub struct FireAndForget;
+
+impl<O: Default> Mode<O> for FireAndForget {
+    type Receipt = ();
     type Resolver = ();
 
-    async fn resolved(self) -> Result<O, RxError> {
-        Ok(O::default())
-    }
-
-    fn new() -> (Self, Self::Resolver) {
+    fn new() -> (Self::Resolver, Self::Receipt) {
         ((), ())
     }
 }
 
-impl<O: Send + 'static> Receipt<O> for Rx<O> {
-    type Resolver = Tx<O>;
-
-    async fn resolved(self) -> Result<O, RxError> {
-        self.await
-    }
-
-    fn new() -> (Self, Self::Resolver) {
-        let (tx, rx) = new_request();
-        (rx, tx)
+impl<O: Default> Receipt<O> for () {
+    async fn wait(self) -> Result<O, RxError> {
+        Ok(O::default())
     }
 }
 
+/// A message mode where the sender waits for an outcome.
+///
+/// The receiver is given a [`Tx<O>`] resolver and the sender receives
+/// an [`Rx<O>`] receipt.
+pub struct Request;
+
+impl<O: Send + 'static> Mode<O> for Request {
+    type Receipt = Rx<O>;
+    type Resolver = Tx<O>;
+
+    fn new() -> (Self::Resolver, Self::Receipt) {
+        let (tx, rx) = new_request();
+
+        (tx, rx)
+    }
+}
+
+impl<O: Send + 'static> Receipt<O> for Rx<O> {
+    async fn wait(self) -> Result<O, RxError> {
+        self.await
+    }
+}
+
+/// A message together with the resolver used by the receiver to produce
+/// its outcome.
 #[derive(Debug)]
 pub struct Envelope<M: Message> {
+    /// The message
     pub msg: M,
-    pub handle: Resolver<M>,
+
+    /// The resolver handle used by the receiver to resolve the message's outcome.
+    pub handle: MessageResolver<M>,
 }
 
 impl<M: Message> Envelope<M> {
-    pub fn new(msg: M, handle: Resolver<M>) -> Self {
+    /// Creates an envelope containing a message and its resolver.
+    pub fn new(msg: M, handle: MessageResolver<M>) -> Self {
         Self { msg, handle }
     }
 }
@@ -78,8 +118,8 @@ impl<M: Message> Envelope<M> {
 pub(crate) mod sealed {
     pub trait Sealed {}
 
-    impl<T> Sealed for super::Rx<T> where T: Send + 'static {}
-    impl Sealed for () {}
+    impl Sealed for super::FireAndForget {}
+    impl Sealed for super::Request {}
 }
 
 //------------------------------------------------------------------------------------------------
@@ -92,8 +132,8 @@ macro_rules! implement_message_for_base_types {
     ),*) => {
         $(
             impl Message for $ty {
+                type Mode = FireAndForget;
                 type Outcome = ();
-                type Receipt = ();
             }
         )*
     };
@@ -114,8 +154,8 @@ macro_rules! implement_message_for_wrappers {
             impl<M> Message for $wrapper
                 where M: Send + 'static + $($where +)*
             {
+                type Mode = FireAndForget;
                 type Outcome = ();
-                type Receipt = ();
             }
         )*
     };
@@ -136,8 +176,8 @@ macro_rules! implement_message_kind_and_message_for_tuples {
             where
                 $($id: Message + Send + 'static,)*
             {
+                type Mode = FireAndForget;
                 type Outcome = ();
-                type Receipt = ();
             }
         )*
     };
