@@ -97,24 +97,6 @@ impl<O: Send + 'static> Receipt<O> for Rx<O> {
     }
 }
 
-/// A message together with the resolver used by the receiver to produce
-/// its outcome.
-#[derive(Debug)]
-pub struct Envelope<M: Message> {
-    /// The message
-    pub msg: M,
-
-    /// The resolver handle used by the receiver to resolve the message's outcome.
-    pub handle: MessageResolver<M>,
-}
-
-impl<M: Message> Envelope<M> {
-    /// Creates an envelope containing a message and its resolver.
-    pub fn new(msg: M, handle: MessageResolver<M>) -> Self {
-        Self { msg, handle }
-    }
-}
-
 pub(crate) mod sealed {
     pub trait Sealed {}
 

@@ -26,7 +26,7 @@ impl<S: TypeSet + 'static> ChannelKind for Set<S> {
 
 #[repr(transparent)]
 pub struct Channel<C: ChannelKind = Set!()> {
-    pub(super) inner: Arc<ChannelInner<dyn IsDynQueue>>,
+    pub(super) inner: Arc<ChannelInner<dyn Queue>>,
     _marker: PhantomData<fn() -> C>,
 }
 
@@ -48,14 +48,14 @@ impl<T: ChannelKind> Channel<T> {
     where
         T: Interface,
     {
-        let inner: Arc<ChannelInner<dyn IsDynQueue>> = Arc::new(ChannelInner {
+        let inner: Arc<ChannelInner<dyn Queue>> = Arc::new(ChannelInner {
             pid,
             msg_notifier: Notify::new(),
             msg_backpressure_limit: BACKPRESSURE_LIMIT,
             signal_queue: ConcurrentQueue::bounded(SIGNAL_QUEUE_CAPACITY),
             signal_notifier: Notify::new(),
             status_observer: SharedObservable::new(ActorStatus::Dead(Exit::Normal)),
-            msg_queue: ConcurrentQueue::<T>::new(MSG_QUEUE_CAPACITY),
+            msg_queue: ConcurrentQueue::<T>::bounded(MSG_QUEUE_CAPACITY),
             created_at: Instant::now(),
             spawns: Default::default(),
             exits: Default::default(),
@@ -82,6 +82,11 @@ impl<T: ChannelKind> Channel<T> {
 
         spawned_at.push(Instant::now());
         self.set_status(ActorStatus::Initializing);
+    }
+
+    #[expect(unused)]
+    pub(super) fn pop_dyn(&self) -> Result<DynEnvelope, PopError> {
+        self.inner.msg_queue.pop_dyn()
     }
 
     pub(super) fn register_exit(&self, reason: Result<(), ExitError>) {
@@ -139,25 +144,8 @@ impl<T: ChannelKind> Channel<T> {
     where
         T: Interface,
     {
-        unsafe { &*(&self.inner.msg_queue as *const dyn IsDynQueue as *const ConcurrentQueue<T>) }
+        unsafe { &*(&self.inner.msg_queue as *const dyn Queue as *const ConcurrentQueue<T>) }
     }
-
-    // fn update_status(&self, f: impl FnOnce(ActorStatus) -> Option<ActorStatus>) {
-    //     self.inner.status_observer.update_if(|status| {
-    //         let new_status = f(status.clone());
-
-    //         if let Some(new_status) = new_status {
-    //             *status = new_status;
-    //             true
-    //         } else {
-    //             false
-    //         }
-    //     });
-
-    //     if !self.status().accepts_messages() {
-    //         self.inner.msg_notifier.notify_waiters();
-    //     }
-    // }
 
     pub(super) fn backpressure(&self) -> &BackPressure {
         BackPressure::default()
@@ -400,10 +388,10 @@ where
         // Channel<I: Interface> always has a ConcurrentQueue<I> as its msg_queue,
         // This is currently not guaranteed by the type system.
         if let Some(queue) = self.raw_queue() {
-            let (resolver, receipt) = <M::Mode as Mode<M::Outcome>>::new();
-            let interface = I::from(Envelope::new(msg, resolver));
+            let (envelope, receipt) = Envelope::new_pair(msg);
+            let interface = I::from(envelope);
 
-            if let Err(_e) = queue.push_item(interface) {
+            if let Err(_e) = queue.push(interface) {
                 panic!("Queue was full or empty {}", std::any::type_name::<Self>());
             }
 

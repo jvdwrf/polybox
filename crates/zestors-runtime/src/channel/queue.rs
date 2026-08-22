@@ -2,84 +2,34 @@ use super::*;
 use std::any::{Any, TypeId};
 use type_sets::TypeSet;
 
-pub(crate) trait Queue: Send + 'static {
-    type Item;
-
-    fn new(capacity: usize) -> Self
-    where
-        Self: Sized;
-
+pub(super) trait Queue: Any + Send + Sync + 'static {
     fn len(&self) -> usize;
 
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
+    fn push_envelope_dyn(&self, msg: DynEnvelope) -> Result<(), NotAccepted<DynEnvelope>>;
 
-    fn pop_item(&self) -> Result<Self::Item, PopError>;
-
-    fn push_item(&self, msg: Self::Item) -> Result<(), TrySendError<Self::Item>>;
-}
-
-pub(crate) trait IsDynQueue: Any + Send + Sync + 'static {
-    fn len(&self) -> usize;
-
-    fn push_boxed_envelope_checked(
-        &self,
-        msg: BoxedEnvelope,
-    ) -> Result<(), NotAccepted<BoxedEnvelope>>;
-
-    fn pop_boxed_envelope(&self) -> Result<BoxedEnvelope, PopError>;
+    fn pop_dyn(&self) -> Result<DynEnvelope, PopError>;
 
     fn members(&self) -> &'static [TypeId];
 }
 
-impl<I: Send + 'static> Queue for ConcurrentQueue<I> {
-    type Item = I;
-
+impl<I: Interface> Queue for ConcurrentQueue<I> {
     fn len(&self) -> usize {
         self.len()
     }
 
-    fn new(capacity: usize) -> Self
-    where
-        Self: Sized,
-    {
-        ConcurrentQueue::bounded(capacity)
-    }
+    fn push_envelope_dyn(&self, msg: DynEnvelope) -> Result<(), NotAccepted<DynEnvelope>> {
+        let envelope = I::try_from_dyn_envelope(msg).map_err(|envelope| NotAccepted(envelope))?;
 
-    fn pop_item(&self) -> Result<Self::Item, PopError> {
-        self.pop()
-    }
-
-    fn push_item(&self, msg: Self::Item) -> Result<(), TrySendError<Self::Item>> {
-        self.push(msg).map_err(Into::into)
-    }
-}
-
-impl<I: Interface> IsDynQueue for ConcurrentQueue<I> {
-    fn len(&self) -> usize {
-        self.len()
-    }
-
-    fn push_boxed_envelope_checked(
-        &self,
-        msg: BoxedEnvelope,
-    ) -> Result<(), NotAccepted<BoxedEnvelope>> {
-        let envelope = msg
-            .try_into_interface::<I>()
-            .map_err(|envelope| NotAccepted(envelope))?;
-
-        self.push_item(envelope).map_err(|e| match e {
-            TrySendError::Closed(_) => unreachable!("Should never be closed"),
-            TrySendError::Full(_) => {
+        self.push(envelope).map_err(|e| match e {
+            PushError::Closed(_) => unreachable!("Should never be closed"),
+            PushError::Full(_) => {
                 panic!("Queue is full: {:?}", std::any::type_name::<Self>());
             }
         })
     }
 
-    fn pop_boxed_envelope(&self) -> Result<BoxedEnvelope, PopError> {
-        self.pop_item()
-            .map(|interface| interface.into_boxed_envelope())
+    fn pop_dyn(&self) -> Result<DynEnvelope, PopError> {
+        self.pop().map(|interface| interface.into_dyn_envelope())
     }
 
     fn members(&self) -> &'static [TypeId] {
@@ -87,47 +37,22 @@ impl<I: Interface> IsDynQueue for ConcurrentQueue<I> {
     }
 }
 
-impl Queue for dyn IsDynQueue {
-    type Item = BoxedEnvelope;
-
-    fn len(&self) -> usize {
-        <dyn IsDynQueue as IsDynQueue>::len(self)
-    }
-
-    fn pop_item(&self) -> Result<Self::Item, PopError> {
-        <dyn IsDynQueue as IsDynQueue>::pop_boxed_envelope(self)
-    }
-
-    fn push_item(&self, msg: Self::Item) -> Result<(), TrySendError<Self::Item>> {
-        if let Err(NotAccepted(_msg)) = self.push_boxed_envelope_checked(msg) {
-            panic!(
-                "Message type not accepted by channel {:?}",
-                std::any::type_name::<Self>()
-            );
-        }
-
-        Ok(())
-    }
-}
-
-impl dyn IsDynQueue {
+impl dyn Queue {
     pub(super) fn try_push_msg<M: Message>(
         &self,
         msg: M,
     ) -> Result<MessageReceipt<M>, NotAccepted<M>> {
-        let (resolver, receipt) = <M::Mode as Mode<M::Outcome>>::new();
+        let (envelope, receipt) = DynEnvelope::new_pair::<M>(msg);
 
-        let envelope = BoxedEnvelope::new::<M>(Envelope::new(msg, resolver));
-
-        if let Err(NotAccepted(envelope)) =
-            <dyn IsDynQueue as IsDynQueue>::push_boxed_envelope_checked(self, envelope)
-        {
-            let envelope = envelope
-                .downcast::<M>()
-                .expect("Failed to convert envelope back");
-
-            return Err(NotAccepted(envelope.msg));
-        }
+        self.push_envelope_dyn(envelope)
+            .map_err(|NotAccepted(envelope)| {
+                NotAccepted(
+                    envelope
+                        .downcast::<M>()
+                        .expect("Should be the same type")
+                        .msg,
+                )
+            })?;
 
         Ok(receipt)
     }

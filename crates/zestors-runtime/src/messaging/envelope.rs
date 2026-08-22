@@ -1,34 +1,49 @@
 use super::*;
 use std::any::Any;
 
-/// Holds a [`MessageSpecifier::Envelope`]
+/// A message together with the resolver used by the receiver to produce
+/// its outcome.
 #[derive(Debug)]
-pub struct BoxedEnvelope(Box<dyn Any + Send>);
+pub struct Envelope<M: Message> {
+    /// The message
+    pub msg: M,
 
-impl BoxedEnvelope {
-    pub fn new<T>(envelope: Envelope<T>) -> Self
-    where
-        T: Message,
-        Envelope<T>: Send + 'static,
-    {
+    /// The resolver handle used by the receiver to resolve the message's outcome.
+    pub handle: MessageResolver<M>,
+}
+
+impl<M: Message> Envelope<M> {
+    /// Creates an envelope containing a message and its resolver.
+    pub fn new(msg: M, handle: MessageResolver<M>) -> Self {
+        Self { msg, handle }
+    }
+
+    pub(crate) fn new_pair(msg: M) -> (Self, MessageReceipt<M>) {
+        let (resolver, receipt) = <M::Mode as Mode<M::Outcome>>::new();
+        (Self::new(msg, resolver), receipt)
+    }
+}
+
+/// Hold the [`Envelope`] of a message in boxed form.
+#[derive(Debug)]
+pub struct DynEnvelope(Box<dyn Any + Send>);
+
+impl DynEnvelope {
+    /// Create a new `DynEnvelope` from an [`Envelope`].
+    pub fn new<M: Message>(envelope: Envelope<M>) -> Self {
         Self(Box::new(envelope))
     }
 
-    pub fn downcast<T>(self) -> Result<Envelope<T>, Self>
-    where
-        T: Message,
-        Envelope<T>: 'static,
-    {
+    pub(crate) fn new_pair<M: Message>(msg: M) -> (Self, MessageReceipt<M>) {
+        let (envelope, receipt) = Envelope::new_pair(msg);
+        (Self::new(envelope), receipt)
+    }
+
+    /// Downcast the to a specific [`Envelope`].
+    pub fn downcast<M: Message>(self) -> Result<Envelope<M>, Self> {
         match self.0.downcast() {
             Ok(cast) => Ok(*cast),
             Err(boxed) => Err(Self(boxed)),
         }
-    }
-
-    pub fn try_into_interface<T>(self) -> Result<T, Self>
-    where
-        T: Interface,
-    {
-        T::try_from_boxed_envelope(self)
     }
 }

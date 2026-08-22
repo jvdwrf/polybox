@@ -1,5 +1,10 @@
 use std::{any::TypeId, convert::Infallible, fmt::Debug, marker::PhantomData};
 
+/// A set of types.
+///
+/// Examples of valid sets include:
+/// - `Set<()>` - an empty set
+/// - `Set<(A, B, C)>` - a set containing types A, B, and C
 pub struct Set<T>(PhantomData<fn() -> T>);
 
 impl<T> TypeSet for Set<T>
@@ -54,13 +59,21 @@ pub trait SupersetOf<S: ?Sized> {}
 
 #[diagnostic::do_not_recommend]
 impl<S1: ?Sized, S2: ?Sized> SupersetOf<S2> for S1 where S2: SubsetOf<S1> {}
+
+/// The main trait for representing a set of types.
+///
+/// This is implemented for tuples up to 24 elements, and [`Set`]s of tuples.
 pub trait TypeSet {
+    /// The underlying set type, which is a private marker-trait.
     type Set: ?Sized;
+
+    /// Returns a static slice of [`TypeId`]s representing the members of the set.
     fn members() -> &'static [TypeId]
     where
         Self: 'static;
 }
 
+/// Indicates that two sets are equal, i.e., they contain the same members.
 #[diagnostic::on_unimplemented(
     message = "`{Self}` and `{R}` do not represent the same set",
     label = "the sets contain different members",

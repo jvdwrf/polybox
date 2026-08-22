@@ -13,7 +13,8 @@ pub trait ActorRef {
     ) -> impl Future<Output = Result<MessageReceipt<M>, SendCheckedError<M>>> + Send;
 
     /// Same as [`Sends::try_send`], but checks whether the message type is accepted by the channel.
-    fn try_send_dyn<M: Message>(&self, msg: M) -> Result<MessageReceipt<M>, TrySendCheckedError<M>>;
+    fn try_send_dyn<M: Message>(&self, msg: M)
+    -> Result<MessageReceipt<M>, TrySendCheckedError<M>>;
 
     /// Same as [`Sends::send_now`], but checks whether the message type is accepted by the channel.
     fn send_now_dyn<M: Message>(&self, msg: M) -> Result<MessageReceipt<M>, SendCheckedError<M>>;
@@ -74,14 +75,6 @@ pub trait ActorRef {
 
     fn signal_resume(&self);
 
-    // fn get_debug_state(
-    //     &self,
-    // ) -> impl Future<Output = Result<DebugState, RequestCheckedError<GetDebug>>> + Send;
-
-    // fn get_children(
-    //     &self,
-    // ) -> impl Future<Output = Result<Vec<ChildDescription>, RequestCheckedError<GetChildren>>> + Send;
-
     fn ping(&self) -> Rx<()>;
 
     fn address(&self) -> &Address<Self::ChannelKind>;
@@ -114,7 +107,10 @@ impl<T: AsActorRef> ActorRef for T {
         self.as_channel().send_dyn(msg)
     }
 
-    fn try_send_dyn<M: Message>(&self, msg: M) -> Result<MessageReceipt<M>, TrySendCheckedError<M>> {
+    fn try_send_dyn<M: Message>(
+        &self,
+        msg: M,
+    ) -> Result<MessageReceipt<M>, TrySendCheckedError<M>> {
         self.as_channel().try_send_dyn(msg)
     }
 

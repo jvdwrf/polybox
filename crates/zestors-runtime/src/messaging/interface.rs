@@ -7,32 +7,27 @@ use type_sets::{Set, TypeSet};
 ///
 /// It defines conversion methods to and from a boxed envelope, which is used for dynamic dispatch of messages.
 pub trait Interface:
-    Message<Mode = FireAndForget, Outcome = ()>
-    + TryInto<Envelope<Self>>
-    + From<Envelope<Self>>
-    + Sized
-    + Send
-    + 'static
+    Message<Mode = FireAndForget, Outcome = ()> + TryInto<Envelope<Self>> + From<Envelope<Self>>
 {
     /// The [set](TypeSet) of messages that this interface can handle.
     type Set: TypeSet;
 
     /// Attempt to convert a boxed envelope into this interface by downcasting.
-    fn try_from_boxed_envelope(envelope: BoxedEnvelope) -> Result<Self, BoxedEnvelope>;
+    fn try_from_dyn_envelope(envelope: DynEnvelope) -> Result<Self, DynEnvelope>;
 
     /// Convert the inner envelope of this interface into a boxed envelope.
-    fn into_boxed_envelope(self) -> BoxedEnvelope;
+    fn into_dyn_envelope(self) -> DynEnvelope;
 }
 
 impl Interface for () {
     type Set = Set!();
 
-    fn try_from_boxed_envelope(envelope: BoxedEnvelope) -> Result<Self, BoxedEnvelope> {
+    fn try_from_dyn_envelope(envelope: DynEnvelope) -> Result<Self, DynEnvelope> {
         envelope.downcast::<()>().map(|env| env.msg)
     }
 
-    fn into_boxed_envelope(self) -> BoxedEnvelope {
-        BoxedEnvelope::new::<()>(Envelope::new(self, ()))
+    fn into_dyn_envelope(self) -> DynEnvelope {
+        DynEnvelope::new::<()>(Envelope::new(self, ()))
     }
 }
 
@@ -53,11 +48,11 @@ impl TryInto<Envelope<()>> for () {
 impl Interface for Infallible {
     type Set = Set!();
 
-    fn try_from_boxed_envelope(envelope: BoxedEnvelope) -> Result<Self, BoxedEnvelope> {
+    fn try_from_dyn_envelope(envelope: DynEnvelope) -> Result<Self, DynEnvelope> {
         Err(envelope)
     }
 
-    fn into_boxed_envelope(self) -> BoxedEnvelope {
+    fn into_dyn_envelope(self) -> DynEnvelope {
         unreachable!()
     }
 }
