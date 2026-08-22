@@ -1,5 +1,6 @@
 use futures::{Future, FutureExt};
 use std::{
+    fmt::Debug,
     pin::Pin,
     task::{Context, Poll},
 };
@@ -21,7 +22,6 @@ pub fn new_request<T>() -> (Tx<T>, Rx<T>) {
 /// The transmitter part of a request, created with [`new_request`].
 ///
 /// This implements [`MessageDerive<M>`] to be used with the [`derive@Message`] derive macro.
-#[derive(Debug)]
 pub struct Tx<M>(oneshot::Sender<M>);
 
 impl<M> Tx<M> {
@@ -41,13 +41,18 @@ impl<M> Tx<M> {
     }
 }
 
+impl<M> Debug for Tx<M> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Tx").finish()
+    }
+}
+
 //  Rx
 //------------------------------------------------------------------------------------------------
 
 /// The receiver part of a request, created with [`new_request`].
 ///
 /// This implements [`MessageDerive<M>`] to be used with the [`derive@Message`] derive macro.
-#[derive(Debug)]
 #[must_use = "Rx should be awaited to receive the message"]
 pub struct Rx<M>(oneshot::Receiver<M>);
 
@@ -75,6 +80,12 @@ impl<M> Future for Rx<M> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.0.poll_unpin(cx).map_err(|e| e.into())
+    }
+}
+
+impl<M> Debug for Rx<M> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Rx").finish()
     }
 }
 

@@ -112,8 +112,9 @@ impl Queue for dyn IsDynQueue {
 
 impl dyn IsDynQueue {
     pub(super) fn try_push_msg<M: Message>(&self, msg: M) -> Result<M::Receipt, NotAccepted<M>> {
-        let (envelope, output) = <M as MessageExt>::build_envelope(msg);
-        let envelope = BoxedEnvelope::new::<M>(envelope);
+        let (receipt, resolver) = <M::Receipt as Receipt<M::Outcome>>::new();
+
+        let envelope = BoxedEnvelope::new::<M>(Envelope::new(msg, resolver));
 
         if let Err(NotAccepted(envelope)) =
             <dyn IsDynQueue as IsDynQueue>::push_boxed_envelope_checked(self, envelope)
@@ -122,9 +123,9 @@ impl dyn IsDynQueue {
                 .downcast::<M>()
                 .expect("Failed to convert envelope back");
 
-            return Err(NotAccepted(M::destroy_envelope(envelope)));
+            return Err(NotAccepted(envelope.msg));
         }
 
-        Ok(output)
+        Ok(receipt)
     }
 }

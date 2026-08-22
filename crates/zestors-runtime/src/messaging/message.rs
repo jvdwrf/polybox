@@ -1,5 +1,5 @@
 use crate::_prelude::*;
-use std::convert::Infallible;
+use std::{convert::Infallible, fmt::Debug};
 
 /// Defines how a message is sent and whether its processing produces an outcome.
 ///
@@ -10,108 +10,70 @@ use std::convert::Infallible;
 /// - **Request:** The sender expects an outcome. Its [`Receipt`] is [`Rx<R>`],
 ///   which receives an outcome of type `R`.
 pub trait Message: Send + 'static + Sized {
-    /// A handle held by the sender to observe the message's outcome.
-    type Receipt: Receipt<Self>;
-
-    /// A capability held by the receiver to produce the message's outcome.
-    type Resolver: Send + 'static;
-
     /// The value produced by the receiver when the receipt is resolved.
     type Outcome: Send + 'static;
+
+    /// A handle held by the sender to observe the message's outcome.
+    type Receipt: Receipt<Self::Outcome>;
 }
+
+pub type Resolver<M> = <<M as Message>::Receipt as Receipt<<M as Message>::Outcome>>::Resolver;
 
 /// A handle for observing the outcome of a [`Message`].
 ///
 /// This trait is sealed and cannot be implemented outside of this crate.
 /// It is implemented for [`Rx<T>`] and `()`, the receipt types for request
 /// and fire-and-forget messages, respectively.
-pub trait Receipt<M: Message>: Send + Sized + sealed::Sealed {
+pub trait Receipt<O>: Send + Sized + sealed::Sealed {
+    type Resolver: Debug + Send + 'static;
+
     /// Waits for the message's receipt to resolve.
-    fn resolve(self) -> impl Future<Output = Result<M::Outcome, RxError>> + Send;
+    fn resolved(self) -> impl Future<Output = Result<O, RxError>> + Send;
 
     /// Waits for the message's receipt to resolve, blocking the current thread.
-    fn resolve_blocking(self) -> Result<M::Outcome, RxError> {
-        futures::executor::block_on(self.resolve())
+    fn resolved_blocking(self) -> Result<O, RxError> {
+        futures::executor::block_on(self.resolved())
     }
 
-    /// Converts a message into its envelope and receipt.
-    fn into_envelope(msg: M) -> (Envelope<M>, Self);
-
-    /// Extracts the message from its envelope.
-    fn from_envelope(envelope: Envelope<M>) -> M;
+    fn new() -> (Self, Self::Resolver);
 }
 
-impl<M> Receipt<M> for ()
-where
-    M: Message<Resolver: Default, Outcome: Default>,
-{
-    async fn resolve(self) -> Result<M::Outcome, RxError> {
-        Ok(Default::default())
+impl<O: Default> Receipt<O> for () {
+    type Resolver = ();
+
+    async fn resolved(self) -> Result<O, RxError> {
+        Ok(O::default())
     }
 
-    fn into_envelope(message: M) -> (Envelope<M>, Self) {
-        (
-            Envelope {
-                msg: message,
-                handle: Default::default(),
-            },
-            (),
-        )
-    }
-
-    fn from_envelope(envelope: Envelope<M>) -> M {
-        envelope.msg
+    fn new() -> (Self, Self::Resolver) {
+        ((), ())
     }
 }
 
-impl<M, O> Receipt<M> for Rx<O>
-where
-    O: Send + 'static,
-    M: Message<Resolver = Tx<O>, Outcome = O>,
-{
-    async fn resolve(self) -> Result<O, RxError> {
+impl<O: Send + 'static> Receipt<O> for Rx<O> {
+    type Resolver = Tx<O>;
+
+    async fn resolved(self) -> Result<O, RxError> {
         self.await
     }
 
-    fn into_envelope(msg: M) -> (Envelope<M>, Self) {
+    fn new() -> (Self, Self::Resolver) {
         let (tx, rx) = new_request();
-        (Envelope::new(msg, tx), rx)
-    }
-
-    fn from_envelope(envelope: Envelope<M>) -> M {
-        envelope.msg
+        (rx, tx)
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
+#[derive(Debug)]
 pub struct Envelope<M: Message> {
     pub msg: M,
-    pub handle: M::Resolver,
+    pub handle: Resolver<M>,
 }
 
 impl<M: Message> Envelope<M> {
-    pub fn new(msg: M, handle: M::Resolver) -> Self {
+    pub fn new(msg: M, handle: Resolver<M>) -> Self {
         Self { msg, handle }
     }
 }
-
-/// A trait that extends [`Message`] with some helper methods.
-pub trait MessageExt: Message {
-    fn build_envelope(self) -> (Envelope<Self>, Self::Receipt)
-    where
-        Self: Sized,
-    {
-        <Self::Receipt as Receipt<Self>>::into_envelope(self)
-    }
-
-    fn destroy_envelope(envelope: Envelope<Self>) -> Self
-    where
-        Self: Sized,
-    {
-        <Self::Receipt as Receipt<Self>>::from_envelope(envelope)
-    }
-}
-impl<I> MessageExt for I where I: Message {}
 
 pub(crate) mod sealed {
     pub trait Sealed {}
@@ -132,7 +94,6 @@ macro_rules! implement_message_for_base_types {
             impl Message for $ty {
                 type Outcome = ();
                 type Receipt = ();
-                type Resolver = ();
             }
         )*
     };
@@ -155,7 +116,6 @@ macro_rules! implement_message_for_wrappers {
             {
                 type Outcome = ();
                 type Receipt = ();
-                type Resolver = ();
             }
         )*
     };
@@ -178,7 +138,6 @@ macro_rules! implement_message_kind_and_message_for_tuples {
             {
                 type Outcome = ();
                 type Receipt = ();
-                type Resolver = ();
             }
         )*
     };

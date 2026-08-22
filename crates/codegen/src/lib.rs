@@ -134,7 +134,6 @@ fn derive_interface(input: TokenStream, base: &str) -> TokenStream {
         impl #msg_path::Message for #enum_name {
             type Receipt = ();
             type Outcome = ();
-            type Resolver = ();
         }
 
         // impl #polybox_path::type_sets::TypeSet for #enum_name {
@@ -261,7 +260,6 @@ fn _derive_message(input: TokenStream, base: &str) -> TokenStream {
             {
                 type Receipt = #base_path::messaging::oneshot::Rx<#reply_type>;
                 type Outcome = #reply_type;
-                type Resolver = #base_path::messaging::oneshot::Tx<#reply_type>;
             }
         )
     } else {
@@ -270,7 +268,6 @@ fn _derive_message(input: TokenStream, base: &str) -> TokenStream {
             {
                 type Receipt = ();
                 type Outcome = ();
-                type Resolver = ();
             }
         )
     };

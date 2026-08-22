@@ -400,14 +400,14 @@ where
         // Channel<I: Interface> always has a ConcurrentQueue<I> as its msg_queue,
         // This is currently not guaranteed by the type system.
         if let Some(queue) = self.raw_queue() {
-            let (envelope, output) = <M as MessageExt>::build_envelope(msg);
-            let interface = <I as FromEnvelope<M>>::from_envelope(envelope);
+            let (receipt, resolver) = <M::Receipt as Receipt<M::Outcome>>::new();
+            let interface = I::from_envelope(Envelope::new(msg, resolver));
 
             if let Err(_e) = queue.push_item(interface) {
                 panic!("Queue was full or empty {}", std::any::type_name::<Self>());
             }
 
-            output
+            receipt
         } else {
             match self.force_send_dyn(msg) {
                 Ok(output) => output,
@@ -459,7 +459,7 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
     }
 
     async fn request_dyn<M: Message>(&self, msg: M) -> Result<M::Outcome, RequestCheckedError<M>> {
-        Ok(self.send_dyn(msg).await?.resolve().await?)
+        Ok(self.send_dyn(msg).await?.resolved().await?)
     }
 
     fn pid(&self) -> &Pid {
