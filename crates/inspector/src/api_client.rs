@@ -51,7 +51,7 @@ impl Client {
         pids: Vec<Pid>,
     ) -> rootcause::Result<Vec<Option<ChannelSnapshot>>> {
         let url = self.base_url.join("/snapshots")?;
-        let response = self.client.post(url).json(&pids).send().await?;
+        let response = self.client.get(url).json(&pids).send().await?;
 
         match response.status() {
             StatusCode::OK => {
@@ -67,7 +67,7 @@ impl Client {
         pids: Vec<Pid>,
     ) -> rootcause::Result<Vec<Option<DebugInfo>>> {
         let url = self.base_url.join("/debug_info")?;
-        let response = self.client.post(url).json(&pids).send().await?;
+        let response = self.client.get(url).json(&pids).send().await?;
 
         match response.status() {
             StatusCode::OK => {

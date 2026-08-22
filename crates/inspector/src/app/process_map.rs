@@ -32,6 +32,16 @@ impl ProcessMap {
         }
     }
 
+    pub fn add_snapshots(&mut self, snapshots: Vec<Option<ChannelSnapshot>>) {
+        for snapshot in snapshots {
+            if let Some(snapshot) = snapshot {
+                if let Some(entry) = self.map.get_mut(&snapshot.pid) {
+                    entry.snapshot = Some(snapshot);
+                }
+            }
+        }
+    }
+
     pub fn tree(&self) -> Vec<ProcessTree<'_>> {
         let now = Instant::now();
 

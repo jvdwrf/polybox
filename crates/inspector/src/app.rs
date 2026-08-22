@@ -43,6 +43,17 @@ impl MyApp {
                         eprintln!("Error updating processes: {:#?}", e);
                     }
                 },
+                ApiMessage::NewChannelSnapshots(channel_snapshots) => match channel_snapshots {
+                    Ok(snapshots) => {
+                        self.error_message = None;
+                        self.map.add_snapshots(snapshots);
+                    }
+                    Err(e) => {
+                        self.error_message =
+                            Some(format!("Error updating channel snapshots: {:#?}", e));
+                        eprintln!("Error updating channel snapshots: {:#?}", e);
+                    }
+                },
             }
         }
     }
@@ -75,8 +86,16 @@ impl eframe::App for MyApp {
             egui::ScrollArea::both()
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
+                    let ctx = ui.ctx().clone();
                     for tree in &tree {
-                        SupervisionNodeWidget::new(tree, true).show(ui);
+                        SupervisionNodeWidget::new(tree, true, &mut |pid| {
+                            crate::api::update_channel_snapshots(
+                                self.sender.clone(),
+                                vec![pid.clone()],
+                                ctx.clone(),
+                            );
+                        })
+                        .show(ui);
                         ui.add_space(4.0);
                     }
                 });

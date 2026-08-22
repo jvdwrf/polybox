@@ -2,19 +2,32 @@ use super::debug_card::render_debug_card;
 use super::status_badge::render_actor_status_badge;
 use crate::{app::ProcessTree, theme::Theme, utils::format_duration};
 use egui::{CornerRadius, Frame, Margin, RichText, Stroke, Ui, collapsing_header::CollapsingState};
+use zestors::channel::Pid;
 
-pub struct SupervisionNodeWidget<'a> {
+pub struct SupervisionNodeWidget<'a, F>
+where
+    F: FnMut(&Pid),
+{
     tree: &'a ProcessTree<'a>,
     default_open: bool,
+    on_reload: &'a mut F,
 }
 
-impl<'a> SupervisionNodeWidget<'a> {
-    pub fn new(tree: &'a ProcessTree<'a>, default_open: bool) -> Self {
-        Self { tree, default_open }
+impl<'a, F> SupervisionNodeWidget<'a, F>
+where
+    F: FnMut(&Pid),
+{
+    pub fn new(tree: &'a ProcessTree<'a>, default_open: bool, on_reload: &'a mut F) -> Self {
+        Self {
+            tree,
+            default_open,
+            on_reload,
+        }
     }
 
-    pub fn show(self, ui: &mut Ui) {
+    pub fn show(mut self, ui: &mut Ui) {
         let process = self.tree.entry;
+
         let node_id = ui.make_persistent_id(("process", &process.pid));
 
         let is_recently_outdated = process.outdated_since.is_some();
@@ -47,15 +60,7 @@ impl<'a> SupervisionNodeWidget<'a> {
         let process = self.tree.entry;
 
         ui.horizontal(|ui| {
-            ui.label(
-                RichText::new("PID:")
-                    .small()
-                    .color(if is_recently_outdated {
-                        Theme::LABEL_MUTED
-                    } else {
-                        Theme::LABEL_MUTED
-                    }),
-            );
+            ui.label(RichText::new("PID:").small().color(Theme::LABEL_MUTED));
 
             ui.label(
                 RichText::new(&process.pid)
@@ -79,25 +84,40 @@ impl<'a> SupervisionNodeWidget<'a> {
         });
     }
 
-    fn render_body(&self, ui: &mut Ui) {
+    fn render_body(&mut self, ui: &mut Ui) {
         let process = self.tree.entry;
 
         // Process configuration
         self.render_config(ui);
 
         // Snapshot / Debug details
-        if process.snapshot.is_some() || process.debug.is_some() {
-            ui.add_space(8.0);
+        ui.add_space(8.0);
 
-            let details_id = ui.make_persistent_id(("process-details", &process.pid));
+        let details_id = ui.make_persistent_id(("process-details", &process.pid));
 
-            CollapsingState::load_with_default_open(ui.ctx(), details_id, false)
-                .show_header(ui, |ui| {
-                    ui.label(RichText::new("Details").strong().color(Theme::LABEL_MUTED));
-                })
-                .body(|ui| {
-                    self.render_details(ui);
-                });
+        let details_state = CollapsingState::load_with_default_open(ui.ctx(), details_id, false);
+
+        let is_open = details_state.is_open();
+
+        details_state
+            .show_header(ui, |ui| {
+                ui.label(RichText::new("Details").strong().color(Theme::LABEL_MUTED));
+
+                if is_open {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("↻").clicked() {
+                            (self.on_reload)(&process.pid);
+                        }
+                    });
+                }
+            })
+            .body(|ui| {
+                self.render_details(ui);
+            });
+
+        // Fetch whenever Details is open.
+        if is_open {
+            (self.on_reload)(&process.pid);
         }
 
         // Children
@@ -119,7 +139,8 @@ impl<'a> SupervisionNodeWidget<'a> {
 
                     ui.vertical(|ui| {
                         for child in &self.tree.children {
-                            SupervisionNodeWidget::new(child, false).show(ui);
+                            SupervisionNodeWidget::new(child, false, self.on_reload).show(ui);
+
                             ui.add_space(4.0);
                         }
                     });
@@ -170,10 +191,14 @@ impl<'a> SupervisionNodeWidget<'a> {
                     .color(Theme::LABEL_MUTED),
             );
 
-            // Render snapshot here.
-            //
-            // Replace this with your actual ChannelSnapshot rendering.
+            // Replace this with the actual ChannelSnapshot rendering.
             ui.label(format!("{snapshot:?}"));
+        } else {
+            ui.label(
+                RichText::new("No snapshot loaded")
+                    .italics()
+                    .color(Theme::LABEL_MUTED),
+            );
         }
 
         if let Some(debug) = &process.debug {
