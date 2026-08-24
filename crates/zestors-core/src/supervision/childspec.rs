@@ -148,15 +148,6 @@ mod tests {
 
     impl Handler for MyActor {
         type Interface = MyInterface;
-        type Error = Report;
-        type Exit = ();
-
-        async fn shut_down(
-            &mut self,
-            _address: &Address<Self::Interface>,
-        ) -> Result<Self::Exit, Self::Error> {
-            Ok(())
-        }
     }
 
     impl Handle<u32> for MyActor {
@@ -164,7 +155,7 @@ mod tests {
             &mut self,
             _state: &mut HandlerState<Self>,
             msg: Envelope<u32>,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), Report> {
             println!("Received message: {:?}", msg);
             Ok(())
         }

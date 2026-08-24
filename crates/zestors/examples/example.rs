@@ -45,7 +45,7 @@ async fn main() {
     child.address().signal_shutdown();
     child.watch_exit().await.unwrap();
 
-    test().await;
+    // test().await;
 }
 
 #[derive(Debug)]
@@ -76,17 +76,8 @@ struct IntervalTick;
 
 impl Handler for MyActor {
     type Interface = MyInterface;
-    type Error = Report;
-    type Exit = u32;
 
-    async fn shut_down(
-        &mut self,
-        _address: &Address<Self::Interface>,
-    ) -> Result<Self::Exit, Self::Error> {
-        Ok(self.nr)
-    }
-
-    async fn schedule_next(&mut self) -> Result<impl HandledBy<Self>, Self::Error> {
+    async fn schedule_next(&mut self) -> Result<impl HandledBy<Self>, Report> {
         self.interval.tick().await;
         Ok(IntervalTick)
     }
@@ -97,7 +88,7 @@ impl Handle<u32> for MyActor {
         &mut self,
         state: &mut HandlerState<Self>,
         Envelope { msg, handle: () }: Envelope<u32>,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Report> {
         println!("Received message: {:?}", msg);
 
         self.nr += msg;
@@ -115,7 +106,7 @@ impl Handle<String> for MyActor {
         &mut self,
         _: &mut HandlerState<Self>,
         msg: Envelope<String>,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Report> {
         println!("Received message: {:?}", msg);
         Ok(())
     }
@@ -126,7 +117,7 @@ impl Handle<IntervalTick> for MyActor {
         &mut self,
         _: &mut HandlerState<Self>,
         _: Envelope<IntervalTick>,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Report> {
         println!("Interval tick: {}", self.nr);
         Ok(())
     }
@@ -137,7 +128,7 @@ impl Handle<GetHealth> for MyActor {
         &mut self,
         _: &mut HandlerState<Self>,
         Envelope { msg: _, handle }: Envelope<GetHealth>,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Report> {
         handle.send(Health::healthy().with_debug_repr(self)).ok();
         Ok(())
     }
@@ -148,22 +139,22 @@ impl Handle<GetChildren> for MyActor {
         &mut self,
         _: &mut HandlerState<Self>,
         Envelope { msg: _, handle }: Envelope<GetChildren>,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Report> {
         handle.send(vec![]).ok();
         Ok(())
     }
 }
 
-async fn test() {
-    let child = MyActor::new()
-        .map_actor_exit(|x| x.map(|x| x * 2))
-        .spawn(Pid::rand());
-    let address = child.address().clone();
+// async fn test() {
+//     let child = MyActor::new()
+//         // .map_actor_exit(|x| x.map(|x| x * 2))
+//         .spawn(Pid::rand());
+//     let address = child.address().clone();
 
-    address.send(5u32).await.unwrap();
-    child.send(15u32).await.unwrap();
-    child.send("Hello, world!".to_string()).await.unwrap();
-    child.signal_shutdown();
-    let exit_value = child.await.unwrap();
-    assert_eq!(exit_value, 20 * 2);
-}
+//     address.send(5u32).await.unwrap();
+//     child.send(15u32).await.unwrap();
+//     child.send("Hello, world!".to_string()).await.unwrap();
+//     child.signal_shutdown();
+//     let exit_value = child.await.unwrap();
+//     assert_eq!(exit_value, 20 * 2);
+// }

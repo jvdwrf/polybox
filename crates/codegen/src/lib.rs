@@ -199,7 +199,7 @@ pub fn derive_actor_interface(input: TokenStream) -> TokenStream {
         where
             T: #base_path::handler::Handler + #( #base_path::handler::Handle<#inner_types> + )*
         {
-            async fn handle_with(self, state: &mut #base_path::handler::HandlerState<T>, actor: &mut T) -> Result<(), T::Error> {
+            async fn handle_with(self, state: &mut #base_path::handler::HandlerState<T>, actor: &mut T) -> Result<(), Report> {
                 match self {
                     #(#handle_matches)*
                 }

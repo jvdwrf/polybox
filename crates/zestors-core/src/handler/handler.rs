@@ -18,24 +18,25 @@ fn test() {
 
 pub trait Handler: Debug + Sized + Send + 'static {
     type Interface: HandlerInterface<Self>;
-    type Error: Into<Report> + Send;
-    type Exit: Send + 'static;
 
     /// Called when the actor is first spawned, before any messages are processed.
     /// This corresponds to [`ActorStatus::Initializing`].
     fn init(
         &mut self,
         _address: &Address<Self::Interface>,
-    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
+    ) -> impl Future<Output = Result<(), Report>> + Send {
         async { Ok(()) }
     }
 
     /// Called when the actor is shutting down, after all messages have been processed.
     /// This corresponds to [`ActorStatus::ShuttingDown`].
-    fn shut_down(
+    fn exit(
         &mut self,
+        result: Result<(), Report>,
         _address: &Address<Self::Interface>,
-    ) -> impl Future<Output = Result<Self::Exit, Self::Error>> + Send;
+    ) -> impl Future<Output = Result<(), Report>> + Send {
+        async { result }
+    }
 
     /// Called when the actor receives [`Signal::Shutdown`].
     ///
@@ -46,7 +47,7 @@ pub trait Handler: Debug + Sized + Send + 'static {
     fn on_shutdown(
         &mut self,
         _address: &Address<Self::Interface>,
-    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
+    ) -> impl Future<Output = Result<(), Report>> + Send {
         async { Ok(()) }
     }
 
@@ -57,7 +58,7 @@ pub trait Handler: Debug + Sized + Send + 'static {
     fn on_suspend(
         &mut self,
         _address: &Address<Self::Interface>,
-    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
+    ) -> impl Future<Output = Result<(), Report>> + Send {
         async { Ok(()) }
     }
 
@@ -68,19 +69,8 @@ pub trait Handler: Debug + Sized + Send + 'static {
     fn on_resume(
         &mut self,
         _address: &Address<Self::Interface>,
-    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
+    ) -> impl Future<Output = Result<(), Report>> + Send {
         async { Ok(()) }
-    }
-
-    /// Called when the actor encounters an error.
-    ///
-    /// Returning `Ok(())` will allow the actor to continue running, while returning `Err(e)` will cause the actor to exit with the error `e`.
-    fn recover_error(
-        &mut self,
-        _address: &Address<Self::Interface>,
-        error: Self::Error,
-    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
-        async { Err(error) }
     }
 
     /// Called whenever the actor is waiting for a new event to process.
@@ -88,7 +78,7 @@ pub trait Handler: Debug + Sized + Send + 'static {
     /// When this returns a value, the actor will then call [`Handle::handle`]
     fn schedule_next(
         &mut self,
-    ) -> impl Future<Output = Result<impl HandledBy<Self>, Self::Error>> + Send {
+    ) -> impl Future<Output = Result<impl HandledBy<Self>, Report>> + Send {
         pending::<Result<Infallible, _>>()
     }
 
@@ -99,13 +89,10 @@ pub trait Handler: Debug + Sized + Send + 'static {
 
 impl<H: Handler> Actor for H {
     type Interface = H::Interface;
-    type Exit = H::Exit;
+    type Exit = ();
 
     async fn run(mut self, state: Inbox<Self::Interface>) -> Result<Self::Exit, Report> {
-        HandlerState::new(state)
-            .run(&mut self)
-            .await
-            .map_err(Into::into)
+        HandlerState::new(state).run(&mut self).await
     }
 }
 
@@ -114,7 +101,7 @@ pub trait HandlerInterface<H: Handler>: Interface {
         self,
         state: &mut HandlerState<H>,
         actor: &mut H,
-    ) -> impl Future<Output = Result<(), H::Error>> + Send;
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 pub trait Handle<M: Message>: Handler {
@@ -122,7 +109,7 @@ pub trait Handle<M: Message>: Handler {
         &mut self,
         state: &mut HandlerState<Self>,
         msg: Envelope<M>,
-    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 impl<H: Handler> Handle<Infallible> for H {
@@ -130,7 +117,7 @@ impl<H: Handler> Handle<Infallible> for H {
         &mut self,
         _state: &mut HandlerState<Self>,
         _msg: Envelope<Infallible>,
-    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
+    ) -> impl Future<Output = Result<(), Report>> + Send {
         async { unreachable!("Infallible message should never be sent") }
     }
 }
@@ -140,7 +127,7 @@ pub trait HandledBy<H: Handler>: Message<Mode = FireAndForget, Outcome = ()> {
         self,
         state: &mut HandlerState<H>,
         actor: &mut H,
-    ) -> impl Future<Output = Result<(), H::Error>> + Send;
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 impl<H, M> HandledBy<H> for M
@@ -152,7 +139,7 @@ where
         self,
         state: &mut HandlerState<H>,
         actor: &mut H,
-    ) -> impl Future<Output = Result<(), H::Error>> + Send {
+    ) -> impl Future<Output = Result<(), Report>> + Send {
         actor.handle(state, Envelope::new(self, ()))
     }
 }

@@ -29,32 +29,28 @@ impl MyActor {
 
 impl Handler for MyActor {
     type Interface = MyInterface;
-    type Error = Report;
-    type Exit = ();
 
-    async fn init(&mut self, _address: &Address<Self::Interface>) -> Result<(), Self::Error> {
+    async fn init(&mut self, _address: &Address<Self::Interface>) -> Result<(), Report> {
         tokio::time::sleep(Duration::from_secs(3)).await;
         Ok(())
     }
 
-    async fn shut_down(
+    async fn exit(
         &mut self,
+        result: Result<(), Report>,
         _address: &Address<Self::Interface>,
-    ) -> Result<Self::Exit, Self::Error> {
+    ) -> Result<(), Report> {
         tokio::time::sleep(Duration::from_secs(3)).await;
         Ok(())
     }
 
-    async fn on_shutdown(
-        &mut self,
-        _address: &Address<Self::Interface>,
-    ) -> Result<(), Self::Error> {
+    async fn on_shutdown(&mut self, _address: &Address<Self::Interface>) -> Result<(), Report> {
         tracing::info!("Actor {} is shutting down", self.name);
 
         Ok(())
     }
 
-    // async fn schedule_next(&mut self) -> Result<impl HandledBy<Self>, Self::Error> {
+    // async fn schedule_next(&mut self) -> Result<impl HandledBy<Self>, Report> {
     //     tokio::time::sleep(Duration::from_secs(5)).await;
     //     tracing::error!("Actor {} is idle for too long, shutting down", self.name);
     //     Err::<Infallible, _>(report!("Idle timeout reached, shutting down"))
@@ -66,7 +62,7 @@ impl Handle<u32> for MyActor {
         &mut self,
         _state: &mut HandlerState<Self>,
         msg: Envelope<u32>,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Report> {
         println!("Received message: {:?}", msg);
         Ok(())
     }
@@ -77,7 +73,7 @@ impl Handle<String> for MyActor {
         &mut self,
         _state: &mut HandlerState<Self>,
         msg: Envelope<String>,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Report> {
         println!("Received message: {:?}", msg);
         Ok(())
     }
