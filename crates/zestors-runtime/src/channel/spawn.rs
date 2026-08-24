@@ -33,7 +33,7 @@ impl<T: ChannelSpec> Channel<T> {
                         val
                     }
                     Err(boxed) => {
-                        this.register_exit(Err(ExitError::Panic));
+                        this.register_exit(Err(ExitError::Panicked));
                         std::panic::resume_unwind(boxed);
                     }
                 };
@@ -76,7 +76,7 @@ impl<'a, T: ChannelSpec> Drop for AbortBomb<'a, T> {
         tracing::debug!("AbortBomb triggered");
 
         if !self.channel.status().is_dead() {
-            self.channel.register_exit(Err(ExitError::Abort));
+            self.channel.register_exit(Err(ExitError::Aborted));
         }
     }
 }

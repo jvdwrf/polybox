@@ -6,11 +6,13 @@ pub enum Event<M> {
     Message(M),
 }
 
+/// A signal that can be sent to an actor to control its behavior. Signals take
+/// precedence over messages, and are processed before any messages in the actor's queue.
 #[derive(Debug)]
 pub enum Signal {
-    Resume,
-    Suspend,
     Shutdown,
+    Suspend,
+    Resume,
 }
 
 impl Signal {
@@ -41,12 +43,15 @@ impl Default for RestartMode {
 }
 
 impl RestartMode {
-    pub fn should_restart(&self, exit: &Exit) -> bool {
+    pub fn should_restart(&self, exit: &ExitStatus) -> bool {
         match (self, exit) {
             (RestartMode::Always, _) => true,
             (RestartMode::Never, _) => false,
-            (RestartMode::OnError, Exit::Error(_)) => true,
-            (RestartMode::OnError, Exit::Normal) => false,
+            (
+                RestartMode::OnError,
+                ExitStatus::Panicked | ExitStatus::Aborted | ExitStatus::UnhandledError,
+            ) => true,
+            (RestartMode::OnError, ExitStatus::Normal) => false,
         }
     }
 }

@@ -1,7 +1,6 @@
-use std::fmt::Display;
-
 use super::*;
-use rootcause::compat::{ReportAsError, boxed_error::IntoBoxedError};
+use rootcause::compat::ReportAsError;
+use std::fmt::Display;
 use thiserror::Error;
 
 #[derive(Debug, thiserror::Error, Clone, PartialEq, Eq, Hash)]
@@ -127,41 +126,13 @@ impl<T> From<NotAccepted<T>> for SendCheckedError<T> {
 #[derive(Debug, thiserror::Error, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Copy)]
 pub enum ExitError {
     #[error("Actor panicked")]
-    Panic,
+    Panicked,
 
     #[error("Actor was aborted")]
-    Abort,
+    Aborted,
 
     #[error("Actor exited with error")]
     UnhandledError,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Copy, Error)]
-pub enum Exit {
-    #[error("Actor exited normally")]
-    Normal,
-    #[error("Actor exited with error: {0}")]
-    Error(
-        #[from]
-        #[source]
-        ExitError,
-    ),
-}
-
-impl Exit {
-    pub fn from_result(result: Result<(), ExitError>) -> Self {
-        match result {
-            Ok(_) => Exit::Normal,
-            Err(err) => Exit::Error(err),
-        }
-    }
-
-    pub fn into_result(self) -> Result<(), ExitError> {
-        match self {
-            Exit::Normal => Ok(()),
-            Exit::Error(err) => Err(err),
-        }
-    }
 }
 
 #[derive(Debug, Error)]

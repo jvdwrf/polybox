@@ -2,7 +2,7 @@ use rootcause::Report;
 use std::time::Duration;
 use zestors::{
     HandlerInterface,
-    handler::{Handle, HandledBy, Handler, HandlerState, ShutdownReason},
+    handler::{Handle, HandledBy, Handler, HandlerShutdownReason, HandlerState},
     prelude::*,
     spawn,
     supervision::{ActorExt as _, GetChildren, GetHealth, Health},
@@ -79,12 +79,10 @@ impl Handler for MyActor {
     type Error = Report;
     type Exit = u32;
 
-    async fn exit(
+    async fn shut_down(
         &mut self,
         _address: &Address<Self::Interface>,
-        reason: ShutdownReason,
     ) -> Result<Self::Exit, Self::Error> {
-        println!("Exiting with reason: {:?}", reason);
         Ok(self.nr)
     }
 

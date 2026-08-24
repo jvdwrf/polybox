@@ -54,7 +54,7 @@ impl<T: ChannelSpec> Channel<T> {
             msg_backpressure_limit: BACKPRESSURE_LIMIT,
             signal_queue: ConcurrentQueue::bounded(SIGNAL_QUEUE_CAPACITY),
             signal_notifier: Notify::new(),
-            status_observer: SharedObservable::new(ActorStatus::Exited(Exit::Normal)),
+            status_observer: SharedObservable::new(ActorStatus::Exited(ExitStatus::Normal)),
             msg_queue: ConcurrentQueue::<T>::bounded(MSG_QUEUE_CAPACITY),
             created_at: Instant::now(),
             spawns: Default::default(),
@@ -102,7 +102,7 @@ impl<T: ChannelSpec> Channel<T> {
         }
 
         exited_at.push((Instant::now(), reason));
-        self.set_status(ActorStatus::Exited(Exit::from_result(reason)));
+        self.set_status(ActorStatus::Exited(ExitStatus::from_result(reason)));
     }
 
     pub(super) fn register_initialized(&self) {
@@ -122,7 +122,7 @@ impl<T: ChannelSpec> Channel<T> {
 
     pub(super) fn register_shutdown(&self) {
         tracing::debug!("Process shutting down");
-        self.set_status(ActorStatus::Exiting);
+        self.set_status(ActorStatus::ShuttingDown);
     }
 
     pub(super) fn raw_queue(&self) -> Option<&ConcurrentQueue<T>>
@@ -253,7 +253,7 @@ impl<I: Interface> Channel<I> {
                 Some(Signal::Shutdown)
             }
             SignalInterface::Suspend(_) => {
-                if self.status() == ActorStatus::Exiting {
+                if self.status() == ActorStatus::ShuttingDown {
                     tracing::warn!("Actor is exiting, cannot suspend");
                     None
                 } else {
@@ -510,7 +510,7 @@ impl<C: ChannelSpec> ActorRef for Channel<C> {
         self.inner.msg_queue.len()
     }
 
-    async fn watch_initialization(&self) -> Result<(), Exit> {
+    async fn watch_initialization(&self) -> Result<(), ExitStatus> {
         loop {
             let mut subscriber = self.inner.status_observer.subscribe();
             let status = self.status();
@@ -590,7 +590,7 @@ impl<C: ChannelSpec> ActorRef for Channel<C> {
                 .map(|(instant, res)| {
                     (
                         clock.zoned_at(instant.clone()),
-                        Exit::from_result(res.clone()),
+                        ExitStatus::from_result(res.clone()),
                     )
                 })
                 .collect(),
@@ -687,6 +687,6 @@ pub struct ChannelSnapshot {
     pub signal_len: usize,
     pub msg_len: usize,
     pub spawns: Vec<Zoned>,
-    pub exits: Vec<(Zoned, Exit)>,
+    pub exits: Vec<(Zoned, ExitStatus)>,
     pub created_at: Zoned,
 }

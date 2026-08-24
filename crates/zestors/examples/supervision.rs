@@ -3,7 +3,7 @@ use std::time::Duration;
 use zestors::{
     HandlerInterface,
     api_server::ApiServer,
-    handler::{Handle, Handler, HandlerState, ShutdownReason},
+    handler::{Handle, Handler, HandlerShutdownReason, HandlerState},
     node::Node,
     prelude::*,
     signals::RestartMode,
@@ -32,15 +32,14 @@ impl Handler for MyActor {
     type Error = Report;
     type Exit = ();
 
-    async fn init(&mut self) -> Result<(), Self::Error> {
+    async fn init(&mut self, _address: &Address<Self::Interface>) -> Result<(), Self::Error> {
         tokio::time::sleep(Duration::from_secs(3)).await;
         Ok(())
     }
 
-    async fn exit(
+    async fn shut_down(
         &mut self,
         _address: &Address<Self::Interface>,
-        _reason: ShutdownReason,
     ) -> Result<Self::Exit, Self::Error> {
         tokio::time::sleep(Duration::from_secs(3)).await;
         Ok(())

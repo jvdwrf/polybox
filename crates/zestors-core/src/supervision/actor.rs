@@ -29,7 +29,7 @@ pub trait ActorExt: Actor {
     }
 
     fn spawn(self, pid: Pid) -> Child<Self::Exit, Self::Interface> {
-        crate::spawn(pid, |state| self.run(state))
+        crate::spawn(pid, |inbox| self.run(inbox))
     }
 }
 impl<T: Actor> ActorExt for T {}

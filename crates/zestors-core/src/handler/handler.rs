@@ -1,26 +1,76 @@
 use crate::_prelude::*;
 use futures::future::pending;
-use smol_str::{SmolStr, format_smolstr};
-use std::{
-    convert::Infallible,
-    fmt::{Debug, Display},
-};
+use std::{convert::Infallible, fmt::Debug};
 
-pub trait Handler: Debug + Sized + Send + Sync + 'static {
-    type Interface: Interface + HandlerInterface<Self>;
-    type Error: Debug + Display + Send + 'static + Into<Report>;
+#[derive(Debug, thiserror::Error)]
+enum MyError {
+    #[error("Error A occurred")]
+    A,
+
+    #[error("Error B occurred")]
+    B,
+}
+
+#[test]
+fn test() {
+    let e: Report<MyError> = Report::new(MyError::A);
+}
+
+pub trait Handler: Debug + Sized + Send + 'static {
+    type Interface: HandlerInterface<Self>;
+    type Error: Into<Report> + Send;
     type Exit: Send + 'static;
 
-    fn init(&mut self) -> impl Future<Output = Result<(), Self::Error>> + Send {
+    /// Called when the actor is first spawned, before any messages are processed.
+    /// This corresponds to [`ActorStatus::Initializing`].
+    fn init(
+        &mut self,
+        _address: &Address<Self::Interface>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
         async { Ok(()) }
     }
 
-    /// Called when the actor is exiting, after all messages have been processed.
-    fn exit(
+    /// Called when the actor is shutting down, after all messages have been processed.
+    /// This corresponds to [`ActorStatus::ShuttingDown`].
+    fn shut_down(
         &mut self,
         _address: &Address<Self::Interface>,
-        reason: ShutdownReason,
     ) -> impl Future<Output = Result<Self::Exit, Self::Error>> + Send;
+
+    /// Called when the actor receives [`Signal::Shutdown`].
+    ///
+    /// The `Shutdown` signal automatically prevents the actor from receiving any
+    /// new messages, and will cause the actor to exit after all messages have
+    /// been processed. This method is only for performing any additional actions
+    /// that may be needed when the actor is shutting down.
+    fn on_shutdown(
+        &mut self,
+        _address: &Address<Self::Interface>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
+        async { Ok(()) }
+    }
+
+    /// Called when the actor receives [`Signal::Suspend`].
+    ///
+    /// The `Suspend` signal automatically pauses the actor's message processing.
+    /// This method is only for performing any additional actions that may be needed when the actor is suspended.
+    fn on_suspend(
+        &mut self,
+        _address: &Address<Self::Interface>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
+        async { Ok(()) }
+    }
+
+    /// Called when the actor receives [`Signal::Resume`].
+    ///
+    /// The `Resume` signal automatically resumes the actor's message processing.
+    /// This method is only for performing any additional actions that may be needed when the actor is resumed.
+    fn on_resume(
+        &mut self,
+        _address: &Address<Self::Interface>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
+        async { Ok(()) }
+    }
 
     /// Called when the actor encounters an error.
     ///
@@ -32,41 +82,6 @@ pub trait Handler: Debug + Sized + Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Error>> + Send {
         async { Err(error) }
     }
-
-    /// Called when the actor starts shutting down.
-    ///
-    /// After this method is called, the actor will stop receiving messages, but
-    /// will still empty its message queue before exiting.
-    ///
-    /// The actor will exit using [`ExitReason::Shutdown`].
-    fn on_shutdown(
-        &mut self,
-        _address: &Address<Self::Interface>,
-    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
-        async { Ok(()) }
-    }
-
-    fn on_suspend(
-        &mut self,
-        _address: &Address<Self::Interface>,
-    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
-        async { Ok(()) }
-    }
-
-    fn on_resume(
-        &mut self,
-        _address: &Address<Self::Interface>,
-    ) -> impl Future<Output = Result<(), Self::Error>> + Send {
-        async { Ok(()) }
-    }
-
-    // fn debug_repr(&self, _address: &Address<Self::Interface>) -> SmolStr {
-    //     format_smolstr!("{self:?}")
-    // }
-
-    // fn health(&self, _address: &Address<Self::Interface>) -> Health {
-
-    // }
 
     /// Called whenever the actor is waiting for a new event to process.
     ///

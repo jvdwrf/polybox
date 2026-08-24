@@ -239,8 +239,8 @@ impl Supervisor {
 
                     if supervisee.spec.cfg().restart_mode.should_restart(&exit) {
                         init_result
-                            .attach_with(|| {
-                                format!("Child {} failed to start", supervisee.spec.pid())
+                            .map_err(|status| {
+                                report!("Child {} failed to start", supervisee.spec.pid()).attach(status)
                             })
                             .map_err(Into::into)
                     } else {

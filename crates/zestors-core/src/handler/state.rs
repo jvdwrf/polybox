@@ -6,29 +6,29 @@ use std::fmt::Debug;
 use tokio::select;
 
 pub struct HandlerState<H: Handler> {
-    stream: Inbox<H::Interface>,
+    inbox: Inbox<H::Interface>,
 }
 
 impl<H: Handler> HandlerState<H> {
-    pub fn new(stream: Inbox<H::Interface>) -> Self {
-        Self { stream }
+    pub fn new(inbox: Inbox<H::Interface>) -> Self {
+        Self { inbox }
     }
 
     pub async fn exit_while_receiving_signals(
         &mut self,
         handler: &mut H,
-        reason: ShutdownReason,
+        reason: HandlerShutdownReason,
     ) -> Result<H::Exit, H::Error> {
         tracing::info!("Actor is exiting due to reason: {:?}", reason);
         let address = self.address().clone();
 
         tokio::select! {
-            res = handler.exit(&address, reason) => {
+            res = handler.shut_down(&address) => {
                 res
             }
 
             _ = async {
-                while let Some(signal) = self.stream.next_signal().await {
+                while let Some(signal) = self.inbox.next_signal().await {
                     match signal {
                         Signal::Resume | Signal::Suspend | Signal::Shutdown => {
                             tracing::debug!("Ignoring signal {:?} while exiting", signal);
@@ -46,13 +46,15 @@ impl<H: Handler> HandlerState<H> {
     where
         H: Handler + Debug,
     {
+        let address = self.address().clone();
+
         tokio::select! {
-            res = handler.init() => {
+            res = handler.init(&address) => {
                 res?;
             }
 
             _shutdown_signal_received = async {
-                while let Some(signal) = self.stream.next_signal().await {
+                while let Some(signal) = self.inbox.next_signal().await {
                     match signal {
                         Signal::Shutdown => {
                             break;
@@ -65,7 +67,7 @@ impl<H: Handler> HandlerState<H> {
             } => {
                 tracing::debug!("Actor is exiting due to shutdown signal");
                 return self
-                    .exit_while_receiving_signals(handler, ShutdownReason::Shutdown)
+                    .exit_while_receiving_signals(handler, HandlerShutdownReason::Shutdown)
                     .await
             }
         }
@@ -82,14 +84,14 @@ impl<H: Handler> HandlerState<H> {
                 }
 
                 Err(e) => {
-                    tracing::warn!("Handler encountered an error: {e}. Attempting to recover...");
+                    tracing::warn!("Handler encountered an error. Attempting to recover...");
 
                     match handler.recover_error(self.address(), e).await {
                         Ok(()) => {
                             tracing::info!("Handler recovered from error");
                         }
                         Err(e) => {
-                            tracing::error!("Handler failed to recover from error: {e}");
+                            tracing::error!("Handler failed to recover from error");
                             break Err(e);
                         }
                     }
@@ -99,12 +101,12 @@ impl<H: Handler> HandlerState<H> {
     }
 
     async fn _run_once(&mut self, handler: &mut H) -> Result<Option<H::Exit>, H::Error> {
-        let stream = &mut self.stream;
+        let stream = &mut self.inbox;
 
         if stream.status().should_exit() && stream.is_empty() {
             tracing::debug!("Actor is exiting due to status: {:?}", stream.status());
             return self
-                .exit_while_receiving_signals(handler, ShutdownReason::Shutdown)
+                .exit_while_receiving_signals(handler, HandlerShutdownReason::Shutdown)
                 .await
                 .map(Some);
         }
@@ -119,14 +121,14 @@ impl<H: Handler> HandlerState<H> {
                         return Ok(None);
                     }
                     Err(e) => {
-                        tracing::error!("Handler encountered an error: {e}");
+                        tracing::error!("Handler encountered an error");
                         return Err(e);
                     }
                 }
             }
 
             else => return self
-                .exit_while_receiving_signals(handler, ShutdownReason::Shutdown)
+                .exit_while_receiving_signals(handler, HandlerShutdownReason::Shutdown)
                 .await
                 .map(Some),
         };
@@ -159,12 +161,12 @@ impl<H: Handler> AsActorRef for HandlerState<H> {
     type ChannelSpec = H::Interface;
 
     fn as_channel(&self) -> &Channel<Self::ChannelSpec> {
-        self.stream.as_channel()
+        self.inbox.as_channel()
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum ShutdownReason {
+pub enum HandlerShutdownReason {
     Shutdown,
     UnhandledError,
 }

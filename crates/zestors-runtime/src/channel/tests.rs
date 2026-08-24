@@ -178,7 +178,7 @@ fn test_send_now_and_pop_msg() {
 fn test_send_when_channel_closed() {
     let channel = create_running_channel::<TestInterface>();
 
-    channel.set_status(ActorStatus::Exiting);
+    channel.set_status(ActorStatus::ShuttingDown);
 
     let msg = PingMessage("closed_test".into());
     let res = channel.try_send(msg.clone());

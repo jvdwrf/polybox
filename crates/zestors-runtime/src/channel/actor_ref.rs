@@ -46,7 +46,7 @@ pub trait ActorRef {
         }
     }
 
-    fn watch_initialization(&self) -> impl Future<Output = Result<(), Exit>> + Send;
+    fn watch_initialization(&self) -> impl Future<Output = Result<(), ExitStatus>> + Send;
 
     fn watch_exit(&self) -> impl Future<Output = Result<(), ExitError>> + Send;
 
@@ -173,7 +173,7 @@ impl<T: AsActorRef> ActorRef for T {
         self.as_channel().len()
     }
 
-    fn watch_initialization(&self) -> impl Future<Output = Result<(), Exit>> + Send {
+    fn watch_initialization(&self) -> impl Future<Output = Result<(), ExitStatus>> + Send {
         self.as_channel().watch_initialization()
     }
 

@@ -151,10 +151,9 @@ mod tests {
         type Error = Report;
         type Exit = ();
 
-        async fn exit(
+        async fn shut_down(
             &mut self,
             _address: &Address<Self::Interface>,
-            _reason: ShutdownReason,
         ) -> Result<Self::Exit, Self::Error> {
             Ok(())
         }
