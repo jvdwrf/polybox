@@ -2,7 +2,7 @@ use rootcause::Report;
 use std::time::Duration;
 use zestors::{
     HandlerInterface,
-    handler::{Handle, HandledBy, Handler, HandlerShutdownReason, HandlerState},
+    handler::{Handle, HandledBy, Handler, HandlerState},
     prelude::*,
     spawn,
     supervision::{ActorExt as _, GetChildren, GetHealth, Health},

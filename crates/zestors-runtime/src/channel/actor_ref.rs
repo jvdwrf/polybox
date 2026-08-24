@@ -52,10 +52,10 @@ pub trait ActorRef {
 
     fn members(&self) -> &'static [TypeId];
 
-    fn len(&self) -> usize;
+    fn msg_len(&self) -> usize;
 
-    fn is_empty(&self) -> bool {
-        self.len() == 0
+    fn msgs_is_empty(&self) -> bool {
+        self.msg_len() == 0
     }
 
     fn can_send(&self, type_id: TypeId) -> bool {
@@ -169,8 +169,8 @@ impl<T: AsActorRef> ActorRef for T {
         Address::from_ref(self.as_channel())
     }
 
-    fn len(&self) -> usize {
-        self.as_channel().len()
+    fn msg_len(&self) -> usize {
+        self.as_channel().msg_len()
     }
 
     fn watch_initialization(&self) -> impl Future<Output = Result<(), ExitStatus>> + Send {

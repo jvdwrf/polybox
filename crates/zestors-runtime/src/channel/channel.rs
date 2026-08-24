@@ -282,6 +282,11 @@ impl<I: Interface> Channel<I> {
             return self.recv_signal().await.map(Event::Signal);
         }
 
+        // If the actor is shutting down and there are no more messages, return None
+        if self.status() == ActorStatus::ShuttingDown && self.msgs_is_empty() {
+            return None;
+        }
+
         select! {
             biased;
 
@@ -506,7 +511,7 @@ impl<C: ChannelSpec> ActorRef for Channel<C> {
         Address::from_ref(self)
     }
 
-    fn len(&self) -> usize {
+    fn msg_len(&self) -> usize {
         self.inner.msg_queue.len()
     }
 

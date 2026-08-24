@@ -1,19 +1,31 @@
 use crate::_prelude::*;
 use futures::future::pending;
+use rootcause::report;
 use std::{convert::Infallible, fmt::Debug};
 
-#[derive(Debug, thiserror::Error)]
-enum MyError {
-    #[error("Error A occurred")]
-    A,
-
-    #[error("Error B occurred")]
-    B,
+#[derive(Debug)]
+pub enum ExitReason {
+    Normal,
+    InitFailed(Report),
+    InitCancelled,
+    HandlerError(Report),
 }
 
-#[test]
-fn test() {
-    let e: Report<MyError> = Report::new(MyError::A);
+impl ExitReason {
+    pub fn into_result(self) -> Result<(), Report> {
+        match self {
+            ExitReason::Normal => Ok(()),
+            ExitReason::InitFailed(e) => Err(e.attach("Handler initialization failed")),
+            ExitReason::InitCancelled => Err(report!("Handler initialization cancelled")),
+            ExitReason::HandlerError(e) => Err(e.attach("Handler encountered an error")),
+        }
+    }
+}
+
+impl From<ExitReason> for Result<(), Report> {
+    fn from(reason: ExitReason) -> Self {
+        reason.into_result()
+    }
 }
 
 pub trait Handler: Debug + Sized + Send + 'static {
@@ -30,12 +42,8 @@ pub trait Handler: Debug + Sized + Send + 'static {
 
     /// Called when the actor is shutting down, after all messages have been processed.
     /// This corresponds to [`ActorStatus::ShuttingDown`].
-    fn exit(
-        &mut self,
-        result: Result<(), Report>,
-        _address: &Address<Self::Interface>,
-    ) -> impl Future<Output = Result<(), Report>> + Send {
-        async { result }
+    fn exit(&mut self, reason: ExitReason) -> impl Future<Output = Result<(), Report>> + Send {
+        async { reason.into_result() }
     }
 
     /// Called when the actor receives [`Signal::Shutdown`].

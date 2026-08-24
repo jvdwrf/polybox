@@ -2,6 +2,7 @@ use crate::{
     handler::{Handler, HandlerInterface},
     *,
 };
+use rootcause::report;
 use std::fmt::Debug;
 use tokio::select;
 
@@ -14,56 +15,16 @@ impl<H: Handler> HandlerState<H> {
         Self { inbox }
     }
 
-    pub async fn exit_actor(
-        &mut self,
-        handler: &mut H,
-        error: Option<Report>,
-    ) -> Result<(), Report> {
-        tracing::info!("Actor is exiting due to reason");
-        let address = self.address().clone();
-
-        let res = match error {
-            Some(err) => Err(err),
-            None => Ok(()),
-        };
-
-        tokio::select! {
-            res = handler.exit(res, &address) => {
-                res
-            }
-
-            _ = async {
-                while let Some(signal) = self.inbox.next_signal().await {
-                    match signal {
-                        Signal::Resume | Signal::Suspend | Signal::Shutdown => {
-                            tracing::debug!("Ignoring signal {:?} while exiting", signal);
-                        }
-                    }
-                }
-                futures::future::pending::<()>().await
-            } => {
-                unreachable!("");
-            }
-        }
+    pub async fn exit(&mut self, handler: &mut H, reason: ExitReason) -> Result<(), Report> {
+        handler.exit(reason).await
     }
 
-    pub async fn run(&mut self, handler: &mut H) -> Result<(), Report>
-    where
-        H: Handler + Debug,
-    {
+    async fn init(&mut self, handler: &mut H) -> Result<(), InitError> {
         let address = self.address().clone();
 
         tokio::select! {
             res = handler.init(&address) => {
-                match res {
-                    Ok(_) => {
-                        tracing::debug!("Handler initialized successfully");
-                    }
-                    Err(e) => {
-                        tracing::warn!("Handler failed to initialize");
-                        return self.exit_actor(handler, Some(e)).await;
-                    }
-                }
+                res.map_err(InitError::Failed)
             }
 
             _shutdown_signal_received = async {
@@ -72,92 +33,82 @@ impl<H: Handler> HandlerState<H> {
                         Signal::Shutdown => {
                             break;
                         }
+
                         Signal::Resume | Signal::Suspend => {
                             tracing::debug!("Ignoring signal {:?} while initializing", signal);
                         }
                     }
                 }
             } => {
-                tracing::debug!("Actor is exiting due to shutdown signal");
-                return self
-                    .exit_actor(handler, None)
-                    .await
+                Err(InitError::Cancelled)
             }
+        }
+    }
+
+    pub async fn run(&mut self, handler: &mut H) -> Result<(), Report>
+    where
+        H: Handler + Debug,
+    {
+        if let Err(e) = self.init(handler).await {
+            return self.exit(handler, e.into()).await;
         }
 
         loop {
-            match self._run_once(handler).await {
-                Ok(RunOnce::Continue) => {
-                    tracing::trace!("Actor loop iteration completed, continuing...");
-                }
+            match self.run_once(handler).await {
+                Ok(RunOnce::Continue) => {}
 
-                Ok(RunOnce::Finished) => {
-                    tracing::debug!("Handler exited");
-                    break self.exit_actor(handler, None).await;
+                Ok(RunOnce::ExitNormal) => {
+                    break self.exit(handler, ExitReason::Normal).await;
                 }
 
                 Err(e) => {
-                    tracing::warn!("Handler encountered an error. Attempting to recover...");
-                    break self.exit_actor(handler, Some(e)).await;
+                    break self.exit(handler, ExitReason::HandlerError(e)).await;
                 }
             }
         }
     }
 
-    async fn _run_once(&mut self, handler: &mut H) -> Result<RunOnce, Report> {
-        let stream = &mut self.inbox;
-
-        if stream.status().should_exit() && stream.is_empty() {
-            tracing::debug!("Actor is exiting due to status: {:?}", stream.status());
-            return Ok(RunOnce::Finished);
-        }
-
+    async fn run_once(&mut self, handler: &mut H) -> Result<RunOnce, Report> {
         let msg = select! {
-            Some(msg) = stream.next() => msg,
-
-            next = handler.schedule_next() => {
-                match next {
-                    Ok(event) => {
-                        event.handle(self, handler).await?;
-                        return Ok(RunOnce::Continue);
-                    }
-                    Err(e) => {
-                        tracing::error!("Handler encountered an error");
-                        return Err(e);
-                    }
+            msg = self.inbox.next() => {
+                if let Some(msg) = msg {
+                    msg
+                } else {
+                    return Ok(RunOnce::ExitNormal);
                 }
-            }
+            },
 
-            else => return Ok(RunOnce::Finished),
+            scheduled = handler.schedule_next() => {
+                let event = scheduled?;
+                event.handle(self, handler).await?;
+                return Ok(RunOnce::Continue);
+            }
         };
 
         match msg {
             Event::Signal(signal) => match signal {
                 Signal::Resume => {
                     handler.on_resume(self.address()).await?;
+                    return Ok(RunOnce::Continue);
                 }
 
                 Signal::Suspend => {
                     handler.on_suspend(self.address()).await?;
+                    return Ok(RunOnce::Continue);
                 }
 
                 Signal::Shutdown => {
                     handler.on_shutdown(self.address()).await?;
+                    return Ok(RunOnce::Continue);
                 }
             },
 
             Event::Message(msg) => {
                 msg.handle_with(self, handler).await?;
+                return Ok(RunOnce::Continue);
             }
         }
-
-        Ok(RunOnce::Continue)
     }
-}
-
-enum RunOnce {
-    Continue,
-    Finished,
 }
 
 impl<H: Handler> AsActorRef for HandlerState<H> {
@@ -168,8 +119,21 @@ impl<H: Handler> AsActorRef for HandlerState<H> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum HandlerShutdownReason {
-    Shutdown,
-    UnhandledError,
+enum InitError {
+    Failed(Report),
+    Cancelled,
+}
+
+impl From<InitError> for ExitReason {
+    fn from(e: InitError) -> Self {
+        match e {
+            InitError::Failed(e) => ExitReason::InitFailed(e),
+            InitError::Cancelled => ExitReason::InitCancelled,
+        }
+    }
+}
+
+enum RunOnce {
+    Continue,
+    ExitNormal,
 }
