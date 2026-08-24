@@ -3,7 +3,7 @@ use std::{net::SocketAddr, pin::pin, sync::Arc};
 use tokio::net::TcpListener;
 use zestors_core::{
     prelude::*,
-    supervision::{GetChildren, GetHealth, Health, HealthStatus},
+    supervision::{GetChildren, GetHealth, Health},
 };
 
 mod router;
@@ -16,8 +16,8 @@ pub struct ApiServerBlueprint {
 impl Blueprint for ApiServerBlueprint {
     type Actor = ApiServer;
 
-    fn instantiate(&self) -> Self::Actor {
-        ApiServer::new(self.clone())
+    async fn build(&self) -> rootcause::Result<Self::Actor> {
+        Ok(ApiServer::new(self.clone()))
     }
 }
 

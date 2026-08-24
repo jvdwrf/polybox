@@ -10,56 +10,37 @@ pub trait Actor: Send + Sized + 'static {
     ) -> impl Future<Output = Result<Self::Exit, Report>> + Send + 'static;
 }
 
-pub trait ActorRunnerExt: Actor {
-    fn map<F, R>(self, map_exit: F) -> MapRun<Self, F>
+pub trait ActorExt: Actor {
+    fn map_actor_exit<F, R>(self, map_exit: F) -> MapActor<Self, F>
     where
         F: FnOnce(Result<Self::Exit, Report>) -> Result<R, Report> + Send + 'static,
         R: Send + 'static,
     {
-        MapRun::new(self, map_exit)
+        MapActor::new(self, map_exit)
     }
 
-    fn tap_err_mut<F>(
-        self,
-        map_err: F,
-    ) -> MapRun<
-        Self,
-        impl FnOnce(Result<Self::Exit, Report>) -> Result<Self::Exit, Report> + Send + 'static,
-    >
-    where
-        F: FnOnce(&mut Report) + Send + 'static,
-    {
-        self.map(move |exit| match exit {
-            Ok(value) => Ok(value),
-            Err(mut e) => {
-                map_err(&mut e);
-                Err(e)
-            }
-        })
-    }
-
-    fn wrap<F, Fut, E>(self, mapper: F) -> WrapRun<Self, F>
+    fn wrap_actor<F, Fut, E>(self, mapper: F) -> WrapActor<Self, F>
     where
         F: FnOnce(Self, Inbox<Self::Interface>) -> Fut + Send + 'static,
         Fut: Future<Output = Result<E, Report>> + Send + 'static,
         E: Send + 'static,
     {
-        WrapRun::new(self, mapper)
+        WrapActor::new(self, mapper)
     }
 
     fn spawn(self, pid: Pid) -> Child<Self::Exit, Self::Interface> {
         crate::spawn(pid, |state| self.run(state))
     }
 }
-impl<T: Actor> ActorRunnerExt for T {}
+impl<T: Actor> ActorExt for T {}
 
 #[derive(Clone)]
-pub struct MapRun<T, F> {
+pub struct MapActor<T, F> {
     inner: T,
     map_exit: F,
 }
 
-impl<T, F> Debug for MapRun<T, F>
+impl<T, F> Debug for MapActor<T, F>
 where
     T: Debug,
 {
@@ -70,7 +51,7 @@ where
     }
 }
 
-impl<T, F> MapRun<T, F> {
+impl<T, F> MapActor<T, F> {
     pub fn new<R>(inner: T, map_exit: F) -> Self
     where
         T: Actor,
@@ -81,7 +62,7 @@ impl<T, F> MapRun<T, F> {
     }
 }
 
-impl<T, F, R> Actor for MapRun<T, F>
+impl<T, F, R> Actor for MapActor<T, F>
 where
     T: Actor + Send + 'static,
     F: FnOnce(Result<T::Exit, Report>) -> Result<R, Report> + Send + 'static,
@@ -101,12 +82,12 @@ where
 }
 
 #[derive(Clone)]
-pub struct WrapRun<T, F> {
+pub struct WrapActor<T, F> {
     inner: T,
     mapper: F,
 }
 
-impl<T, F> Debug for WrapRun<T, F>
+impl<T, F> Debug for WrapActor<T, F>
 where
     T: Debug,
 {
@@ -117,7 +98,7 @@ where
     }
 }
 
-impl<T, F> WrapRun<T, F> {
+impl<T, F> WrapActor<T, F> {
     pub fn new<R, Fut>(inner: T, mapper: F) -> Self
     where
         T: Actor,
@@ -129,7 +110,7 @@ impl<T, F> WrapRun<T, F> {
     }
 }
 
-impl<T, F, Fut, E> Actor for WrapRun<T, F>
+impl<T, F, Fut, E> Actor for WrapActor<T, F>
 where
     T: Actor + Send + 'static,
     F: FnOnce(T, Inbox<T::Interface>) -> Fut + Send + 'static,

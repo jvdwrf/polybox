@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use super::*;
+use rootcause::compat::{ReportAsError, boxed_error::IntoBoxedError};
 use thiserror::Error;
 
 #[derive(Debug, thiserror::Error, Clone, PartialEq, Eq, Hash)]
@@ -163,12 +164,29 @@ impl Exit {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Error)]
+#[derive(Debug, Error)]
 #[error("Failed to spawn process: {0}")]
 pub enum SpawnError {
     #[error("There is already an active process running on this channel.")]
-    DoubleSpawn,
+    ConcurrentInbox,
+
+    #[error("Failed to instantiate actor from blueprint: {0}")]
+    Instantiation(#[source] ReportAsError),
 }
+
+impl From<ConcurrentInboxError> for SpawnError {
+    fn from(_: ConcurrentInboxError) -> Self {
+        SpawnError::ConcurrentInbox
+    }
+}
+
+// fn test(x: Report) {
+//     x.into_boxed_error()
+// }
+
+#[derive(Debug, Error)]
+#[error("There is already an active process running on this channel.")]
+pub struct ConcurrentInboxError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum JoinError {

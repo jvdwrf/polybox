@@ -7,7 +7,7 @@ impl<T: ChannelKind> Channel<T> {
     pub fn spawn<R, F>(
         self,
         spawn_fn: impl FnOnce(Inbox<T>) -> F,
-    ) -> Result<Child<R, T>, SpawnError>
+    ) -> Result<Child<R, T>, ConcurrentInboxError>
     where
         T: Interface,
         R: Send + 'static,

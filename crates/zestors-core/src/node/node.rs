@@ -32,7 +32,7 @@ impl Node {
         self
     }
 
-    pub fn start(self) -> Result<Address<SupervisorInterface>, Report> {
+    pub async fn start(self) -> Result<Address<SupervisorInterface>, Report> {
         let Self {
             restart_intensity,
             supervisor_spec,
@@ -45,7 +45,7 @@ impl Node {
             })
             .map_err(|_| report!("Root Node can only be started once."))?;
 
-        let supervisor_child = supervisor_spec.spawn()?;
+        let supervisor_child = supervisor_spec.spawn().await?;
         let supervisor_address = supervisor_child.address().clone();
 
         Registry::local()
@@ -92,7 +92,7 @@ impl NodeActor {
                             "Root-Supervisor exited with error: {:?}. Restarting...",
                             err
                         );
-                        let new_supervisor_child = self.supervisor_spec.spawn().unwrap();
+                        let new_supervisor_child = self.supervisor_spec.spawn().await.unwrap();
                         self.supervisor_child = new_supervisor_child;
                     }
                 }

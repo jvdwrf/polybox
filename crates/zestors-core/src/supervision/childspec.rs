@@ -94,8 +94,8 @@ impl<T: SpawnOn> ChildSpec<T> {
         self
     }
 
-    pub fn spawn(&self) -> Result<Child<T::Exit, T::Inbox>, SpawnError> {
-        self.blueprint.spawn_on(self.channel.clone())
+    pub async fn spawn(&self) -> Result<Child<T::Exit, T::Inbox>, SpawnError> {
+        self.blueprint.spawn_on(self.channel.clone()).await
     }
 
     pub fn into_dyn(self) -> ChildSpec {

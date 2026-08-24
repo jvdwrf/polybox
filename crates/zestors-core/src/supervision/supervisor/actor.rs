@@ -88,10 +88,13 @@ impl Supervisor {
         self
     }
 
-    fn spawn_supervisee(supervisee: &mut Supervisee, registry: &Registry) -> Result<(), Report> {
+    async fn spawn_supervisee(
+        supervisee: &mut Supervisee,
+        registry: &Registry,
+    ) -> Result<(), Report> {
         // We only have to add the children to the registry the first time they are spawned,
         // since it will persist across restarts.
-        let child = supervisee.spec.spawn().attach(format!(
+        let child = supervisee.spec.spawn().await.attach(format!(
             "Failed to spawn supervisee {}",
             supervisee.spec.pid()
         ))?;
@@ -105,11 +108,7 @@ impl Supervisor {
         Ok(())
     }
 
-    async fn shutdown(
-        &mut self,
-        pids: Option<&[Pid]>,
-        stream: &mut Inbox<SupervisorInterface>,
-    ) {
+    async fn shutdown(&mut self, pids: Option<&[Pid]>, stream: &mut Inbox<SupervisorInterface>) {
         let child_descriptions = self.get_child_descriptions();
 
         let mut supervisees = match pids {
@@ -224,6 +223,7 @@ impl Supervisor {
             let child = supervisee
                 .spec
                 .spawn()
+                .await
                 .expect("Children should all be shut-down now");
             supervisee.child = Some(child);
         }
@@ -322,7 +322,7 @@ impl Actor for Supervisor {
             initialization_result = async {
                 // Spawn all supervisees
                 for supervisee in self.supervisees.values_mut() {
-                    if let Err(e) = Self::spawn_supervisee(supervisee, &self.registry) {
+                    if let Err(e) = Self::spawn_supervisee(supervisee, &self.registry).await {
                         tracing::error!(error = ?e, "Failed to spawn supervisee: {}", supervisee.spec.pid());
 
                         return Err(report!(

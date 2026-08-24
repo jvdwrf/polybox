@@ -86,12 +86,12 @@ impl SupervisorBlueprint {
 impl Blueprint for SupervisorBlueprint {
     type Actor = Supervisor;
 
-    fn instantiate(&self) -> Self::Actor {
-        Supervisor::new(
+    async fn build(&self) -> rootcause::Result<Self::Actor> {
+        Ok(Supervisor::new(
             self.supervisees.clone(),
             self.strategy,
             self.restart_intensity.clone(),
-        )
+        ))
     }
 
     fn default_abort_timeout(&self) -> Duration {

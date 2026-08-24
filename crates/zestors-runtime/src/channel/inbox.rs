@@ -7,9 +7,9 @@ pub struct Inbox<T: Interface> {
 }
 
 impl<T: Interface> Inbox<T> {
-    pub(crate) fn try_new(channel: Channel<T>) -> Result<Self, SpawnError> {
+    pub(crate) fn try_new(channel: Channel<T>) -> Result<Self, ConcurrentInboxError> {
         if !channel.status().is_dead() {
-            return Err(SpawnError::DoubleSpawn);
+            return Err(ConcurrentInboxError);
         }
 
         Ok(Self {

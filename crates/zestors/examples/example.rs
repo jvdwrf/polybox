@@ -5,7 +5,7 @@ use zestors::{
     handler::{Handle, HandledBy, Handler, HandlerState, ShutdownReason},
     prelude::*,
     spawn,
-    supervision::{ActorRunnerExt as _, GetChildren, GetHealth, Health},
+    supervision::{ActorExt as _, GetChildren, GetHealth, Health},
 };
 
 #[tokio::main]
@@ -157,7 +157,9 @@ impl Handle<GetChildren> for MyActor {
 }
 
 async fn test() {
-    let child = MyActor::new().map(|x| x.map(|x| x * 2)).spawn(Pid::rand());
+    let child = MyActor::new()
+        .map_actor_exit(|x| x.map(|x| x * 2))
+        .spawn(Pid::rand());
     let address = child.address().clone();
 
     address.send(5u32).await.unwrap();

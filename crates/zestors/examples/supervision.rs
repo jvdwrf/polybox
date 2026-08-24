@@ -143,7 +143,7 @@ async fn main() -> Result<(), Report> {
         ])
         .with_pid("RootSupervisor");
 
-    let root_address = Node::new(root_supervisor).start()?;
+    let root_address = Node::new(root_supervisor).start().await?;
 
     root_address.watch_start().await;
 

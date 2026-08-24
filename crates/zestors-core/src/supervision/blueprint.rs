@@ -1,9 +1,14 @@
 use super::*;
+use std::future::Future;
 
 pub trait Blueprint: Debug + Send + Sync + 'static {
     type Actor: Actor;
 
-    fn instantiate(&self) -> Self::Actor;
+    fn build(&self) -> impl Future<Output = rootcause::Result<Self::Actor>> + Send;
+
+    fn default_instantiation_timeout(&self) -> Duration {
+        Duration::from_millis(5_000)
+    }
 
     fn default_abort_timeout(&self) -> Duration {
         Duration::from_millis(5_000)
@@ -21,8 +26,8 @@ pub trait Blueprint: Debug + Send + Sync + 'static {
 impl<T: Actor + Clone + Debug + Send + Sync + 'static> Blueprint for T {
     type Actor = T;
 
-    fn instantiate(&self) -> Self::Actor {
-        self.clone()
+    async fn build(&self) -> rootcause::Result<Self::Actor> {
+        Ok(self.clone())
     }
 }
 
@@ -37,11 +42,15 @@ pub trait BlueprintExt: Blueprint + Sized {
     fn spawn(
         &self,
         pid: Pid,
-    ) -> Child<<Self::Actor as Actor>::Exit, <Self::Actor as Actor>::Interface>
+    ) -> impl Future<
+        Output = rootcause::Result<
+            Child<<Self::Actor as Actor>::Exit, <Self::Actor as Actor>::Interface>,
+        >,
+    > + Send
     where
         Self: Send + Sync + 'static,
     {
-        self.instantiate().spawn(pid)
+        async { Ok(self.build().await?.spawn(pid)) }
     }
 
     fn supervisee_cfg(&self) -> ChildConfig {
@@ -93,8 +102,8 @@ where
 {
     type Actor = A;
 
-    fn instantiate(&self) -> Self::Actor {
-        (self.f)()
+    async fn build(&self) -> rootcause::Result<Self::Actor> {
+        Ok((self.f)())
     }
 }
 
