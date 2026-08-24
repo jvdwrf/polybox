@@ -28,8 +28,8 @@ pub use status::*;
 mod spawn;
 pub use spawn::*;
 
-mod event_stream;
-pub use event_stream::*;
+mod inbox;
+pub use inbox::*;
 
 mod pid;
 pub use pid::*;
@@ -43,7 +43,7 @@ pub use child::*;
 #[cfg(test)]
 mod tests;
 
-pub fn spawn<T, R, F>(pid: Pid, f: impl FnOnce(EventStream<T>) -> F) -> Child<R, T>
+pub fn spawn<T, R, F>(pid: Pid, f: impl FnOnce(Inbox<T>) -> F) -> Child<R, T>
 where
     T: Interface,
     R: Send + 'static,

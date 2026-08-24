@@ -10,39 +10,36 @@ use zestors::{
 
 #[tokio::main]
 async fn main() {
-    let child = spawn(
-        Pid::rand(),
-        async move |mut stream: EventStream<MyInterface>| {
-            while let Some(msg) = stream.next().await {
-                match msg {
-                    Event::Signal(signal) => match signal {
-                        SignalEvent::Shutdown => {
-                            println!("Received shutdown signal");
-                            break;
-                        }
-                        SignalEvent::Resume | SignalEvent::Suspend => {}
-                    },
+    let child = spawn(Pid::rand(), async move |mut stream: Inbox<MyInterface>| {
+        while let Some(msg) = stream.next().await {
+            match msg {
+                Event::Signal(signal) => match signal {
+                    Signal::Shutdown => {
+                        println!("Received shutdown signal");
+                        break;
+                    }
+                    Signal::Resume | Signal::Suspend => {}
+                },
 
-                    Event::Message(message) => match message {
-                        MyInterface::Add(envelope) => {
-                            println!("Received message: {:?}", envelope);
-                        }
-                        MyInterface::Print(envelope) => {
-                            println!("Received message: {:?}", envelope);
-                        }
-                        MyInterface::Health(Envelope { handle, .. }) => {
-                            handle.send(Health::healthy()).ok();
-                        }
-                        MyInterface::Children(Envelope { handle, .. }) => {
-                            handle.send(vec![]).ok();
-                        }
-                    },
-                }
+                Event::Message(message) => match message {
+                    MyInterface::Add(envelope) => {
+                        println!("Received message: {:?}", envelope);
+                    }
+                    MyInterface::Print(envelope) => {
+                        println!("Received message: {:?}", envelope);
+                    }
+                    MyInterface::Health(Envelope { handle, .. }) => {
+                        handle.send(Health::healthy()).ok();
+                    }
+                    MyInterface::Children(Envelope { handle, .. }) => {
+                        handle.send(vec![]).ok();
+                    }
+                },
             }
+        }
 
-            Ok(())
-        },
-    );
+        Ok(())
+    });
 
     child.address().send(10u32).await.unwrap();
     child.address().signal_shutdown();
@@ -101,7 +98,7 @@ impl Handle<u32> for MyActor {
     async fn handle(
         &mut self,
         state: &mut HandlerState<Self>,
-        Envelope { msg, handle }: Envelope<u32>,
+        Envelope { msg, handle: () }: Envelope<u32>,
     ) -> Result<(), Self::Error> {
         println!("Received message: {:?}", msg);
 

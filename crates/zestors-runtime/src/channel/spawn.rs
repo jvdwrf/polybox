@@ -6,7 +6,7 @@ use tracing::Instrument as _;
 impl<T: ChannelKind> Channel<T> {
     pub fn spawn<R, F>(
         self,
-        spawn_fn: impl FnOnce(EventStream<T>) -> F,
+        spawn_fn: impl FnOnce(Inbox<T>) -> F,
     ) -> Result<Child<R, T>, SpawnError>
     where
         T: Interface,
@@ -16,7 +16,7 @@ impl<T: ChannelKind> Channel<T> {
     {
         let handle = tokio::spawn({
             let this = self.clone();
-            let stream = EventStream::try_new(this.clone())?;
+            let stream = Inbox::try_new(this.clone())?;
             let span = tracing::debug_span!("process", pid = %this.pid());
             let future = AssertUnwindSafe(spawn_fn(stream)).catch_unwind();
             this.register_spawn();

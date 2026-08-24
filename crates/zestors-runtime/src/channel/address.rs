@@ -79,7 +79,7 @@ mod tests {
     async fn test_address_downcast_ref() {
         let child = crate::spawn(
             Pid::rand(),
-            |_: EventStream<MyInterface>| async move { Ok(()) },
+            |_: Inbox<MyInterface>| async move { Ok(()) },
         );
         let address = child.address().clone().into_dyn::<Set![]>();
 

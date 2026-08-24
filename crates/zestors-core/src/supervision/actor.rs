@@ -6,7 +6,7 @@ pub trait Actor: Send + Sized + 'static {
 
     fn run(
         self,
-        state: EventStream<Self::Interface>,
+        state: Inbox<Self::Interface>,
     ) -> impl Future<Output = Result<Self::Exit, Report>> + Send + 'static;
 }
 
@@ -40,7 +40,7 @@ pub trait ActorRunnerExt: Actor {
 
     fn wrap<F, Fut, E>(self, mapper: F) -> WrapRun<Self, F>
     where
-        F: FnOnce(Self, EventStream<Self::Interface>) -> Fut + Send + 'static,
+        F: FnOnce(Self, Inbox<Self::Interface>) -> Fut + Send + 'static,
         Fut: Future<Output = Result<E, Report>> + Send + 'static,
         E: Send + 'static,
     {
@@ -92,7 +92,7 @@ where
 
     fn run(
         self,
-        state: EventStream<Self::Interface>,
+        state: Inbox<Self::Interface>,
     ) -> impl Future<Output = Result<Self::Exit, Report>> + Send + 'static {
         let Self { inner, map_exit } = self;
 
@@ -121,7 +121,7 @@ impl<T, F> WrapRun<T, F> {
     pub fn new<R, Fut>(inner: T, mapper: F) -> Self
     where
         T: Actor,
-        F: FnOnce(T, EventStream<T::Interface>) -> Fut + Send + 'static,
+        F: FnOnce(T, Inbox<T::Interface>) -> Fut + Send + 'static,
         Fut: Future<Output = Result<R, Report>> + Send + 'static,
         R: Send + 'static,
     {
@@ -132,7 +132,7 @@ impl<T, F> WrapRun<T, F> {
 impl<T, F, Fut, E> Actor for WrapRun<T, F>
 where
     T: Actor + Send + 'static,
-    F: FnOnce(T, EventStream<T::Interface>) -> Fut + Send + 'static,
+    F: FnOnce(T, Inbox<T::Interface>) -> Fut + Send + 'static,
     Fut: Future<Output = Result<E, Report>> + Send + 'static,
     E: Send + 'static,
 {
@@ -141,7 +141,7 @@ where
 
     fn run(
         self,
-        state: EventStream<Self::Interface>,
+        state: Inbox<Self::Interface>,
     ) -> impl Future<Output = Result<Self::Exit, Report>> + Send + 'static {
         let Self { inner, mapper } = self;
 
@@ -151,7 +151,7 @@ where
 
 pub struct FnActor<F, Fut, I, E>
 where
-    F: FnOnce(EventStream<I>) -> Fut + Send + 'static,
+    F: FnOnce(Inbox<I>) -> Fut + Send + 'static,
     Fut: Future<Output = Result<E, Report>> + Send + 'static,
     I: Interface,
     E: Send + 'static,
@@ -162,7 +162,7 @@ where
 
 impl<F, Fut, I, E> FnActor<F, Fut, I, E>
 where
-    F: FnOnce(EventStream<I>) -> Fut + Send + 'static,
+    F: FnOnce(Inbox<I>) -> Fut + Send + 'static,
     Fut: Future<Output = Result<E, Report>> + Send + 'static,
     I: Interface,
     E: Send + 'static,
@@ -177,7 +177,7 @@ where
 
 impl<F, Fut, I, E> Actor for FnActor<F, Fut, I, E>
 where
-    F: FnOnce(EventStream<I>) -> Fut + Send + 'static,
+    F: FnOnce(Inbox<I>) -> Fut + Send + 'static,
     Fut: Future<Output = Result<E, Report>> + Send + 'static,
     I: Interface,
     E: Send + 'static,
@@ -187,7 +187,7 @@ where
 
     fn run(
         self,
-        state: EventStream<Self::Interface>,
+        state: Inbox<Self::Interface>,
     ) -> impl Future<Output = Result<Self::Exit, Report>> + Send + 'static {
         (self.f)(state)
     }
@@ -195,7 +195,7 @@ where
 
 impl<F, Fut, I, E> Debug for FnActor<F, Fut, I, E>
 where
-    F: FnOnce(EventStream<I>) -> Fut + Send + 'static,
+    F: FnOnce(Inbox<I>) -> Fut + Send + 'static,
     Fut: Future<Output = Result<E, Report>> + Send + 'static,
     I: Interface,
     E: Send + 'static,
@@ -210,7 +210,7 @@ where
 
 impl<F, Fut, I, E> Clone for FnActor<F, Fut, I, E>
 where
-    F: Clone + FnOnce(EventStream<I>) -> Fut + Send + 'static,
+    F: Clone + FnOnce(Inbox<I>) -> Fut + Send + 'static,
     Fut: Future<Output = Result<E, Report>> + Send + 'static,
     I: Interface,
     E: Send + 'static,
@@ -225,7 +225,7 @@ where
 
 pub fn new_actor<F, Fut, I, E>(f: F) -> FnActor<F, Fut, I, E>
 where
-    F: FnOnce(EventStream<I>) -> Fut + Send + 'static,
+    F: FnOnce(Inbox<I>) -> Fut + Send + 'static,
     Fut: Future<Output = Result<E, Report>> + Send + 'static,
     I: Interface,
     E: Send + 'static,

@@ -6,11 +6,11 @@ use std::fmt::Debug;
 use tokio::select;
 
 pub struct HandlerState<H: Handler> {
-    stream: EventStream<H::Interface>,
+    stream: Inbox<H::Interface>,
 }
 
 impl<H: Handler> HandlerState<H> {
-    pub fn new(stream: EventStream<H::Interface>) -> Self {
+    pub fn new(stream: Inbox<H::Interface>) -> Self {
         Self { stream }
     }
 
@@ -30,7 +30,7 @@ impl<H: Handler> HandlerState<H> {
             _ = async {
                 while let Some(signal) = self.stream.next_signal().await {
                     match signal {
-                        SignalEvent::Resume | SignalEvent::Suspend | SignalEvent::Shutdown => {
+                        Signal::Resume | Signal::Suspend | Signal::Shutdown => {
                             tracing::debug!("Ignoring signal {:?} while exiting", signal);
                         }
                     }
@@ -54,10 +54,10 @@ impl<H: Handler> HandlerState<H> {
             _shutdown_signal_received = async {
                 while let Some(signal) = self.stream.next_signal().await {
                     match signal {
-                        SignalEvent::Shutdown => {
+                        Signal::Shutdown => {
                             break;
                         }
-                        SignalEvent::Resume | SignalEvent::Suspend => {
+                        Signal::Resume | Signal::Suspend => {
                             tracing::debug!("Ignoring signal {:?} while initializing", signal);
                         }
                     }
@@ -133,15 +133,15 @@ impl<H: Handler> HandlerState<H> {
 
         match msg {
             Event::Signal(signal) => match signal {
-                SignalEvent::Resume => {
+                Signal::Resume => {
                     handler.on_resume(self.address()).await?;
                 }
 
-                SignalEvent::Suspend => {
+                Signal::Suspend => {
                     handler.on_suspend(self.address()).await?;
                 }
 
-                SignalEvent::Shutdown => {
+                Signal::Shutdown => {
                     handler.on_shutdown(self.address()).await?;
                 }
             },

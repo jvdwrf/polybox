@@ -2,28 +2,28 @@ use super::*;
 
 #[derive(Debug)]
 pub enum Event<M> {
-    Signal(SignalEvent),
+    Signal(Signal),
     Message(M),
 }
 
 #[derive(Debug)]
-pub enum SignalEvent {
+pub enum Signal {
     Resume,
     Suspend,
     Shutdown,
 }
 
-impl SignalEvent {
+impl Signal {
     pub fn is_shutdown(&self) -> bool {
-        matches!(self, SignalEvent::Shutdown)
+        matches!(self, Signal::Shutdown)
     }
 
     pub fn is_resume(&self) -> bool {
-        matches!(self, SignalEvent::Resume)
+        matches!(self, Signal::Resume)
     }
 
     pub fn is_suspend(&self) -> bool {
-        matches!(self, SignalEvent::Suspend)
+        matches!(self, Signal::Suspend)
     }
 }
 

@@ -124,7 +124,7 @@ async fn main() -> Result<(), Report> {
         .with_pid("ApiServer")
         .split();
 
-    let (dyn_actor_spec, _) = new_actor(async |_: EventStream<MyInterface>| Ok(()))
+    let (dyn_actor_spec, _) = new_actor(async |_: Inbox<MyInterface>| Ok(()))
         .with_pid("DynActor")
         .split();
 
@@ -134,7 +134,7 @@ async fn main() -> Result<(), Report> {
             super_spec_b,
             api_server_spec,
             dyn_actor_spec,
-            new_blueprint(|| new_actor(async |_: EventStream<MyInterface>| Ok(())))
+            new_blueprint(|| new_actor(async |_: Inbox<MyInterface>| Ok(())))
                 .with_pid("DynBlueprintActor")
                 .into(),
             new_blueprint(|| MyActor::new("E"))

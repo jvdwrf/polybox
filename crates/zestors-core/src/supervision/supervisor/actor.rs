@@ -108,7 +108,7 @@ impl Supervisor {
     async fn shutdown(
         &mut self,
         pids: Option<&[Pid]>,
-        stream: &mut EventStream<SupervisorInterface>,
+        stream: &mut Inbox<SupervisorInterface>,
     ) {
         let child_descriptions = self.get_child_descriptions();
 
@@ -131,7 +131,7 @@ impl Supervisor {
                 while let Some(msg) = stream.next().await {
                     match msg {
                         Event::Signal(signal) => match signal {
-                            SignalEvent::Shutdown | SignalEvent::Resume | SignalEvent::Suspend => {
+                            Signal::Shutdown | Signal::Resume | Signal::Suspend => {
                                 tracing::debug!("Ignoring signal {:?} while shutting down supervisees", signal);
                             }
                         },
@@ -152,7 +152,7 @@ impl Supervisor {
     async fn handle_child_termination(
         &mut self,
         termination: ChildTermination,
-        stream: &mut EventStream<SupervisorInterface>,
+        stream: &mut Inbox<SupervisorInterface>,
     ) -> Result<(), RestartLimitReached> {
         let ChildTermination { id, exit, .. } = &termination;
         let spec = &self
@@ -206,7 +206,7 @@ impl Supervisor {
     async fn restart_affected_children<'a>(
         &mut self,
         pid: &Pid,
-        stream: &mut EventStream<SupervisorInterface>,
+        stream: &mut Inbox<SupervisorInterface>,
     ) {
         let affected_pids = self.affected_pids(pid);
 
@@ -314,7 +314,7 @@ impl Actor for Supervisor {
     type Interface = SupervisorInterface;
     type Exit = ();
 
-    async fn run(mut self, mut stream: EventStream<Self::Interface>) -> Result<Self::Exit, Report> {
+    async fn run(mut self, mut stream: Inbox<Self::Interface>) -> Result<Self::Exit, Report> {
         let child_descriptions = self.get_child_descriptions();
 
         // Run the initialization and shutdown signal handling concurrently.
@@ -353,11 +353,11 @@ impl Actor for Supervisor {
                 while let Some(msg) = stream.next().await {
                     match msg {
                         Event::Signal(signal) => match signal {
-                            SignalEvent::Shutdown => {
+                            Signal::Shutdown => {
                                 tracing::info!("Shutdown signal received during initialization. Shutting down supervisees.");
                                 break;
                             }
-                            SignalEvent::Resume | SignalEvent::Suspend => {
+                            Signal::Resume | Signal::Suspend => {
                                 tracing::debug!("Ignoring signal {:?} while initializing", signal);
                             }
                         },
@@ -402,12 +402,12 @@ impl Actor for Supervisor {
 
             match msg {
                 Event::Signal(signal) => match signal {
-                    SignalEvent::Shutdown => {
+                    Signal::Shutdown => {
                         self.shutdown(None, &mut stream).await;
                         break;
                     }
-                    SignalEvent::Resume => (),
-                    SignalEvent::Suspend => (),
+                    Signal::Resume => (),
+                    Signal::Suspend => (),
                 },
                 Event::Message(message) => match message {
                     // SupervisorInterface::RegisterChild(RegisterChild(spec)) => {

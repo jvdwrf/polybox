@@ -44,7 +44,7 @@ impl Theme {
                 Color32::from_rgb(70, 45, 25),    // Orange BG
                 Color32::from_rgb(209, 154, 102), // Orange FG
             ),
-            ActorStatus::Dead(exit) => (
+            ActorStatus::Exited(exit) => (
                 format!("Dead ({:?})", exit),
                 Color32::from_rgb(65, 35, 40),    // Red BG
                 Color32::from_rgb(224, 108, 117), // Red FG

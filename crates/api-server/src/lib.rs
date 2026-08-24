@@ -43,7 +43,7 @@ impl Actor for ApiServer {
     type Interface = ApiServerInterface;
     type Exit = ();
 
-    async fn run(self, mut state: EventStream<Self::Interface>) -> Result<Self::Exit, Report> {
+    async fn run(self, mut state: Inbox<Self::Interface>) -> Result<Self::Exit, Report> {
         let mut run_api = pin!(self.clone().run());
 
         loop {
@@ -68,11 +68,11 @@ impl Actor for ApiServer {
 
             match event {
                 Event::Signal(signal) => match signal {
-                    SignalEvent::Shutdown => {
+                    Signal::Shutdown => {
                         tracing::info!("API server received shutdown signal");
                         break Ok(());
                     }
-                    SignalEvent::Resume | SignalEvent::Suspend => {}
+                    Signal::Resume | Signal::Suspend => {}
                 },
 
                 Event::Message(msg) => match msg {

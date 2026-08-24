@@ -5,7 +5,7 @@
 /// - `Set!(A, B, C)` - a set containing types A, B, and C (`Set<(A, B, C)>`)
 #[macro_export]
 macro_rules! Set {
-    ($($es:path),* $(,)?) => {
+    ($($es:ty),* $(,)?) => {
         $crate::Set<($($es,)*)>
     };
 }

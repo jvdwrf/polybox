@@ -54,7 +54,7 @@ impl<T: ChannelKind> Channel<T> {
             msg_backpressure_limit: BACKPRESSURE_LIMIT,
             signal_queue: ConcurrentQueue::bounded(SIGNAL_QUEUE_CAPACITY),
             signal_notifier: Notify::new(),
-            status_observer: SharedObservable::new(ActorStatus::Dead(Exit::Normal)),
+            status_observer: SharedObservable::new(ActorStatus::Exited(Exit::Normal)),
             msg_queue: ConcurrentQueue::<T>::bounded(MSG_QUEUE_CAPACITY),
             created_at: Instant::now(),
             spawns: Default::default(),
@@ -102,7 +102,7 @@ impl<T: ChannelKind> Channel<T> {
         }
 
         exited_at.push((Instant::now(), reason));
-        self.set_status(ActorStatus::Dead(Exit::from_result(reason)));
+        self.set_status(ActorStatus::Exited(Exit::from_result(reason)));
     }
 
     pub(super) fn register_initialized(&self) {
@@ -213,7 +213,7 @@ impl<I: Interface> Channel<I> {
         raw_queue.pop().ok()
     }
 
-    pub(crate) async fn recv_signal(&self) -> Option<SignalEvent> {
+    pub(crate) async fn recv_signal(&self) -> Option<Signal> {
         let mut notify = pin!(self.inner.signal_notifier.notified());
 
         loop {
@@ -229,7 +229,7 @@ impl<I: Interface> Channel<I> {
         }
     }
 
-    pub(crate) fn pop_signal(&self) -> Option<SignalEvent> {
+    pub(crate) fn pop_signal(&self) -> Option<Signal> {
         loop {
             match self.inner.signal_queue.pop() {
                 Ok(signal) => match self.handle_signal(signal) {
@@ -246,11 +246,11 @@ impl<I: Interface> Channel<I> {
         }
     }
 
-    fn handle_signal(&self, signal: SignalInterface) -> Option<SignalEvent> {
+    fn handle_signal(&self, signal: SignalInterface) -> Option<Signal> {
         match signal {
             SignalInterface::Shutdown(_) => {
                 self.register_shutdown();
-                Some(SignalEvent::Shutdown)
+                Some(Signal::Shutdown)
             }
             SignalInterface::Suspend(_) => {
                 if self.status() == ActorStatus::Exiting {
@@ -258,7 +258,7 @@ impl<I: Interface> Channel<I> {
                     None
                 } else {
                     self.register_suspend();
-                    Some(SignalEvent::Suspend)
+                    Some(Signal::Suspend)
                 }
             }
             SignalInterface::Resume(_) => {
@@ -267,7 +267,7 @@ impl<I: Interface> Channel<I> {
                     None
                 } else {
                     self.register_resume();
-                    Some(SignalEvent::Resume)
+                    Some(Signal::Resume)
                 }
             }
             SignalInterface::Ping(envelope) => {
@@ -517,7 +517,7 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
 
             match status {
                 ActorStatus::Running => return Ok(()),
-                ActorStatus::Dead(exit) => {
+                ActorStatus::Exited(exit) => {
                     return Err(exit);
                 }
                 _ => {}
@@ -527,7 +527,7 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
 
             match status {
                 Some(ActorStatus::Running) => return Ok(()),
-                Some(ActorStatus::Dead(exit)) => {
+                Some(ActorStatus::Exited(exit)) => {
                     return Err(exit);
                 }
                 _ => {}
@@ -540,13 +540,13 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
             let mut subscriber = self.inner.status_observer.subscribe();
             let status = self.status();
 
-            if let ActorStatus::Dead(exit) = status {
+            if let ActorStatus::Exited(exit) = status {
                 return exit.into_result();
             }
 
             let status = subscriber.next().await;
 
-            if let Some(ActorStatus::Dead(exit)) = status {
+            if let Some(ActorStatus::Exited(exit)) = status {
                 return exit.into_result();
             }
         }
