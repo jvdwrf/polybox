@@ -13,9 +13,9 @@ impl Supervisee {
 }
 
 impl AsActorRef for Supervisee {
-    type QueueType = Set<()>;
+    type ChannelSpec = Set<()>;
 
-    fn as_channel(&self) -> &Channel<Self::QueueType> {
+    fn as_channel(&self) -> &Channel<Self::ChannelSpec> {
         &self.spec.as_channel()
     }
 }

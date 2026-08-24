@@ -2,24 +2,24 @@ use crate::_prelude::*;
 use std::{fmt::Debug, hash::Hash};
 
 #[repr(transparent)]
-pub struct Address<T: ChannelKind = Set!()> {
+pub struct Address<T: ChannelSpec = Set!()> {
     channel: Channel<T>,
 }
 
-impl<T: ChannelKind> AsActorRef for Address<T> {
-    type QueueType = T;
+impl<T: ChannelSpec> AsActorRef for Address<T> {
+    type ChannelSpec = T;
 
-    fn as_channel(&self) -> &Channel<Self::QueueType> {
+    fn as_channel(&self) -> &Channel<Self::ChannelSpec> {
         &self.channel
     }
 }
 
-impl<T: ChannelKind> IntoDyn for Address<T> {
-    type Ref<R: ChannelKind> = Address<R>;
+impl<T: ChannelSpec> IntoDyn for Address<T> {
+    type Ref<R: ChannelSpec> = Address<R>;
 
     fn into_dyn_unchecked<S>(self) -> Address<S>
     where
-        S: ChannelKind,
+        S: ChannelSpec,
     {
         Address {
             channel: self.channel.into_dyn_unchecked(),
@@ -27,7 +27,7 @@ impl<T: ChannelKind> IntoDyn for Address<T> {
     }
 }
 
-impl<T: ChannelKind> Clone for Address<T> {
+impl<T: ChannelSpec> Clone for Address<T> {
     fn clone(&self) -> Self {
         Self {
             channel: self.channel.clone(),
@@ -35,7 +35,7 @@ impl<T: ChannelKind> Clone for Address<T> {
     }
 }
 
-impl<T: ChannelKind> Address<T> {
+impl<T: ChannelSpec> Address<T> {
     pub(super) fn new(channel: Channel<T>) -> Self {
         Self { channel }
     }
@@ -46,20 +46,20 @@ impl<T: ChannelKind> Address<T> {
     }
 }
 
-impl<T: ChannelKind> Debug for Address<T> {
+impl<T: ChannelSpec> Debug for Address<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Address")
             .field("channel", &self.channel)
             .finish()
     }
 }
-impl<T: ChannelKind> PartialEq for Address<T> {
+impl<T: ChannelSpec> PartialEq for Address<T> {
     fn eq(&self, other: &Self) -> bool {
         self.channel == other.channel
     }
 }
-impl<T: ChannelKind> Eq for Address<T> {}
-impl<T: ChannelKind> Hash for Address<T> {
+impl<T: ChannelSpec> Eq for Address<T> {}
+impl<T: ChannelSpec> Hash for Address<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.channel.hash(state);
     }
@@ -77,10 +77,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_address_downcast_ref() {
-        let child = crate::spawn(
-            Pid::rand(),
-            |_: Inbox<MyInterface>| async move { Ok(()) },
-        );
+        let child = crate::spawn(Pid::rand(), |_: Inbox<MyInterface>| async move { Ok(()) });
         let address = child.address().clone().into_dyn::<Set![]>();
 
         address

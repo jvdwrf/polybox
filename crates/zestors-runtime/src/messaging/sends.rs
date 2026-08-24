@@ -62,7 +62,7 @@ impl<M, T> Sends<M> for T
 where
     T: AsActorRef + Sync,
     M: Message,
-    Channel<T::QueueType>: Sends<M>,
+    Channel<T::ChannelSpec>: Sends<M>,
 {
     async fn send(&self, msg: M) -> Result<MessageReceipt<M>, SendError<M>> {
         self.as_channel().send(msg).await

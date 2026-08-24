@@ -30,7 +30,7 @@ enum TestInterface {
 #[interface(path = "crate")]
 enum UnrelatedInterface {}
 
-fn create_running_channel<S: ChannelKind + Interface>() -> Channel<S> {
+fn create_running_channel<S: Interface>() -> Channel<S> {
     let channel = Channel::<S>::new(Pid::default());
     channel.set_status(ActorStatus::Running);
     channel

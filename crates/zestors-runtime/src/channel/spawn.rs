@@ -3,7 +3,7 @@ use futures::FutureExt as _;
 use std::panic::AssertUnwindSafe;
 use tracing::Instrument as _;
 
-impl<T: ChannelKind> Channel<T> {
+impl<T: ChannelSpec> Channel<T> {
     pub fn spawn<R, F>(
         self,
         spawn_fn: impl FnOnce(Inbox<T>) -> F,
@@ -49,12 +49,12 @@ impl<T: ChannelKind> Channel<T> {
     }
 }
 
-struct AbortBomb<'a, T: ChannelKind> {
+struct AbortBomb<'a, T: ChannelSpec> {
     channel: &'a Channel<T>,
     armed: bool,
 }
 
-impl<'a, T: ChannelKind> AbortBomb<'a, T> {
+impl<'a, T: ChannelSpec> AbortBomb<'a, T> {
     fn new(channel: &'a Channel<T>) -> Self {
         Self {
             channel,
@@ -67,7 +67,7 @@ impl<'a, T: ChannelKind> AbortBomb<'a, T> {
     }
 }
 
-impl<'a, T: ChannelKind> Drop for AbortBomb<'a, T> {
+impl<'a, T: ChannelSpec> Drop for AbortBomb<'a, T> {
     fn drop(&mut self) {
         if !self.armed {
             return;

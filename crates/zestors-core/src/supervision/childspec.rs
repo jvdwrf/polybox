@@ -100,9 +100,9 @@ impl<T: SpawnOnChannel> ChildSpec<T> {
 }
 
 impl<T: SpawnOnChannel> AsActorRef for ChildSpec<T> {
-    type QueueType = T::Inbox;
+    type ChannelSpec = T::Inbox;
 
-    fn as_channel(&self) -> &Channel<Self::QueueType> {
+    fn as_channel(&self) -> &Channel<Self::ChannelSpec> {
         &self.channel
     }
 }

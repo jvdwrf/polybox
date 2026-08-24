@@ -3,7 +3,7 @@ use std::{any::TypeId, future::Future};
 use tokio::time::Instant;
 
 pub trait ActorRef {
-    type ChannelKind: ChannelKind<Set = Self::Set>;
+    type ChannelSpec: ChannelSpec<Set = Self::Set>;
     type Set: 'static;
 
     /// Same as [`Sends::send`], but checks whether the message type is accepted by the channel.
@@ -77,7 +77,7 @@ pub trait ActorRef {
 
     fn ping(&self) -> Rx<()>;
 
-    fn address(&self) -> &Address<Self::ChannelKind>;
+    fn address(&self) -> &Address<Self::ChannelSpec>;
 
     fn created_at(&self) -> Instant;
 
@@ -91,14 +91,14 @@ pub trait ActorRef {
 }
 
 pub trait AsActorRef {
-    type QueueType: ChannelKind;
+    type ChannelSpec: ChannelSpec;
 
-    fn as_channel(&self) -> &Channel<Self::QueueType>;
+    fn as_channel(&self) -> &Channel<Self::ChannelSpec>;
 }
 
 impl<T: AsActorRef> ActorRef for T {
-    type Set = <T::QueueType as ChannelKind>::Set;
-    type ChannelKind = T::QueueType;
+    type Set = <T::ChannelSpec as ChannelSpec>::Set;
+    type ChannelSpec = T::ChannelSpec;
 
     fn send_dyn<M: Message>(
         &self,
@@ -165,7 +165,7 @@ impl<T: AsActorRef> ActorRef for T {
         self.as_channel().is_interface::<I>()
     }
 
-    fn address(&self) -> &Address<Self::ChannelKind> {
+    fn address(&self) -> &Address<Self::ChannelSpec> {
         Address::from_ref(self.as_channel())
     }
 

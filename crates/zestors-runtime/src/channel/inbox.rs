@@ -35,9 +35,9 @@ impl<T: Interface> Inbox<T> {
 }
 
 impl<T: Interface> AsActorRef for Inbox<T> {
-    type QueueType = T;
+    type ChannelSpec = T;
 
-    fn as_channel(&self) -> &Channel<Self::QueueType> {
+    fn as_channel(&self) -> &Channel<Self::ChannelSpec> {
         &self.channel
     }
 }

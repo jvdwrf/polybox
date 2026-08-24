@@ -12,20 +12,20 @@ pub(super) const BACKPRESSURE_LIMIT: usize = 100;
 const KEEP_N_SPAWNS: usize = 5;
 const KEEP_N_EXITS: usize = 5;
 
-pub trait ChannelKind: 'static {
+pub trait ChannelSpec: 'static {
     type Set: TypeSet + 'static;
 }
 
-impl<I: Interface> ChannelKind for I {
+impl<I: Interface> ChannelSpec for I {
     type Set = I::Set;
 }
 
-impl<S: TypeSet + 'static> ChannelKind for Set<S> {
+impl<S: TypeSet + 'static> ChannelSpec for Set<S> {
     type Set = S;
 }
 
 #[repr(transparent)]
-pub struct Channel<C: ChannelKind = Set!()> {
+pub struct Channel<C: ChannelSpec = Set!()> {
     pub(super) inner: Arc<ChannelInner<dyn Queue>>,
     _marker: PhantomData<fn() -> C>,
 }
@@ -43,7 +43,7 @@ pub(crate) struct ChannelInner<Q: ?Sized> {
     msg_queue: Q,
 }
 
-impl<T: ChannelKind> Channel<T> {
+impl<T: ChannelSpec> Channel<T> {
     pub fn new(pid: Pid) -> Self
     where
         T: Interface,
@@ -411,8 +411,8 @@ where
     }
 }
 
-impl<C: ChannelKind> ActorRef for Channel<C> {
-    type ChannelKind = C;
+impl<C: ChannelSpec> ActorRef for Channel<C> {
+    type ChannelSpec = C;
     type Set = C::Set;
 
     async fn send_dyn<M: Message>(&self, msg: M) -> Result<MessageReceipt<M>, SendCheckedError<M>> {
@@ -502,7 +502,7 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
         self.inner.msg_queue.type_id() == TypeId::of::<ConcurrentQueue<I>>()
     }
 
-    fn address(&self) -> &Address<Self::ChannelKind> {
+    fn address(&self) -> &Address<Self::ChannelSpec> {
         Address::from_ref(self)
     }
 
@@ -599,12 +599,12 @@ impl<C: ChannelKind> ActorRef for Channel<C> {
     }
 }
 
-impl<Q: ChannelKind> IntoDyn for Channel<Q> {
-    type Ref<T: ChannelKind> = Channel<T>;
+impl<Q: ChannelSpec> IntoDyn for Channel<Q> {
+    type Ref<T: ChannelSpec> = Channel<T>;
 
     fn into_dyn_unchecked<S>(self) -> Channel<S>
     where
-        S: ChannelKind,
+        S: ChannelSpec,
     {
         Channel {
             inner: self.inner,
@@ -613,10 +613,10 @@ impl<Q: ChannelKind> IntoDyn for Channel<Q> {
     }
 }
 
-impl<Q: ChannelKind> AsDyn for Channel<Q> {
+impl<Q: ChannelSpec> AsDyn for Channel<Q> {
     fn as_dyn_unchecked<S>(&self) -> &Channel<S>
     where
-        S: ChannelKind,
+        S: ChannelSpec,
     {
         // Sound because #[repr(transparent)] guarantees Channel<S>
         // and Channel<S2> share the exact layout of Arc<...>.
@@ -624,7 +624,7 @@ impl<Q: ChannelKind> AsDyn for Channel<Q> {
     }
 }
 
-impl<T: ChannelKind> Debug for Channel<T> {
+impl<T: ChannelSpec> Debug for Channel<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Channel")
             .field("pid", &self.inner.pid)
@@ -634,7 +634,7 @@ impl<T: ChannelKind> Debug for Channel<T> {
     }
 }
 
-impl<T: ChannelKind> Clone for Channel<T> {
+impl<T: ChannelSpec> Clone for Channel<T> {
     fn clone(&self) -> Self {
         Channel {
             inner: self.inner.clone(),
@@ -643,13 +643,13 @@ impl<T: ChannelKind> Clone for Channel<T> {
     }
 }
 
-impl<T: ChannelKind> PartialEq for Channel<T> {
+impl<T: ChannelSpec> PartialEq for Channel<T> {
     fn eq(&self, other: &Self) -> bool {
         self.inner.pid == other.inner.pid
     }
 }
-impl<T: ChannelKind> Eq for Channel<T> {}
-impl<T: ChannelKind> Hash for Channel<T> {
+impl<T: ChannelSpec> Eq for Channel<T> {}
+impl<T: ChannelSpec> Hash for Channel<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.inner.pid.hash(state);
     }

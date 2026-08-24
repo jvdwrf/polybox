@@ -156,9 +156,9 @@ impl<H: Handler> HandlerState<H> {
 }
 
 impl<H: Handler> AsActorRef for HandlerState<H> {
-    type QueueType = H::Interface;
+    type ChannelSpec = H::Interface;
 
-    fn as_channel(&self) -> &Channel<Self::QueueType> {
+    fn as_channel(&self) -> &Channel<Self::ChannelSpec> {
         self.stream.as_channel()
     }
 }

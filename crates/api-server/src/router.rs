@@ -9,7 +9,7 @@ use indexmap::IndexMap;
 use rootcause::report;
 use std::time::Duration;
 use zestors_core::{
-    channel::{ActorStatus, ChannelKind, ChannelSnapshot},
+    channel::{ActorStatus, ChannelSnapshot, ChannelSpec},
     node::Node,
     prelude::*,
     registry::Registry,
@@ -105,7 +105,7 @@ async fn get_processes() -> ApiResult<Json<IndexMap<Pid, (ChildConfig, ActorStat
 }
 
 async fn get_children(
-    address: &Address<impl ChannelKind>,
+    address: &Address<impl ChannelSpec>,
 ) -> rootcause::Result<Vec<ChildDescription>> {
     Ok(timeout(Duration::from_millis(50), address.request_dyn(GetChildren)).await??)
 }

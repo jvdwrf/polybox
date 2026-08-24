@@ -2,7 +2,7 @@ use super::*;
 use futures::future::BoxFuture;
 
 pub trait SpawnOnChannel: Into<DynSpawner> {
-    type Inbox: ChannelKind;
+    type Inbox: ChannelSpec;
     type Exit: Send + 'static;
 
     fn spawn_on(

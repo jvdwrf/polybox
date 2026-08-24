@@ -25,7 +25,7 @@ impl Registry {
     }
 
     /// Add a process to the registry if not already present.
-    pub fn register<T: ChannelKind>(&self, address: Address<T>) -> Result<(), RegistryAddError<T>> {
+    pub fn register<T: ChannelSpec>(&self, address: Address<T>) -> Result<(), RegistryAddError<T>> {
         let pid = address.pid();
 
         // If the pid is already present and the address is different, return an error.
@@ -84,12 +84,12 @@ impl Registry {
 
 #[derive(thiserror::Error)]
 #[error("Failed to add entry for pid {pid}")]
-pub struct RegistryAddError<T: ChannelKind = Set!()> {
+pub struct RegistryAddError<T: ChannelSpec = Set!()> {
     pid: Pid,
     entry: Address<T>,
 }
 
-impl<T: ChannelKind> std::fmt::Debug for RegistryAddError<T> {
+impl<T: ChannelSpec> std::fmt::Debug for RegistryAddError<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RegistryAddError")
             .field("pid", &self.pid)
