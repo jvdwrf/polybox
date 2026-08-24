@@ -1,24 +1,24 @@
 use super::*;
 use futures::future::BoxFuture;
 
-pub trait SpawnOnChannel: Into<DynSpawner> {
-    type Inbox: ChannelSpec;
+pub trait Spawnable: Into<DynSpawner> {
+    type ChannelSpec: ChannelSpec;
     type Exit: Send + 'static;
 
     fn spawn_on(
         &self,
-        data: Channel<Self::Inbox>,
-    ) -> impl Future<Output = Result<Child<Self::Exit, Self::Inbox>, SpawnError>> + Send;
+        data: Channel<Self::ChannelSpec>,
+    ) -> impl Future<Output = Result<Child<Self::Exit, Self::ChannelSpec>, SpawnError>> + Send;
 }
 
-impl<T: Blueprint> SpawnOnChannel for T {
-    type Inbox = <T::Actor as Actor>::Interface;
+impl<T: Blueprint> Spawnable for T {
+    type ChannelSpec = <T::Actor as Actor>::Interface;
     type Exit = <T::Actor as Actor>::Exit;
 
     async fn spawn_on(
         &self,
-        data: Channel<Self::Inbox>,
-    ) -> Result<Child<Self::Exit, Self::Inbox>, SpawnError> {
+        data: Channel<Self::ChannelSpec>,
+    ) -> Result<Child<Self::Exit, Self::ChannelSpec>, SpawnError> {
         let runner = self
             .instantiate()
             .await
@@ -31,13 +31,13 @@ impl<T: Blueprint> SpawnOnChannel for T {
 }
 
 #[derive(Debug, Clone)]
-pub struct DynSpawner(Arc<dyn SpawnOnChannelDyn + Send + Sync + 'static>);
+pub struct DynSpawner(Arc<dyn _Spawnable + Send + Sync + 'static>);
 
-trait SpawnOnChannelDyn: Debug {
+trait _Spawnable: Debug {
     fn spawn_on_dyn<'a>(&'a self, data: &'a Channel) -> BoxFuture<'a, Result<Child, SpawnError>>;
 }
 
-impl<R: Blueprint> SpawnOnChannelDyn for R {
+impl<R: Blueprint> _Spawnable for R {
     fn spawn_on_dyn<'a>(&'a self, data: &'a Channel) -> BoxFuture<'a, Result<Child, SpawnError>> {
         Box::pin(async move {
             let runner = self
@@ -56,14 +56,14 @@ impl<R: Blueprint> SpawnOnChannelDyn for R {
     }
 }
 
-impl SpawnOnChannel for DynSpawner {
-    type Inbox = Set!();
+impl Spawnable for DynSpawner {
+    type ChannelSpec = Set!();
     type Exit = ();
 
     async fn spawn_on(
         &self,
-        data: Channel<Self::Inbox>,
-    ) -> Result<Child<Self::Exit, Self::Inbox>, SpawnError> {
+        data: Channel<Self::ChannelSpec>,
+    ) -> Result<Child<Self::Exit, Self::ChannelSpec>, SpawnError> {
         self.0.spawn_on_dyn(&data).await
     }
 }

@@ -32,12 +32,12 @@ impl SupervisorBlueprint {
         self
     }
 
-    pub fn with_child<T: SpawnOnChannel>(mut self, spec: ChildSpec<T>) -> Self {
+    pub fn with_child<T: Spawnable>(mut self, spec: ChildSpec<T>) -> Self {
         self.supervisees.insert(spec.pid().clone(), spec.into_dyn());
         self
     }
 
-    pub fn with_children<T: SpawnOnChannel>(
+    pub fn with_children<T: Spawnable>(
         mut self,
         specs: impl IntoIterator<Item = ChildSpec<T>>,
     ) -> Self {
