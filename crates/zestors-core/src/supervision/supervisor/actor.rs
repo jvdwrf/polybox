@@ -67,7 +67,7 @@ impl Supervisor {
             .collect()
     }
 
-    pub fn with_child<T: SpawnOn>(mut self, spec: ChildSpec<T>) -> Self
+    pub fn with_child<T: SpawnOnChannel>(mut self, spec: ChildSpec<T>) -> Self
     where
         ChildSpec<T>: Into<ChildSpec>,
     {
@@ -75,7 +75,7 @@ impl Supervisor {
         self
     }
 
-    pub fn with_children<T: SpawnOn>(
+    pub fn with_children<T: SpawnOnChannel>(
         mut self,
         specs: impl IntoIterator<Item = ChildSpec<T>>,
     ) -> Self

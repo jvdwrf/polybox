@@ -5,6 +5,7 @@ pub struct ChildConfig {
     pub restart_mode: RestartMode,
     pub abort_timeout: Duration,
     pub init_timeout: Duration,
+    pub instantiation_timeout: Duration,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -14,16 +15,17 @@ pub struct ChildDescription {
 }
 
 impl ChildConfig {
-    pub fn for_blueprint<T: Blueprint>(blueprint: &T) -> Self {
+    pub fn new_for_blueprint<T: Blueprint>(blueprint: &T) -> Self {
         Self {
             restart_mode: blueprint.default_restart_mode(),
             abort_timeout: blueprint.default_abort_timeout(),
             init_timeout: blueprint.default_init_timeout(),
+            instantiation_timeout: blueprint.default_instantiation_timeout(),
         }
     }
 }
 
-pub struct ChildSpec<T: SpawnOn = DynRepeatSpawner> {
+pub struct ChildSpec<T: SpawnOnChannel = DynSpawner> {
     cfg: ChildConfig,
     blueprint: T,
     channel: Channel<T::Inbox>,
@@ -33,24 +35,14 @@ pub struct ChildSpec<T: SpawnOn = DynRepeatSpawner> {
 impl<T: Blueprint> ChildSpec<T> {
     pub fn new(id: impl Into<Pid>, blueprint: T) -> Self {
         Self {
-            cfg: blueprint.supervisee_cfg(),
+            cfg: blueprint.generate_config(),
             blueprint: blueprint.into(),
             channel: Channel::<<T::Actor as Actor>::Interface>::new(id.into()),
         }
     }
 
     pub fn new_uuid(blueprint: T) -> Self {
-        let data = Channel::<<T::Actor as Actor>::Interface>::new(Pid::rand());
-
-        Self {
-            cfg: blueprint.supervisee_cfg(),
-            blueprint: blueprint.into(),
-            channel: data,
-        }
-    }
-
-    pub fn supervise(self, supervisor: &mut Supervisor) -> Address<<T::Actor as Actor>::Interface> {
-        supervisor.add_child(self)
+        Self::new(Pid::rand(), blueprint)
     }
 
     pub fn split(self) -> (ChildSpec, Address<<T::Actor as Actor>::Interface>) {
@@ -61,7 +53,7 @@ impl<T: Blueprint> ChildSpec<T> {
 
 // Implementations when T can be any type that implements RepeatSpawn
 // (including DynRepeatSpawner)
-impl<T: SpawnOn> ChildSpec<T> {
+impl<T: SpawnOnChannel> ChildSpec<T> {
     pub fn cfg(&self) -> &ChildConfig {
         &self.cfg
     }
@@ -107,7 +99,7 @@ impl<T: SpawnOn> ChildSpec<T> {
     }
 }
 
-impl<T: SpawnOn> AsActorRef for ChildSpec<T> {
+impl<T: SpawnOnChannel> AsActorRef for ChildSpec<T> {
     type QueueType = T::Inbox;
 
     fn as_channel(&self) -> &Channel<Self::QueueType> {
@@ -115,7 +107,7 @@ impl<T: SpawnOn> AsActorRef for ChildSpec<T> {
     }
 }
 
-impl<T: SpawnOn + Clone> Clone for ChildSpec<T> {
+impl<T: SpawnOnChannel + Clone> Clone for ChildSpec<T> {
     fn clone(&self) -> Self {
         Self {
             cfg: self.cfg.clone(),
@@ -125,7 +117,7 @@ impl<T: SpawnOn + Clone> Clone for ChildSpec<T> {
     }
 }
 
-impl<T: SpawnOn + Debug> Debug for ChildSpec<T> {
+impl<T: SpawnOnChannel + Debug> Debug for ChildSpec<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ChildSpec")
             .field("cfg", &self.cfg)

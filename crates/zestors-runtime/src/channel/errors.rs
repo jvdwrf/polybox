@@ -180,10 +180,6 @@ impl From<ConcurrentInboxError> for SpawnError {
     }
 }
 
-// fn test(x: Report) {
-//     x.into_boxed_error()
-// }
-
 #[derive(Debug, Error)]
 #[error("There is already an active process running on this channel.")]
 pub struct ConcurrentInboxError;

@@ -1,9 +1,7 @@
-use futures::future::BoxFuture;
-use rootcause::compat::ReportAsError;
-
 use super::*;
+use futures::future::BoxFuture;
 
-pub trait SpawnOn: Into<DynRepeatSpawner> {
+pub trait SpawnOnChannel: Into<DynSpawner> {
     type Inbox: ChannelKind;
     type Exit: Send + 'static;
 
@@ -13,7 +11,7 @@ pub trait SpawnOn: Into<DynRepeatSpawner> {
     ) -> impl Future<Output = Result<Child<Self::Exit, Self::Inbox>, SpawnError>> + Send;
 }
 
-impl<T: Blueprint> SpawnOn for T {
+impl<T: Blueprint> SpawnOnChannel for T {
     type Inbox = <T::Actor as Actor>::Interface;
     type Exit = <T::Actor as Actor>::Exit;
 
@@ -22,7 +20,7 @@ impl<T: Blueprint> SpawnOn for T {
         data: Channel<Self::Inbox>,
     ) -> Result<Child<Self::Exit, Self::Inbox>, SpawnError> {
         let runner = self
-            .build()
+            .instantiate()
             .await
             .map_err(|x| SpawnError::Instantiation(x.into()))?;
 
@@ -33,17 +31,17 @@ impl<T: Blueprint> SpawnOn for T {
 }
 
 #[derive(Debug, Clone)]
-pub struct DynRepeatSpawner(Arc<dyn SpawnOnDyn + Send + Sync + 'static>);
+pub struct DynSpawner(Arc<dyn SpawnOnChannelDyn + Send + Sync + 'static>);
 
-trait SpawnOnDyn: Debug {
+trait SpawnOnChannelDyn: Debug {
     fn spawn_on_dyn<'a>(&'a self, data: &'a Channel) -> BoxFuture<'a, Result<Child, SpawnError>>;
 }
 
-impl<R: Blueprint> SpawnOnDyn for R {
+impl<R: Blueprint> SpawnOnChannelDyn for R {
     fn spawn_on_dyn<'a>(&'a self, data: &'a Channel) -> BoxFuture<'a, Result<Child, SpawnError>> {
         Box::pin(async move {
             let runner = self
-                .build()
+                .instantiate()
                 .await
                 .map_err(|x| SpawnError::Instantiation(x.into()))?
                 .map_actor_exit(|res| res.map(|_| ()));
@@ -58,7 +56,7 @@ impl<R: Blueprint> SpawnOnDyn for R {
     }
 }
 
-impl SpawnOn for DynRepeatSpawner {
+impl SpawnOnChannel for DynSpawner {
     type Inbox = Set!();
     type Exit = ();
 
@@ -70,16 +68,16 @@ impl SpawnOn for DynRepeatSpawner {
     }
 }
 
-impl DynRepeatSpawner {
+impl DynSpawner {
     pub fn new<R>(blueprint: R) -> Self
     where
         R: Blueprint + Send + Sync + 'static,
     {
-        DynRepeatSpawner(Arc::new(blueprint))
+        DynSpawner(Arc::new(blueprint))
     }
 }
 
-impl<R> From<R> for DynRepeatSpawner
+impl<R> From<R> for DynSpawner
 where
     R: Blueprint + Send + Sync + 'static,
 {

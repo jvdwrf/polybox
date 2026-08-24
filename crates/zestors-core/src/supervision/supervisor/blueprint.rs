@@ -32,12 +32,12 @@ impl SupervisorBlueprint {
         self
     }
 
-    pub fn with_child<T: SpawnOn>(mut self, spec: ChildSpec<T>) -> Self {
+    pub fn with_child<T: SpawnOnChannel>(mut self, spec: ChildSpec<T>) -> Self {
         self.supervisees.insert(spec.pid().clone(), spec.into_dyn());
         self
     }
 
-    pub fn with_children<T: SpawnOn>(
+    pub fn with_children<T: SpawnOnChannel>(
         mut self,
         specs: impl IntoIterator<Item = ChildSpec<T>>,
     ) -> Self {
@@ -86,7 +86,7 @@ impl SupervisorBlueprint {
 impl Blueprint for SupervisorBlueprint {
     type Actor = Supervisor;
 
-    async fn build(&self) -> rootcause::Result<Self::Actor> {
+    async fn instantiate(&self) -> rootcause::Result<Self::Actor> {
         Ok(Supervisor::new(
             self.supervisees.clone(),
             self.strategy,

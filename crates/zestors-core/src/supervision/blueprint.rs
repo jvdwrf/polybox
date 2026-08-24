@@ -4,7 +4,7 @@ use std::future::Future;
 pub trait Blueprint: Debug + Send + Sync + 'static {
     type Actor: Actor;
 
-    fn build(&self) -> impl Future<Output = rootcause::Result<Self::Actor>> + Send;
+    fn instantiate(&self) -> impl Future<Output = rootcause::Result<Self::Actor>> + Send;
 
     fn default_instantiation_timeout(&self) -> Duration {
         Duration::from_millis(5_000)
@@ -26,17 +26,17 @@ pub trait Blueprint: Debug + Send + Sync + 'static {
 impl<T: Actor + Clone + Debug + Send + Sync + 'static> Blueprint for T {
     type Actor = T;
 
-    async fn build(&self) -> rootcause::Result<Self::Actor> {
+    async fn instantiate(&self) -> rootcause::Result<Self::Actor> {
         Ok(self.clone())
     }
 }
 
 pub trait BlueprintExt: Blueprint + Sized {
-    fn into_spawn_fn(self) -> DynRepeatSpawner
+    fn into_spawn_fn(self) -> DynSpawner
     where
         Self: Send + Sync + 'static,
     {
-        DynRepeatSpawner::new(self)
+        DynSpawner::new(self)
     }
 
     fn spawn(
@@ -50,11 +50,11 @@ pub trait BlueprintExt: Blueprint + Sized {
     where
         Self: Send + Sync + 'static,
     {
-        async { Ok(self.build().await?.spawn(pid)) }
+        async { Ok(self.instantiate().await?.spawn(pid)) }
     }
 
-    fn supervisee_cfg(&self) -> ChildConfig {
-        ChildConfig::for_blueprint(self)
+    fn generate_config(&self) -> ChildConfig {
+        ChildConfig::new_for_blueprint(self)
     }
 
     fn with_pid(self, pid: impl Into<Pid>) -> ChildSpec<Self> {
@@ -62,20 +62,6 @@ pub trait BlueprintExt: Blueprint + Sized {
     }
 }
 impl<T: Blueprint> BlueprintExt for T {}
-
-pub trait IntoBlueprint {
-    type Blueprint: Blueprint;
-
-    fn into_blueprint(self) -> Self::Blueprint;
-}
-
-impl<T: Blueprint> IntoBlueprint for T {
-    type Blueprint = T;
-
-    fn into_blueprint(self) -> Self::Blueprint {
-        self
-    }
-}
 
 pub struct FnBlueprint<F, A>
 where
@@ -102,7 +88,7 @@ where
 {
     type Actor = A;
 
-    async fn build(&self) -> rootcause::Result<Self::Actor> {
+    async fn instantiate(&self) -> rootcause::Result<Self::Actor> {
         Ok((self.f)())
     }
 }

@@ -16,7 +16,7 @@ pub struct ApiServerBlueprint {
 impl Blueprint for ApiServerBlueprint {
     type Actor = ApiServer;
 
-    async fn build(&self) -> rootcause::Result<Self::Actor> {
+    async fn instantiate(&self) -> rootcause::Result<Self::Actor> {
         Ok(ApiServer::new(self.clone()))
     }
 }
