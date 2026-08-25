@@ -40,14 +40,14 @@ pub trait Sends<M: Message>: Sync {
     /// ignored.
     fn send_now(&self, msg: M) -> Result<MessageReceipt<M>, SendError<M>>;
 
-    /// Sends a message immediately, ignoring backpressure and channel status.
-    ///
-    /// This is the lowest-level sending operation. The message is queued even
-    /// when the channel is closed.
-    ///
-    /// If the underlying queue is at capacity, the message is dropped and the
-    /// implementation may log the overflow.
-    fn force_send(&self, msg: M) -> MessageReceipt<M>;
+    // /// Sends a message immediately, ignoring backpressure and channel status.
+    // ///
+    // /// This is the lowest-level sending operation. The message is queued even
+    // /// when the channel is closed.
+    // ///
+    // /// If the underlying queue is at capacity, the message is dropped and the
+    // /// implementation may log the overflow.
+    // fn force_send(&self, msg: M) -> MessageReceipt<M>;
 
     /// Sends a message and waits for a reply.
     ///
@@ -62,21 +62,17 @@ impl<M, T> Sends<M> for T
 where
     T: AsActorRef + Sync,
     M: Message,
-    Channel<T::ChannelSpec>: Sends<M>,
+    ChannelData<T::ChannelSpec>: Sends<M>,
 {
     async fn send(&self, msg: M) -> Result<MessageReceipt<M>, SendError<M>> {
-        self.as_channel().send(msg).await
+        self.channel_data().send(msg).await
     }
 
     fn try_send(&self, msg: M) -> Result<MessageReceipt<M>, TrySendError<M>> {
-        self.as_channel().try_send(msg)
+        self.channel_data().try_send(msg)
     }
 
     fn send_now(&self, msg: M) -> Result<MessageReceipt<M>, SendError<M>> {
-        self.as_channel().send_now(msg)
-    }
-
-    fn force_send(&self, msg: M) -> MessageReceipt<M> {
-        self.as_channel().force_send(msg)
+        self.channel_data().send_now(msg)
     }
 }

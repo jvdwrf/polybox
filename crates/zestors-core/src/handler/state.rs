@@ -13,7 +13,7 @@ pub(super) struct FullHandlerState<H: Handler> {
 impl<H: Handler> FullHandlerState<H> {
     pub(super) fn new(inbox: Inbox<H::Interface>) -> Self {
         Self {
-            address: inbox.address().clone(),
+            address: inbox.get_address(),
             inbox,
         }
     }
@@ -102,17 +102,17 @@ impl<H: Handler> FullHandlerState<H> {
         match msg {
             Event::Signal(signal) => match signal {
                 Signal::Resume => {
-                    handler.on_resume(self.address()).await?;
+                    handler.on_resume(&self.address).await?;
                     return Ok(RunOnce::Continue);
                 }
 
                 Signal::Suspend => {
-                    handler.on_suspend(self.address()).await?;
+                    handler.on_suspend(&self.address).await?;
                     return Ok(RunOnce::Continue);
                 }
 
                 Signal::Shutdown => {
-                    handler.on_shutdown(self.address()).await?;
+                    handler.on_shutdown(&self.address).await?;
                     return Ok(RunOnce::Continue);
                 }
             },
@@ -128,8 +128,12 @@ impl<H: Handler> FullHandlerState<H> {
 impl<H: Handler> AsActorRef for FullHandlerState<H> {
     type ChannelSpec = H::Interface;
 
-    fn as_channel(&self) -> &Channel<Self::ChannelSpec> {
-        self.inbox.as_channel()
+    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
+        self.address.channel_data()
+    }
+
+    fn get_address(&self) -> Address<Self::ChannelSpec> {
+        self.address.get_address()
     }
 }
 
@@ -178,7 +182,11 @@ pub struct HandlerState<'a, H: Handler> {
 impl<'a, H: Handler> AsActorRef for HandlerState<'a, H> {
     type ChannelSpec = H::Interface;
 
-    fn as_channel(&self) -> &Channel<Self::ChannelSpec> {
-        self.address.as_channel()
+    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
+        self.address.channel_data()
+    }
+
+    fn get_address(&self) -> Address<Self::ChannelSpec> {
+        self.address.get_address()
     }
 }

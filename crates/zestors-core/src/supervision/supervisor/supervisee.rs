@@ -15,7 +15,11 @@ impl Supervisee {
 impl AsActorRef for Supervisee {
     type ChannelSpec = Set<()>;
 
-    fn as_channel(&self) -> &Channel<Self::ChannelSpec> {
-        &self.spec.as_channel()
+    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
+        &self.spec.channel_data()
+    }
+
+    fn get_address(&self) -> Address<Self::ChannelSpec> {
+        self.spec.get_address()
     }
 }

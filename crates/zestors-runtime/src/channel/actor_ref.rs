@@ -19,8 +19,8 @@ pub trait ActorRef {
     /// Same as [`Sends::send_now`], but checks whether the message type is accepted by the channel.
     fn send_now_dyn<M: Message>(&self, msg: M) -> Result<MessageReceipt<M>, SendCheckedError<M>>;
 
-    /// Same as [`Sends::force_send`], but checks whether the message type is accepted by the channel.
-    fn force_send_dyn<M: Message>(&self, msg: M) -> Result<MessageReceipt<M>, NotAccepted<M>>;
+    // /// Same as [`Sends::force_send`], but checks whether the message type is accepted by the channel.
+    // fn force_send_dyn<M: Message>(&self, msg: M) -> Result<MessageReceipt<M>, NotAccepted<M>>;
 
     fn request_dyn<M: Message>(
         &self,
@@ -77,7 +77,7 @@ pub trait ActorRef {
 
     fn ping(&self) -> Rx<()>;
 
-    fn address(&self) -> &Address<Self::ChannelSpec>;
+    // fn address(&self) -> &Address<Self::ChannelSpec>;
 
     fn created_at(&self) -> Instant;
 
@@ -93,111 +93,109 @@ pub trait ActorRef {
 pub trait AsActorRef {
     type ChannelSpec: ChannelSpec;
 
-    fn as_channel(&self) -> &Channel<Self::ChannelSpec>;
+    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec>;
+    fn get_address(&self) -> Address<Self::ChannelSpec>;
 }
 
-impl<T: AsActorRef> ActorRef for T {
+impl<T: AsActorRef + Sync> ActorRef for T {
     type Set = <T::ChannelSpec as ChannelSpec>::Set;
     type ChannelSpec = T::ChannelSpec;
 
-    fn send_dyn<M: Message>(
-        &self,
-        msg: M,
-    ) -> impl Future<Output = Result<MessageReceipt<M>, SendCheckedError<M>>> + Send {
-        self.as_channel().send_dyn(msg)
+    async fn send_dyn<M: Message>(&self, msg: M) -> Result<MessageReceipt<M>, SendCheckedError<M>> {
+        self.channel_data().send_dyn(msg).await
     }
 
     fn try_send_dyn<M: Message>(
         &self,
         msg: M,
     ) -> Result<MessageReceipt<M>, TrySendCheckedError<M>> {
-        self.as_channel().try_send_dyn(msg)
+        self.channel_data().try_send_dyn(msg)
     }
 
     fn send_now_dyn<M: Message>(&self, msg: M) -> Result<MessageReceipt<M>, SendCheckedError<M>> {
-        self.as_channel().send_now_dyn(msg)
+        self.channel_data().send_now_dyn(msg)
     }
 
-    fn force_send_dyn<M: Message>(&self, msg: M) -> Result<MessageReceipt<M>, NotAccepted<M>> {
-        self.as_channel().force_send_dyn(msg)
-    }
+    // fn force_send_dyn<M: Message>(&self, msg: M) -> Result<MessageReceipt<M>, NotAccepted<M>> {
+    //     self.channel_data().force_send_dyn(msg)
+    // }
 
     fn request_dyn<M: Message>(
         &self,
         msg: M,
     ) -> impl Future<Output = Result<M::Outcome, RequestCheckedError<M>>> + Send {
-        self.as_channel().request_dyn(msg)
+        self.channel_data().request_dyn(msg)
     }
 
     fn pid(&self) -> &Pid {
-        self.as_channel().pid()
+        self.channel_data().pid()
     }
 
     fn status(&self) -> ActorStatus {
-        self.as_channel().status()
+        self.channel_data().status()
     }
 
     fn reached_backpressure(&self) -> bool {
-        self.as_channel().reached_backpressure()
+        self.channel_data().reached_backpressure()
     }
 
     fn signal_shutdown(&self) -> bool {
-        self.as_channel().signal_shutdown()
+        self.channel_data().signal_shutdown()
     }
 
     fn signal_suspend(&self) -> bool {
-        self.as_channel().signal_suspend()
+        self.channel_data().signal_suspend()
     }
 
     fn signal_resume(&self) -> bool {
-        self.as_channel().signal_resume()
+        self.channel_data().signal_resume()
     }
 
     fn ping(&self) -> Rx<()> {
-        self.as_channel().ping()
+        self.channel_data().ping()
     }
 
     fn members(&self) -> &'static [TypeId] {
-        self.as_channel().members()
+        self.channel_data().members()
     }
 
     fn is_interface<I: Interface>(&self) -> bool {
-        self.as_channel().is_interface::<I>()
+        self.channel_data().is_interface::<I>()
     }
 
-    fn address(&self) -> &Address<Self::ChannelSpec> {
-        Address::from_ref(self.as_channel())
-    }
+    // fn address(&self) -> &Address<Self::ChannelSpec> {
+    //     Address::from_ref(self.channel_data())
+    // }
 
     fn msg_len(&self) -> usize {
-        self.as_channel().msg_len()
+        self.channel_data().msg_len()
     }
 
     fn watch_initialization(&self) -> impl Future<Output = Result<(), ExitStatus>> + Send {
-        self.as_channel().watch_initialization()
+        self.channel_data().watch_initialization()
     }
 
     fn watch_exit(&self) -> impl Future<Output = Result<(), ExitError>> + Send {
-        self.as_channel().watch_exit()
+        self.channel_data().watch_exit()
     }
 
     fn created_at(&self) -> Instant {
-        self.as_channel().created_at()
+        self.channel_data().created_at()
     }
 
     fn spawned_at(&self) -> Vec<Instant> {
-        self.as_channel().spawned_at()
+        self.channel_data().spawned_at()
     }
 
     fn uptime(&self) -> Option<Duration> {
-        self.as_channel().uptime()
+        self.channel_data().uptime()
     }
 
     fn last_spawned_at(&self) -> Option<Instant> {
-        self.as_channel().last_spawned_at()
+        self.channel_data().last_spawned_at()
     }
 
     fn snapshot(&self) -> ChannelSnapshot {
-        self.as_channel().snapshot()
+        self.channel_data().snapshot()
     }
 }

@@ -46,7 +46,7 @@ impl<T: Blueprint> ChildSpec<T> {
     }
 
     pub fn split(self) -> (ChildSpec, Address<<T::Actor as Actor>::Interface>) {
-        let address = self.channel.address().clone();
+        let address = self.channel.get_address();
         (self.into_dyn(), address)
     }
 }
@@ -102,8 +102,12 @@ impl<T: Spawnable> ChildSpec<T> {
 impl<T: Spawnable> AsActorRef for ChildSpec<T> {
     type ChannelSpec = T::ChannelSpec;
 
-    fn as_channel(&self) -> &Channel<Self::ChannelSpec> {
-        &self.channel
+    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
+        &self.channel.channel_data()
+    }
+
+    fn get_address(&self) -> Address<Self::ChannelSpec> {
+        self.channel.get_address()
     }
 }
 
@@ -164,6 +168,6 @@ mod tests {
     #[test]
     fn test_childspec_doesnt_panic_on_address_retrieval() {
         let spec = ChildSpec::new("test", MyActor);
-        let _ = spec.address();
+        let _ = spec.get_address();
     }
 }

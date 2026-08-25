@@ -19,25 +19,27 @@ impl<T: ChannelSpec> Channel<T> {
             let stream = Inbox::try_new(this.clone())?;
             let span = tracing::debug_span!("process", pid = %this.pid());
             let future = AssertUnwindSafe(spawn_fn(stream)).catch_unwind();
-            this.register_spawn();
+            this.channel_data().register_spawn();
 
             async move {
                 let mut bomb = AbortBomb::new(&this);
 
                 let future_result = future.await;
 
-                this.drain_messages_and_signals();
+                this.channel_data().drain_messages_and_signals();
 
                 let mapped_result = match future_result {
                     Ok(val) => {
                         match &val {
-                            Ok(_) => this.register_exit(Ok(())),
-                            Err(_) => this.register_exit(Err(ExitError::UnhandledError)),
+                            Ok(_) => this.channel_data().register_exit(Ok(())),
+                            Err(_) => this
+                                .channel_data()
+                                .register_exit(Err(ExitError::UnhandledError)),
                         };
                         val
                     }
                     Err(boxed) => {
-                        this.register_exit(Err(ExitError::Panicked));
+                        this.channel_data().register_exit(Err(ExitError::Panicked));
                         std::panic::resume_unwind(boxed);
                     }
                 };
@@ -49,7 +51,7 @@ impl<T: ChannelSpec> Channel<T> {
             .instrument(span)
         });
 
-        Ok(Child::new(handle, Address::new(self)))
+        Ok(Child::new(handle, Address::new(self.data)))
     }
 }
 
@@ -80,7 +82,9 @@ impl<'a, T: ChannelSpec> Drop for AbortBomb<'a, T> {
         tracing::debug!("AbortBomb triggered");
 
         if !self.channel.status().is_dead() {
-            self.channel.register_exit(Err(ExitError::Aborted));
+            self.channel
+                .channel_data()
+                .register_exit(Err(ExitError::Aborted));
         }
     }
 }

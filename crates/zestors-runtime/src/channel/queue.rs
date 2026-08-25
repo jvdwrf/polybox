@@ -2,15 +2,20 @@ use super::*;
 use std::any::{Any, TypeId};
 use type_sets::TypeSet;
 
-pub(super) trait Queue: Any + Send + Sync + 'static {
-    fn len(&self) -> usize;
+mod _priv {
+    use super::*;
 
-    fn push_envelope_dyn(&self, msg: DynEnvelope) -> Result<(), NotAccepted<DynEnvelope>>;
+    pub trait Queue: Any + Send + Sync + 'static {
+        fn len(&self) -> usize;
 
-    fn pop_dyn(&self) -> Result<DynEnvelope, PopError>;
+        fn push_envelope_dyn(&self, msg: DynEnvelope) -> Result<(), NotAccepted<DynEnvelope>>;
 
-    fn members(&self) -> &'static [TypeId];
+        fn pop_dyn(&self) -> Result<DynEnvelope, PopError>;
+
+        fn members(&self) -> &'static [TypeId];
+    }
 }
+pub(crate) use _priv::Queue;
 
 impl<I: Interface> Queue for ConcurrentQueue<I> {
     fn len(&self) -> usize {

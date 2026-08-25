@@ -32,7 +32,7 @@ impl SupervisorBlueprint {
         self
     }
 
-    pub fn with_child<T: Spawnable>(mut self, spec: ChildSpec<T>) -> Self {
+    pub fn with_child<T: Spawnable + Sync>(mut self, spec: ChildSpec<T>) -> Self {
         self.supervisees.insert(spec.pid().clone(), spec.into_dyn());
         self
     }
@@ -62,7 +62,7 @@ impl SupervisorBlueprint {
     where
         T: Blueprint + Send + Sync + 'static,
     {
-        let address = spec.address().clone();
+        let address = spec.get_address();
 
         self.add_dyn_child(spec.into_dyn());
 

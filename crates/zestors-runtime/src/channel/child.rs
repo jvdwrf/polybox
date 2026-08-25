@@ -96,15 +96,19 @@ impl<T, R: ChannelSpec> Child<T, R> {
     }
 }
 
-impl<T, R: ChannelSpec> AsActorRef for Child<T, R> {
+impl<T: Send, R: ChannelSpec> AsActorRef for Child<T, R> {
     type ChannelSpec = R;
 
-    fn as_channel(&self) -> &Channel<Self::ChannelSpec> {
-        self.address.as_channel()
+    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
+        self.address.channel_data()
+    }
+
+    fn get_address(&self) -> Address<Self::ChannelSpec> {
+        self.address.get_address()
     }
 }
 
-impl<T, R: ChannelSpec> IntoDyn for Child<T, R> {
+impl<T: Send, R: ChannelSpec> IntoDyn for Child<T, R> {
     type Ref<S: ChannelSpec> = Child<T, S>;
 
     fn into_dyn_unchecked<S>(self) -> Self::Ref<S>

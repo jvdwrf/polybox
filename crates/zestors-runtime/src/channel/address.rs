@@ -1,20 +1,35 @@
 use crate::_prelude::*;
-use std::{fmt::Debug, hash::Hash};
+use std::{fmt::Debug, hash::Hash, sync::Arc};
 
 #[repr(transparent)]
-pub struct Address<T: ChannelSpec = Set!()> {
-    channel: Channel<T>,
+pub struct Address<C: ChannelSpec = Set!()> {
+    pub(super) channel: Arc<ChannelData<C>>,
 }
 
-impl<T: ChannelSpec> AsActorRef for Address<T> {
-    type ChannelSpec = T;
+impl<C: ChannelSpec> Address<C> {
+    pub(super) fn new(channel: Arc<ChannelData<C>>) -> Self {
+        Self { channel }
+    }
 
-    fn as_channel(&self) -> &Channel<Self::ChannelSpec> {
-        &self.channel
+    pub(super) fn from_ref(channel: &Channel<C>) -> &Self {
+        // SAFETY: This is safe because Address<T> is a transparent wrapper around Channel<T>
+        unsafe { &*(channel as *const Channel<C> as *const Self) }
     }
 }
 
-impl<T: ChannelSpec> IntoDyn for Address<T> {
+impl<C: ChannelSpec> AsActorRef for Address<C> {
+    type ChannelSpec = C;
+
+    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
+        &self.channel
+    }
+
+    fn get_address(&self) -> Address<Self::ChannelSpec> {
+        self.clone()
+    }
+}
+
+impl<C: ChannelSpec> IntoDyn for Address<C> {
     type Ref<R: ChannelSpec> = Address<R>;
 
     fn into_dyn_unchecked<S>(self) -> Address<S>
@@ -22,7 +37,7 @@ impl<T: ChannelSpec> IntoDyn for Address<T> {
         S: ChannelSpec,
     {
         Address {
-            channel: self.channel.into_dyn_unchecked(),
+            channel: ChannelData::arc_into_dyn_unchecked(self.channel),
         }
     }
 }
@@ -32,17 +47,6 @@ impl<T: ChannelSpec> Clone for Address<T> {
         Self {
             channel: self.channel.clone(),
         }
-    }
-}
-
-impl<T: ChannelSpec> Address<T> {
-    pub(super) fn new(channel: Channel<T>) -> Self {
-        Self { channel }
-    }
-
-    pub(super) fn from_ref(channel: &Channel<T>) -> &Self {
-        // SAFETY: This is safe because Address<T> is a transparent wrapper around Channel<T>
-        unsafe { &*(channel as *const Channel<T> as *const Self) }
     }
 }
 

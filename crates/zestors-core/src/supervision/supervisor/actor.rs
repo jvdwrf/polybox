@@ -45,7 +45,7 @@ impl Supervisor {
     where
         T: Blueprint + Send + Sync + 'static,
     {
-        let address = spec.address().clone();
+        let address = spec.get_address();
 
         self.add_dyn_child(spec.into_dyn());
 
@@ -97,12 +97,10 @@ impl Supervisor {
             supervisee.spec.pid()
         ))?;
         supervisee.child = Some(child);
-        registry
-            .register(supervisee.address().clone())
-            .attach(format!(
-                "Failed to register supervisee {}",
-                supervisee.spec.pid()
-            ))?;
+        registry.register(supervisee.get_address()).attach(format!(
+            "Failed to register supervisee {}",
+            supervisee.spec.pid()
+        ))?;
         Ok(())
     }
 

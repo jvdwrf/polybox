@@ -46,10 +46,10 @@ impl Node {
             .map_err(|_| report!("Root Node can only be started once."))?;
 
         let supervisor_child = supervisor_spec.spawn().await?;
-        let supervisor_address = supervisor_child.address().clone();
+        let supervisor_address = supervisor_child.get_address();
 
         Registry::local()
-            .register(supervisor_spec.address().clone())
+            .register(supervisor_spec.get_address())
             .attach("Root Supervisor failed to register")?;
 
         tokio::spawn(
