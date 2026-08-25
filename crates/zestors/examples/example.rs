@@ -3,7 +3,7 @@ use std::time::Duration;
 use zestors::{
     HandlerInterface,
     handler::{
-        BasicScheduler, CallbackMessage, ErasedMessage, Handle, HandledBy, Handler, HandlerState,
+        BasicScheduler, Handle, HandledBy, Handler, HandlerCallback, HandlerMessage, HandlerState,
     },
     prelude::*,
     spawn,
@@ -36,8 +36,9 @@ async fn main() {
                     MyInterface::Children(Envelope { handle, .. }) => {
                         handle.send(vec![]).ok();
                     }
-                    MyInterface::Any(envelope) => {
-                        unimplemented!()
+                    MyInterface::Rpc(envelope) => {
+                        println!("Received any message. Not handleable, dropping...");
+                        drop(envelope);
                     }
                 },
             }
@@ -76,7 +77,7 @@ enum MyInterface {
     Print(Envelope<String>),
     Health(Envelope<GetHealth>),
     Children(Envelope<GetChildren>),
-    Any(Envelope<ErasedMessage<MyActor>>),
+    Rpc(Envelope<HandlerCallback<MyActor>>),
 }
 
 #[derive(Message)]
@@ -94,7 +95,7 @@ impl Handler for MyActor {
             }
 
             _instant = self.interval.tick() => {
-                Some(Ok(ErasedMessage::new(IntervalTick)))
+                Some(Ok(HandlerMessage::new(IntervalTick)))
             }
         }
     }
@@ -143,7 +144,7 @@ impl Handle<IntervalTick> for MyActor {
 impl Handle<GetHealth> for MyActor {
     async fn handle(
         &mut self,
-        mut state: HandlerState<'_, Self>,
+        _state: HandlerState<'_, Self>,
         Envelope { msg: _, handle }: Envelope<GetHealth>,
     ) -> Result<(), Report> {
         handle.send(Health::healthy().with_debug_repr(&self)).ok();
@@ -184,9 +185,7 @@ async fn test() {
     child.send("Hello, world!".to_string()).await.unwrap();
 
     child
-        .send(ErasedMessage::new(CallbackMessage::new(|actor, state| {
-            Ok(())
-        })))
+        .send(HandlerCallback::new(|actor, state| Ok(())))
         .await
         .unwrap();
 

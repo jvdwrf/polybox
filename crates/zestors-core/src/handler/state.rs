@@ -94,9 +94,7 @@ impl<H: Handler> FullHandlerState<H> {
             }
 
             Some(result) = handler.next_event() => {
-                if let Some(msg) = result? {
-                    msg.handle(state, handler).await?;
-                }
+                result?.handle(state, handler).await?;
                 return Ok(RunOnce::Continue);
             }
         };

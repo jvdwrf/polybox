@@ -3,11 +3,11 @@ use std::time::Duration;
 use zestors::{
     HandlerInterface,
     api_server::ApiServer,
-    handler::{Handle, Handler, HandlerExit, HandlerState},
+    handler::{BasicScheduler, Handle, Handler, HandlerExit, HandlerState},
     node::Node,
     prelude::*,
     signals::RestartMode,
-    supervision::{BlueprintExt, Supervisor, new_actor, new_blueprint},
+    supervision::{BlueprintExt, Supervisor, blueprint, new_actor},
 };
 
 #[derive(Interface, HandlerInterface)]
@@ -16,14 +16,18 @@ enum MyInterface {
     Print(Envelope<String>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct MyActor {
     name: String,
+    scheduler: BasicScheduler<MyActor>,
 }
 
 impl MyActor {
     fn new(name: &str) -> Self {
-        Self { name: name.into() }
+        Self {
+            name: name.into(),
+            scheduler: BasicScheduler::new(),
+        }
     }
 }
 
@@ -33,10 +37,10 @@ struct Tick;
 impl Handler for MyActor {
     type Interface = MyInterface;
 
-    async fn init(&mut self, mut state: HandlerState<'_, MyActor>) -> Result<(), Report> {
+    async fn init(&mut self, _state: HandlerState<'_, MyActor>) -> Result<(), Report> {
         tokio::time::sleep(Duration::from_secs(3)).await;
 
-        state.schedule_msg(async move {
+        self.scheduler.schedule_msg(async move {
             tokio::time::sleep(Duration::from_secs(3)).await;
 
             Ok(Tick)
@@ -64,12 +68,12 @@ impl Handler for MyActor {
 impl Handle<Tick> for MyActor {
     async fn handle(
         &mut self,
-        mut state: HandlerState<'_, Self>,
+        _state: HandlerState<'_, Self>,
         _msg: Envelope<Tick>,
     ) -> Result<(), Report> {
         tracing::info!("Actor {} received a tick", self.name);
 
-        state.schedule_msg(async move {
+        self.scheduler.schedule_msg(async move {
             tokio::time::sleep(Duration::from_secs(3)).await;
             Ok(Tick)
         });
@@ -106,12 +110,12 @@ async fn main() -> Result<(), Report> {
         .with_max_level(tracing::Level::DEBUG)
         .init();
 
-    let (spec_a, addr_a) = MyActor::new("A")
+    let (spec_a, addr_a) = blueprint(|| MyActor::new("A"))
         .with_pid("HelloActor")
         .with_mode(RestartMode::Never)
         .split();
 
-    let (spec_b, addr_b) = MyActor::new("B")
+    let (spec_b, addr_b) = blueprint(|| MyActor::new("B"))
         .with_pid("HelloActor2")
         .with_mode(RestartMode::Always)
         .split();
@@ -121,12 +125,12 @@ async fn main() -> Result<(), Report> {
         .with_pid("SupervisorA")
         .split();
 
-    let (spec_c, _) = MyActor::new("C")
+    let (spec_c, _) = blueprint(|| MyActor::new("C"))
         .with_pid("HelloActor3")
         .with_mode(RestartMode::Always)
         .split();
 
-    let (spec_d, _) = MyActor::new("D")
+    let (spec_d, _) = blueprint(|| MyActor::new("D"))
         .with_pid("HelloActor4")
         .with_mode(RestartMode::Always)
         .split();
@@ -150,10 +154,10 @@ async fn main() -> Result<(), Report> {
             super_spec_b,
             api_server_spec,
             dyn_actor_spec,
-            new_blueprint(|| new_actor(async |_: Inbox<MyInterface>| Ok(())))
+            blueprint(|| new_actor(async |_: Inbox<MyInterface>| Ok(())))
                 .with_pid("DynBlueprintActor")
                 .into(),
-            new_blueprint(|| MyActor::new("E"))
+            blueprint(|| MyActor::new("E"))
                 .with_pid("DynBlueprintActor2")
                 .into(),
         ])

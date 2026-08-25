@@ -6,7 +6,7 @@ use futures::{StreamExt as _, future::BoxFuture, stream::FuturesUnordered};
 /// actor's [`next_event`](Handler::next_event) method to enable scheduling.
 #[derive(Debug)]
 pub struct BasicScheduler<H: Handler> {
-    futures: FuturesUnordered<BoxFuture<'static, Result<Option<ErasedMessage<H>>, Report>>>,
+    futures: FuturesUnordered<BoxFuture<'static, Result<Option<HandlerMessage<H>>, Report>>>,
 }
 
 impl<H: Handler> BasicScheduler<H> {
@@ -24,7 +24,7 @@ impl<H: Handler> BasicScheduler<H> {
         M: Message,
     {
         self.futures.push(Box::pin(async move {
-            Ok(Some(ErasedMessage::new(future_message.await?)))
+            Ok(Some(HandlerMessage::new(future_message.await?)))
         }));
     }
 
@@ -36,7 +36,7 @@ impl<H: Handler> BasicScheduler<H> {
     {
         self.futures.push(Box::pin(async move {
             let callback = fut.await;
-            Ok(Some(ErasedMessage::new(CallbackMessage::new(callback))))
+            Ok(Some(HandlerMessage::new(HandlerCallback::new(callback))))
         }));
     }
 
@@ -53,7 +53,7 @@ impl<H: Handler> BasicScheduler<H> {
 
     /// Polls the scheduler for the next completed future, returning a [`Message`] to be handled
     /// by the actor, or an error if the future failed.
-    pub async fn next(&mut self) -> Option<Result<ErasedMessage<H>, Report>> {
+    pub async fn next(&mut self) -> Option<Result<HandlerMessage<H>, Report>> {
         loop {
             match self.futures.next().await {
                 Some(Ok(Some(msg))) => return Some(Ok(msg)),
@@ -68,11 +68,11 @@ impl<H: Handler> BasicScheduler<H> {
 /// A type-erased [`Message`], known to be handled by the [`Handler`] `H`.
 #[derive(Message)]
 #[msg(path = "crate")]
-pub struct ErasedMessage<H: Handler> {
+pub struct HandlerMessage<H: Handler> {
     msg: Box<dyn DynErasedMessage<H>>,
 }
 
-impl<H: Handler> ErasedMessage<H> {
+impl<H: Handler> HandlerMessage<H> {
     pub fn new<M>(msg: M) -> Self
     where
         H: Handle<M>,
@@ -94,17 +94,17 @@ impl<H: Handler> ErasedMessage<H> {
     }
 }
 
-impl<H: Handler> Handle<ErasedMessage<H>> for H {
+impl<H: Handler> Handle<HandlerMessage<H>> for H {
     async fn handle(
         &mut self,
         state: HandlerState<'_, Self>,
-        env: Envelope<ErasedMessage<H>>,
+        env: Envelope<HandlerMessage<H>>,
     ) -> Result<(), Report> {
         env.msg.msg.handle_dyn(state, self).await
     }
 }
 
-impl<H: Handler> Debug for ErasedMessage<H> {
+impl<H: Handler> Debug for HandlerMessage<H> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("HandlerMessage")
             .field("msg", &"<dyn DynMessageHandledBy>")
@@ -143,11 +143,11 @@ impl<M: Message, H: Handle<M>> DynErasedMessage<H> for M {
 /// This type is also useful for scheduling callbacks in the [`next_event`](Handler::next_event) method of a [`Handler`].
 #[derive(Message)]
 #[msg(path = "crate")]
-pub struct CallbackMessage<H: Handler> {
+pub struct HandlerCallback<H: Handler> {
     f: Box<dyn FnOnce(&mut H, HandlerState<'_, H>) -> Result<(), Report> + Send + 'static>,
 }
 
-impl<H: Handler> CallbackMessage<H> {
+impl<H: Handler> HandlerCallback<H> {
     pub fn new(
         f: impl FnOnce(&mut H, HandlerState<'_, H>) -> Result<(), Report> + Send + 'static,
     ) -> Self {
@@ -155,13 +155,21 @@ impl<H: Handler> CallbackMessage<H> {
     }
 }
 
-impl<H: Handler> Handle<CallbackMessage<H>> for H {
+impl<H: Handler> Handle<HandlerCallback<H>> for H {
     async fn handle(
         &mut self,
         state: HandlerState<'_, Self>,
-        env: Envelope<CallbackMessage<H>>,
+        env: Envelope<HandlerCallback<H>>,
     ) -> Result<(), Report> {
         (env.msg.f)(self, state)
+    }
+}
+
+impl<H: Handler> Debug for HandlerCallback<H> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CallbackMessage")
+            .field("f", &"<dyn FnOnce>")
+            .finish()
     }
 }
 
