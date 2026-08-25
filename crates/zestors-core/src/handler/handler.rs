@@ -1,7 +1,7 @@
-use crate::{_prelude::*, handler::_HandlerState};
+use crate::{_prelude::*, handler::FullHandlerState};
 use futures::{
     StreamExt as _,
-    future::{BoxFuture, pending},
+    future::{BoxFuture, pending, ready},
     stream::FuturesUnordered,
 };
 use rootcause::report;
@@ -108,6 +108,29 @@ pub trait Handler: Debug + Sized + Send + 'static {
     ) -> impl Future<Output = Result<(), Report>> + Send {
         async { Ok(()) }
     }
+
+    /// Waits for the next event that should be processed.
+    ///
+    /// The default implementation returns `None`, which means the actor will only process
+    /// messages and signals.
+    ///
+    /// The returned value has the following semantics: (similar to `Stream::next`)
+    /// - `None` means the actor will not receive any more events from this source in this actor-loop.
+    /// - `Some(Ok(M))` means the actor received an event `M` that should be processed.
+    /// - `Some(Err(e))` means the actor received an error `e`, and the actor should exit.
+    ///
+    /// For scheduling arbitrary futures or messages, see the [`BasicScheduler`]. It's `next` method
+    /// is compatible with this message.
+    ///
+    /// # Cancellation
+    /// Any implementation **must** be cancellation-safe, since this future is cancelled whenever
+    /// the actor receives a message or signal and starts processing it.
+    fn next_event(
+        &mut self,
+    ) -> impl Future<Output = Option<Result<impl HandledBy<Self> + Send + 'static, Report>>> + Send
+    {
+        ready::<Option<Result<Infallible, _>>>(None)
+    }
 }
 
 impl<H: Handler> Actor for H {
@@ -115,7 +138,7 @@ impl<H: Handler> Actor for H {
     type Exit = ();
 
     async fn run(mut self, state: Inbox<Self::Interface>) -> Result<Self::Exit, Report> {
-        _HandlerState::new(state).run(&mut self).await
+        FullHandlerState::new(state).run(&mut self).await
     }
 }
 
@@ -197,11 +220,11 @@ impl From<HandlerExit> for Result<(), Report> {
 }
 
 #[derive(Debug)]
-pub(crate) struct Scheduler<H: Handler> {
-    futures: FuturesUnordered<BoxFuture<'static, Result<Option<DynHandlerMessage<H>>, Report>>>,
+pub struct BasicScheduler<H: Handler> {
+    futures: FuturesUnordered<BoxFuture<'static, Result<Option<ErasedMessage<H>>, Report>>>,
 }
 
-impl<H: Handler> Scheduler<H> {
+impl<H: Handler> BasicScheduler<H> {
     pub fn new() -> Self {
         Self {
             futures: FuturesUnordered::new(),
@@ -216,7 +239,7 @@ impl<H: Handler> Scheduler<H> {
         M: Message,
     {
         self.futures.push(Box::pin(async move {
-            Ok(Some(DynHandlerMessage::new(future_message.await?)))
+            Ok(Some(ErasedMessage::new(future_message.await?)))
         }));
     }
 
@@ -231,41 +254,62 @@ impl<H: Handler> Scheduler<H> {
         }));
     }
 
-    pub async fn next(&mut self) -> Option<Result<Option<DynHandlerMessage<H>>, Report>> {
-        self.futures.next().await
+    pub async fn next(&mut self) -> Option<Result<ErasedMessage<H>, Report>> {
+        loop {
+            match self.futures.next().await {
+                Some(Ok(Some(msg))) => return Some(Ok(msg)),
+                Some(Ok(None)) => continue,
+                Some(Err(e)) => return Some(Err(e)),
+                None => return None,
+            }
+        }
     }
 }
 
 /// A type-erased [`Message`], known to be handled by the [`Handler`] `H`.
 #[derive(Message)]
 #[msg(path = "crate")]
-pub(crate) struct DynHandlerMessage<H: Handler> {
-    inner: Box<dyn DynMessageHandledBy<H>>,
+pub struct ErasedMessage<H: Handler> {
+    msg: Box<dyn DynMessageHandledBy<H>>,
 }
 
-impl<H: Handler> DynHandlerMessage<H> {
+impl<H: Handler> ErasedMessage<H> {
     pub fn new<M>(msg: M) -> Self
     where
         H: Handle<M>,
         M: Message,
     {
-        Self {
-            inner: Box::new(msg),
-        }
+        Self::from_box(Box::new(msg))
+    }
+
+    pub fn from_box<M>(msg: Box<M>) -> Self
+    where
+        H: Handle<M>,
+        M: Message,
+    {
+        Self { msg }
     }
 
     pub async fn handle(self, state: HandlerState<'_, H>, actor: &mut H) -> Result<(), Report> {
-        self.inner.handle_dyn(state, actor).await
+        self.msg.handle_dyn(state, actor).await
     }
 }
 
-impl<H: Handler> Handle<DynHandlerMessage<H>> for H {
+impl<H: Handler> Handle<ErasedMessage<H>> for H {
     async fn handle(
         &mut self,
         state: HandlerState<'_, Self>,
-        env: Envelope<DynHandlerMessage<H>>,
+        env: Envelope<ErasedMessage<H>>,
     ) -> Result<(), Report> {
-        env.msg.inner.handle_dyn(state, self).await
+        env.msg.msg.handle_dyn(state, self).await
+    }
+}
+
+impl<H: Handler> Debug for ErasedMessage<H> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HandlerMessage")
+            .field("msg", &"<dyn DynMessageHandledBy>")
+            .finish()
     }
 }
 
@@ -289,5 +333,54 @@ impl<M: Message, H: Handle<M>> DynMessageHandledBy<H> for M {
             actor.handle(state, Envelope::new(*self, resolver)).await?;
             Ok(())
         })
+    }
+}
+
+#[derive(Message)]
+#[msg(path = "crate")]
+pub struct CallbackMessage<H: Handler> {
+    f: Box<dyn FnOnce(&mut H, HandlerState<'_, H>) -> Result<(), Report> + Send + 'static>,
+}
+
+impl<H: Handler> CallbackMessage<H> {
+    pub fn new(
+        f: impl FnOnce(&mut H, HandlerState<'_, H>) -> Result<(), Report> + Send + 'static,
+    ) -> Self {
+        Self { f: Box::new(f) }
+    }
+}
+
+impl<H: Handler> Handle<CallbackMessage<H>> for H {
+    async fn handle(
+        &mut self,
+        state: HandlerState<'_, Self>,
+        env: Envelope<CallbackMessage<H>>,
+    ) -> Result<(), Report> {
+        (env.msg.f)(self, state)
+    }
+}
+
+pub trait HandledBy<H: Handler> {
+    fn handle(
+        self,
+        state: HandlerState<'_, H>,
+        actor: &mut H,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+impl<H, M> HandledBy<H> for M
+where
+    H: Handle<M>,
+    M: Message,
+{
+    fn handle(
+        self,
+        state: HandlerState<'_, H>,
+        actor: &mut H,
+    ) -> impl Future<Output = Result<(), Report>> + Send {
+        let (resolver, receipt) = <M::Mode as Mode<M::Outcome>>::new();
+        std::mem::drop(receipt);
+        let envelope = Envelope::new(self, resolver);
+        actor.handle(state, envelope)
     }
 }

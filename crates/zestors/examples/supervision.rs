@@ -27,11 +27,21 @@ impl MyActor {
     }
 }
 
+#[derive(Message)]
+struct Tick;
+
 impl Handler for MyActor {
     type Interface = MyInterface;
 
-    async fn init(&mut self, _state: HandlerState<'_, MyActor>) -> Result<(), Report> {
+    async fn init(&mut self, mut state: HandlerState<'_, MyActor>) -> Result<(), Report> {
         tokio::time::sleep(Duration::from_secs(3)).await;
+
+        state.schedule_msg(async move {
+            tokio::time::sleep(Duration::from_secs(3)).await;
+
+            Ok(Tick)
+        });
+
         Ok(())
     }
 
@@ -46,6 +56,23 @@ impl Handler for MyActor {
 
     async fn on_shutdown(&mut self, _address: &Address<Self::Interface>) -> Result<(), Report> {
         tracing::info!("Actor {} is shutting down", self.name);
+
+        Ok(())
+    }
+}
+
+impl Handle<Tick> for MyActor {
+    async fn handle(
+        &mut self,
+        mut state: HandlerState<'_, Self>,
+        _msg: Envelope<Tick>,
+    ) -> Result<(), Report> {
+        tracing::info!("Actor {} received a tick", self.name);
+
+        state.schedule_msg(async move {
+            tokio::time::sleep(Duration::from_secs(3)).await;
+            Ok(Tick)
+        });
 
         Ok(())
     }

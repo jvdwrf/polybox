@@ -5,50 +5,16 @@ use crate::{
 use std::fmt::Debug;
 use tokio::select;
 
-pub(super) struct _HandlerState<H: Handler> {
+pub(super) struct FullHandlerState<H: Handler> {
     inbox: Inbox<H::Interface>,
     address: Address<H::Interface>,
-    scheduler: Scheduler<H>,
 }
 
-pub struct HandlerState<'a, H: Handler> {
-    address: &'a Address<H::Interface>,
-    scheduler: &'a mut Scheduler<H>,
-}
-
-impl<'a, H: Handler> HandlerState<'a, H> {
-    /// Schedule a future that will produce a [`Message`] to be handled by the actor.
-    pub fn schedule_msg<F, M>(&mut self, future_message: F)
-    where
-        F: Future<Output = Result<M, Report>> + Send + 'static,
-        M: Message,
-        H: Handle<M>,
-    {
-        self.scheduler.schedule_msg(future_message);
-    }
-
-    pub fn schedule_fut<F>(&mut self, future_message: F)
-    where
-        F: Future<Output = Result<(), Report>> + Send + 'static,
-    {
-        self.scheduler.schedule_fut(future_message);
-    }
-}
-
-impl<'a, H: Handler> AsActorRef for HandlerState<'a, H> {
-    type ChannelSpec = H::Interface;
-
-    fn as_channel(&self) -> &Channel<Self::ChannelSpec> {
-        self.address.as_channel()
-    }
-}
-
-impl<H: Handler> _HandlerState<H> {
+impl<H: Handler> FullHandlerState<H> {
     pub(super) fn new(inbox: Inbox<H::Interface>) -> Self {
         Self {
             address: inbox.address().clone(),
             inbox,
-            scheduler: Scheduler::new(),
         }
     }
 
@@ -57,7 +23,6 @@ impl<H: Handler> _HandlerState<H> {
             &mut self.inbox,
             HandlerState {
                 address: &self.address,
-                scheduler: &mut self.scheduler,
             },
         )
     }
@@ -126,11 +91,11 @@ impl<H: Handler> _HandlerState<H> {
                 } else {
                     return Ok(RunOnce::ExitNormal);
                 }
-            },
+            }
 
-            Some(next) = state.scheduler.next() => {
-                if let Some(event) = next? {
-                    event.handle(state, handler).await?;
+            Some(result) = handler.next_event() => {
+                if let Some(msg) = result? {
+                    msg.handle(state, handler).await?;
                 }
                 return Ok(RunOnce::Continue);
             }
@@ -162,7 +127,7 @@ impl<H: Handler> _HandlerState<H> {
     }
 }
 
-impl<H: Handler> AsActorRef for _HandlerState<H> {
+impl<H: Handler> AsActorRef for FullHandlerState<H> {
     type ChannelSpec = H::Interface;
 
     fn as_channel(&self) -> &Channel<Self::ChannelSpec> {
@@ -187,4 +152,35 @@ impl From<InitError> for HandlerExit {
 enum RunOnce {
     Continue,
     ExitNormal,
+}
+
+pub struct HandlerState<'a, H: Handler> {
+    address: &'a Address<H::Interface>,
+}
+
+// impl<'a, H: Handler> HandlerState<'a, H> {
+//     /// Schedule a future that will produce a [`Message`] to be handled by the actor.
+//     pub fn schedule_msg<F, M>(&mut self, future_message: F)
+//     where
+//         F: Future<Output = Result<M, Report>> + Send + 'static,
+//         M: Message,
+//         H: Handle<M>,
+//     {
+//         self.scheduler.schedule_msg(future_message);
+//     }
+
+//     pub fn schedule_fut<F>(&mut self, future_message: F)
+//     where
+//         F: Future<Output = Result<(), Report>> + Send + 'static,
+//     {
+//         self.scheduler.schedule_fut(future_message);
+//     }
+// }
+
+impl<'a, H: Handler> AsActorRef for HandlerState<'a, H> {
+    type ChannelSpec = H::Interface;
+
+    fn as_channel(&self) -> &Channel<Self::ChannelSpec> {
+        self.address.as_channel()
+    }
 }

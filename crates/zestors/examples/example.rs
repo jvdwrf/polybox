@@ -2,7 +2,9 @@ use rootcause::Report;
 use std::time::Duration;
 use zestors::{
     HandlerInterface,
-    handler::{Handle, Handler, HandlerState},
+    handler::{
+        BasicScheduler, CallbackMessage, ErasedMessage, Handle, HandledBy, Handler, HandlerState,
+    },
     prelude::*,
     spawn,
     supervision::{ActorExt as _, GetChildren, GetHealth, Health},
@@ -34,6 +36,9 @@ async fn main() {
                     MyInterface::Children(Envelope { handle, .. }) => {
                         handle.send(vec![]).ok();
                     }
+                    MyInterface::Any(envelope) => {
+                        unimplemented!()
+                    }
                 },
             }
         }
@@ -52,6 +57,7 @@ async fn main() {
 struct MyActor {
     nr: u32,
     interval: tokio::time::Interval,
+    scheduler: BasicScheduler<MyActor>,
 }
 
 impl MyActor {
@@ -59,6 +65,7 @@ impl MyActor {
         Self {
             nr: 0,
             interval: tokio::time::interval(Duration::from_secs(5)),
+            scheduler: BasicScheduler::new(),
         }
     }
 }
@@ -69,6 +76,7 @@ enum MyInterface {
     Print(Envelope<String>),
     Health(Envelope<GetHealth>),
     Children(Envelope<GetChildren>),
+    Any(Envelope<ErasedMessage<MyActor>>),
 }
 
 #[derive(Message)]
@@ -76,6 +84,20 @@ struct IntervalTick;
 
 impl Handler for MyActor {
     type Interface = MyInterface;
+
+    async fn next_event(
+        &mut self,
+    ) -> Option<Result<impl HandledBy<Self> + Send + 'static, Report>> {
+        tokio::select! {
+            Some(result) = self.scheduler.next() => {
+                Some(result)
+            }
+
+            _instant = self.interval.tick() => {
+                Some(Ok(ErasedMessage::new(IntervalTick)))
+            }
+        }
+    }
 }
 
 impl Handle<u32> for MyActor {
@@ -126,12 +148,12 @@ impl Handle<GetHealth> for MyActor {
     ) -> Result<(), Report> {
         handle.send(Health::healthy().with_debug_repr(&self)).ok();
 
-        state.schedule_msg(async move {
+        self.scheduler.schedule_msg(async move {
             tokio::time::sleep(Duration::from_secs(1)).await;
             Ok("Hello".to_string())
         });
 
-        state.schedule_fut(async move {
+        self.scheduler.schedule_fut(async move {
             tokio::time::sleep(Duration::from_secs(1)).await;
             Ok(())
         });
@@ -160,6 +182,13 @@ async fn test() {
     address.send(5u32).await.unwrap();
     child.send(15u32).await.unwrap();
     child.send("Hello, world!".to_string()).await.unwrap();
+
+    child
+        .send(ErasedMessage::new(CallbackMessage::new(|actor, state| {
+            Ok(())
+        })))
+        .await
+        .unwrap();
 
     child.signal_shutdown();
     child.await.unwrap();
