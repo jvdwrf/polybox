@@ -4,6 +4,12 @@ use std::time::Duration;
 use std::{pin::pin, sync::Arc};
 use tokio::sync::Notify;
 
+pub(super) const BACKPRESSURE_LIMIT: usize = 100;
+const KEEP_N_SPAWNS: usize = 5;
+const KEEP_N_EXITS: usize = 5;
+const SIGNAL_QUEUE_CAPACITY: usize = 1_000_000;
+const MSG_QUEUE_CAPACITY: usize = 1_000_000;
+
 mod channel;
 pub use channel::*;
 
@@ -39,6 +45,9 @@ pub use address::*;
 
 mod child;
 pub use child::*;
+
+mod channel_data;
+pub use channel_data::*;
 
 #[cfg(test)]
 mod tests;
