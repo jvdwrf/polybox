@@ -153,7 +153,7 @@ mod tests {
     impl Handle<u32> for MyActor {
         async fn handle(
             &mut self,
-            _state: &mut HandlerState<Self>,
+            _state: HandlerState<'_, Self>,
             msg: Envelope<u32>,
         ) -> Result<(), Report> {
             println!("Received message: {:?}", msg);

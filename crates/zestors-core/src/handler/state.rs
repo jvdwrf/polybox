@@ -2,33 +2,81 @@ use crate::{
     handler::{Handler, HandlerInterface},
     *,
 };
-use rootcause::report;
 use std::fmt::Debug;
 use tokio::select;
 
-pub struct HandlerState<H: Handler> {
+pub(super) struct _HandlerState<H: Handler> {
     inbox: Inbox<H::Interface>,
+    address: Address<H::Interface>,
+    scheduler: Scheduler<H>,
 }
 
-impl<H: Handler> HandlerState<H> {
-    pub fn new(inbox: Inbox<H::Interface>) -> Self {
-        Self { inbox }
+pub struct HandlerState<'a, H: Handler> {
+    address: &'a Address<H::Interface>,
+    scheduler: &'a mut Scheduler<H>,
+}
+
+impl<'a, H: Handler> HandlerState<'a, H> {
+    /// Schedule a future that will produce a [`Message`] to be handled by the actor.
+    pub fn schedule_msg<F, M>(&mut self, future_message: F)
+    where
+        F: Future<Output = Result<M, Report>> + Send + 'static,
+        M: Message,
+        H: Handle<M>,
+    {
+        self.scheduler.schedule_msg(future_message);
     }
 
-    pub async fn exit(&mut self, handler: &mut H, reason: ExitReason) -> Result<(), Report> {
-        handler.exit(reason).await
+    pub fn schedule_fut<F>(&mut self, future_message: F)
+    where
+        F: Future<Output = Result<(), Report>> + Send + 'static,
+    {
+        self.scheduler.schedule_fut(future_message);
+    }
+}
+
+impl<'a, H: Handler> AsActorRef for HandlerState<'a, H> {
+    type ChannelSpec = H::Interface;
+
+    fn as_channel(&self) -> &Channel<Self::ChannelSpec> {
+        self.address.as_channel()
+    }
+}
+
+impl<H: Handler> _HandlerState<H> {
+    pub(super) fn new(inbox: Inbox<H::Interface>) -> Self {
+        Self {
+            address: inbox.address().clone(),
+            inbox,
+            scheduler: Scheduler::new(),
+        }
+    }
+
+    pub(super) fn split(&mut self) -> (&mut Inbox<H::Interface>, HandlerState<'_, H>) {
+        (
+            &mut self.inbox,
+            HandlerState {
+                address: &self.address,
+                scheduler: &mut self.scheduler,
+            },
+        )
+    }
+
+    async fn exit(&mut self, handler: &mut H, reason: HandlerExit) -> Result<(), Report> {
+        let (_, state) = self.split();
+        handler.exit(state, reason).await
     }
 
     async fn init(&mut self, handler: &mut H) -> Result<(), InitError> {
-        let address = self.address().clone();
+        let (inbox, state) = self.split();
 
         tokio::select! {
-            res = handler.init(&address) => {
+            res = handler.init(state) => {
                 res.map_err(InitError::Failed)
             }
 
             _shutdown_signal_received = async {
-                while let Some(signal) = self.inbox.next_signal().await {
+                while let Some(signal) = inbox.next_signal().await {
                     match signal {
                         Signal::Shutdown => {
                             break;
@@ -45,7 +93,7 @@ impl<H: Handler> HandlerState<H> {
         }
     }
 
-    pub async fn run(&mut self, handler: &mut H) -> Result<(), Report>
+    pub(super) async fn run(&mut self, handler: &mut H) -> Result<(), Report>
     where
         H: Handler + Debug,
     {
@@ -58,19 +106,21 @@ impl<H: Handler> HandlerState<H> {
                 Ok(RunOnce::Continue) => {}
 
                 Ok(RunOnce::ExitNormal) => {
-                    break self.exit(handler, ExitReason::Normal).await;
+                    break self.exit(handler, HandlerExit::Normal).await;
                 }
 
                 Err(e) => {
-                    break self.exit(handler, ExitReason::HandlerError(e)).await;
+                    break self.exit(handler, HandlerExit::HandlerError(e)).await;
                 }
             }
         }
     }
 
     async fn run_once(&mut self, handler: &mut H) -> Result<RunOnce, Report> {
+        let (inbox, state) = self.split();
+
         let msg = select! {
-            msg = self.inbox.next() => {
+            msg = inbox.next() => {
                 if let Some(msg) = msg {
                     msg
                 } else {
@@ -78,9 +128,10 @@ impl<H: Handler> HandlerState<H> {
                 }
             },
 
-            scheduled = handler.schedule_next() => {
-                let event = scheduled?;
-                event.handle(self, handler).await?;
+            Some(next) = state.scheduler.next() => {
+                if let Some(event) = next? {
+                    event.handle(state, handler).await?;
+                }
                 return Ok(RunOnce::Continue);
             }
         };
@@ -104,14 +155,14 @@ impl<H: Handler> HandlerState<H> {
             },
 
             Event::Message(msg) => {
-                msg.handle_with(self, handler).await?;
+                msg.handle_with(state, handler).await?;
                 return Ok(RunOnce::Continue);
             }
         }
     }
 }
 
-impl<H: Handler> AsActorRef for HandlerState<H> {
+impl<H: Handler> AsActorRef for _HandlerState<H> {
     type ChannelSpec = H::Interface;
 
     fn as_channel(&self) -> &Channel<Self::ChannelSpec> {
@@ -124,11 +175,11 @@ enum InitError {
     Cancelled,
 }
 
-impl From<InitError> for ExitReason {
+impl From<InitError> for HandlerExit {
     fn from(e: InitError) -> Self {
         match e {
-            InitError::Failed(e) => ExitReason::InitFailed(e),
-            InitError::Cancelled => ExitReason::InitCancelled,
+            InitError::Failed(e) => HandlerExit::InitError(e),
+            InitError::Cancelled => HandlerExit::InitCancelled,
         }
     }
 }

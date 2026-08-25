@@ -3,7 +3,7 @@ use std::time::Duration;
 use zestors::{
     HandlerInterface,
     api_server::ApiServer,
-    handler::{ExitReason, Handle, Handler, HandlerState},
+    handler::{Handle, Handler, HandlerExit, HandlerState},
     node::Node,
     prelude::*,
     signals::RestartMode,
@@ -30,12 +30,16 @@ impl MyActor {
 impl Handler for MyActor {
     type Interface = MyInterface;
 
-    async fn init(&mut self, _address: &Address<Self::Interface>) -> Result<(), Report> {
+    async fn init(&mut self, _state: HandlerState<'_, MyActor>) -> Result<(), Report> {
         tokio::time::sleep(Duration::from_secs(3)).await;
         Ok(())
     }
 
-    async fn exit(&mut self, reason: ExitReason) -> Result<(), Report> {
+    async fn exit(
+        &mut self,
+        _state: HandlerState<'_, Self>,
+        reason: HandlerExit,
+    ) -> Result<(), Report> {
         tokio::time::sleep(Duration::from_secs(3)).await;
         reason.into()
     }
@@ -45,18 +49,12 @@ impl Handler for MyActor {
 
         Ok(())
     }
-
-    // async fn schedule_next(&mut self) -> Result<impl HandledBy<Self>, Report> {
-    //     tokio::time::sleep(Duration::from_secs(5)).await;
-    //     tracing::error!("Actor {} is idle for too long, shutting down", self.name);
-    //     Err::<Infallible, _>(report!("Idle timeout reached, shutting down"))
-    // }
 }
 
 impl Handle<u32> for MyActor {
     async fn handle(
         &mut self,
-        _state: &mut HandlerState<Self>,
+        _state: HandlerState<'_, Self>,
         msg: Envelope<u32>,
     ) -> Result<(), Report> {
         println!("Received message: {:?}", msg);
@@ -67,7 +65,7 @@ impl Handle<u32> for MyActor {
 impl Handle<String> for MyActor {
     async fn handle(
         &mut self,
-        _state: &mut HandlerState<Self>,
+        _state: HandlerState<'_, Self>,
         msg: Envelope<String>,
     ) -> Result<(), Report> {
         println!("Received message: {:?}", msg);

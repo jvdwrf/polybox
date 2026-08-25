@@ -2,7 +2,7 @@ use rootcause::Report;
 use std::time::Duration;
 use zestors::{
     HandlerInterface,
-    handler::{Handle, HandledBy, Handler, HandlerState},
+    handler::{Handle, Handler, HandlerState},
     prelude::*,
     spawn,
     supervision::{ActorExt as _, GetChildren, GetHealth, Health},
@@ -76,17 +76,12 @@ struct IntervalTick;
 
 impl Handler for MyActor {
     type Interface = MyInterface;
-
-    async fn schedule_next(&mut self) -> Result<impl HandledBy<Self>, Report> {
-        self.interval.tick().await;
-        Ok(IntervalTick)
-    }
 }
 
 impl Handle<u32> for MyActor {
     async fn handle(
         &mut self,
-        state: &mut HandlerState<Self>,
+        state: HandlerState<'_, Self>,
         Envelope { msg, handle: () }: Envelope<u32>,
     ) -> Result<(), Report> {
         println!("Received message: {:?}", msg);
@@ -104,7 +99,7 @@ impl Handle<u32> for MyActor {
 impl Handle<String> for MyActor {
     async fn handle(
         &mut self,
-        _: &mut HandlerState<Self>,
+        _: HandlerState<'_, Self>,
         msg: Envelope<String>,
     ) -> Result<(), Report> {
         println!("Received message: {:?}", msg);
@@ -115,7 +110,7 @@ impl Handle<String> for MyActor {
 impl Handle<IntervalTick> for MyActor {
     async fn handle(
         &mut self,
-        _: &mut HandlerState<Self>,
+        _: HandlerState<'_, Self>,
         _: Envelope<IntervalTick>,
     ) -> Result<(), Report> {
         println!("Interval tick: {}", self.nr);
@@ -126,10 +121,21 @@ impl Handle<IntervalTick> for MyActor {
 impl Handle<GetHealth> for MyActor {
     async fn handle(
         &mut self,
-        _: &mut HandlerState<Self>,
+        mut state: HandlerState<'_, Self>,
         Envelope { msg: _, handle }: Envelope<GetHealth>,
     ) -> Result<(), Report> {
-        handle.send(Health::healthy().with_debug_repr(self)).ok();
+        handle.send(Health::healthy().with_debug_repr(&self)).ok();
+
+        state.schedule_msg(async move {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            Ok("Hello".to_string())
+        });
+
+        state.schedule_fut(async move {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            Ok(())
+        });
+
         Ok(())
     }
 }
@@ -137,7 +143,7 @@ impl Handle<GetHealth> for MyActor {
 impl Handle<GetChildren> for MyActor {
     async fn handle(
         &mut self,
-        _: &mut HandlerState<Self>,
+        _: HandlerState<'_, Self>,
         Envelope { msg: _, handle }: Envelope<GetChildren>,
     ) -> Result<(), Report> {
         handle.send(vec![]).ok();
@@ -145,16 +151,16 @@ impl Handle<GetChildren> for MyActor {
     }
 }
 
-// async fn test() {
-//     let child = MyActor::new()
-//         // .map_actor_exit(|x| x.map(|x| x * 2))
-//         .spawn(Pid::rand());
-//     let address = child.address().clone();
+async fn test() {
+    let child = MyActor::new()
+        // .map_actor_exit(|x| x.map(|x| x * 2))
+        .spawn(Pid::rand());
+    let address = child.address().clone();
 
-//     address.send(5u32).await.unwrap();
-//     child.send(15u32).await.unwrap();
-//     child.send("Hello, world!".to_string()).await.unwrap();
-//     child.signal_shutdown();
-//     let exit_value = child.await.unwrap();
-//     assert_eq!(exit_value, 20 * 2);
-// }
+    address.send(5u32).await.unwrap();
+    child.send(15u32).await.unwrap();
+    child.send("Hello, world!".to_string()).await.unwrap();
+
+    child.signal_shutdown();
+    child.await.unwrap();
+}
