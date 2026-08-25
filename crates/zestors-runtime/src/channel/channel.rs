@@ -168,7 +168,14 @@ impl<T: ChannelSpec> Channel<T> {
         }
     }
 
-    fn signal(&self, signal: SignalInterface) {
+    fn signal(&self, signal: SignalInterface) -> bool {
+        if matches!(
+            self.status(),
+            ActorStatus::Exited(_) | ActorStatus::ShuttingDown
+        ) {
+            return false;
+        }
+
         match self.inner.signal_queue.push(signal) {
             Ok(_) => {
                 self.inner.signal_notifier.notify_one();
@@ -180,8 +187,11 @@ impl<T: ChannelSpec> Channel<T> {
                     SIGNAL_QUEUE_CAPACITY,
                     e
                 );
+                return false;
             }
         }
+
+        true
     }
 }
 
@@ -211,6 +221,16 @@ impl<I: Interface> Channel<I> {
             .expect("Channel is not of the expected interface type");
 
         raw_queue.pop().ok()
+    }
+
+    pub(crate) fn drain_messages_and_signals(&self) {
+        while let Some(msg) = self.pop_msg() {
+            drop(msg);
+        }
+
+        while let Some(signal) = self.pop_signal() {
+            drop(signal);
+        }
     }
 
     pub(crate) async fn recv_signal(&self) -> Option<Signal> {
@@ -479,22 +499,22 @@ impl<C: ChannelSpec> ActorRef for Channel<C> {
             .is_some()
     }
 
-    fn signal_shutdown(&self) {
+    fn signal_shutdown(&self) -> bool {
         self.signal(SignalInterface::Shutdown(Envelope::new(
             signals::Shutdown,
             (),
-        )));
+        )))
     }
 
-    fn signal_suspend(&self) {
+    fn signal_suspend(&self) -> bool {
         self.signal(SignalInterface::Suspend(Envelope::new(
             signals::Suspend,
             (),
-        )));
+        )))
     }
 
-    fn signal_resume(&self) {
-        self.signal(SignalInterface::Resume(Envelope::new(signals::Resume, ())));
+    fn signal_resume(&self) -> bool {
+        self.signal(SignalInterface::Resume(Envelope::new(signals::Resume, ())))
     }
 
     fn ping(&self) -> Rx<()> {

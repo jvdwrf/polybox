@@ -174,7 +174,7 @@ impl<H: Handler> Debug for HandlerCallback<H> {
 }
 
 /// A trait for types that can be handled by a [`Handler`].
-pub trait HandledBy<H: Handler> {
+pub trait HandledBy<H: Handler>: Send + 'static {
     fn handle(
         self,
         state: HandlerState<'_, H>,

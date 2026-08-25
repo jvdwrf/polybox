@@ -1,5 +1,3 @@
-use smol_str::format_smolstr;
-
 use super::*;
 
 #[derive(Debug)]

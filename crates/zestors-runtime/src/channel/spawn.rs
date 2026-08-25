@@ -24,7 +24,11 @@ impl<T: ChannelSpec> Channel<T> {
             async move {
                 let mut bomb = AbortBomb::new(&this);
 
-                let res = match future.await {
+                let future_result = future.await;
+
+                this.drain_messages_and_signals();
+
+                let mapped_result = match future_result {
                     Ok(val) => {
                         match &val {
                             Ok(_) => this.register_exit(Ok(())),
@@ -40,7 +44,7 @@ impl<T: ChannelSpec> Channel<T> {
 
                 bomb.defuse();
 
-                res
+                mapped_result
             }
             .instrument(span)
         });

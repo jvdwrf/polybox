@@ -86,9 +86,7 @@ struct IntervalTick;
 impl Handler for MyActor {
     type Interface = MyInterface;
 
-    async fn next_event(
-        &mut self,
-    ) -> Option<Result<impl HandledBy<Self> + Send + 'static, Report>> {
+    async fn next_event(&mut self) -> Option<Result<impl HandledBy<Self>, Report>> {
         tokio::select! {
             Some(result) = self.scheduler.next() => {
                 Some(result)

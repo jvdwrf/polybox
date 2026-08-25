@@ -137,8 +137,7 @@ pub trait Handler: Debug + Sized + Send + 'static {
     /// the actor receives a message or signal and starts processing it.
     fn next_event(
         &mut self,
-    ) -> impl Future<Output = Option<Result<impl HandledBy<Self> + Send + 'static, Report>>> + Send
-    {
+    ) -> impl Future<Output = Option<Result<impl HandledBy<Self>, Report>>> + Send {
         ready::<Option<Result<Infallible, _>>>(None)
     }
 }

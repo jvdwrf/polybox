@@ -69,11 +69,11 @@ pub trait ActorRef {
 
     fn reached_backpressure(&self) -> bool;
 
-    fn signal_shutdown(&self);
+    fn signal_shutdown(&self) -> bool;
 
-    fn signal_suspend(&self);
+    fn signal_suspend(&self) -> bool;
 
-    fn signal_resume(&self);
+    fn signal_resume(&self) -> bool;
 
     fn ping(&self) -> Rx<()>;
 
@@ -141,15 +141,15 @@ impl<T: AsActorRef> ActorRef for T {
         self.as_channel().reached_backpressure()
     }
 
-    fn signal_shutdown(&self) {
+    fn signal_shutdown(&self) -> bool {
         self.as_channel().signal_shutdown()
     }
 
-    fn signal_suspend(&self) {
+    fn signal_suspend(&self) -> bool {
         self.as_channel().signal_suspend()
     }
 
-    fn signal_resume(&self) {
+    fn signal_resume(&self) -> bool {
         self.as_channel().signal_resume()
     }
 
