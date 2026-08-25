@@ -3,24 +3,24 @@ use std::{fmt::Debug, hash::Hash, sync::Arc};
 
 #[repr(transparent)]
 pub struct Address<C: ChannelSpec = Set!()> {
-    pub(super) channel: Arc<ChannelData<C>>,
+    pub(super) channel: Arc<Channel<C>>,
 }
 
 impl<C: ChannelSpec> Address<C> {
-    pub(super) fn new(channel: Arc<ChannelData<C>>) -> Self {
+    pub(super) fn new(channel: Arc<Channel<C>>) -> Self {
         Self { channel }
     }
 
-    pub(super) fn from_ref(channel: &Channel<C>) -> &Self {
+    pub(super) fn from_ref(channel: &ChannelHandle<C>) -> &Self {
         // SAFETY: This is safe because Address<T> is a transparent wrapper around Channel<T>
-        unsafe { &*(channel as *const Channel<C> as *const Self) }
+        unsafe { &*(channel as *const ChannelHandle<C> as *const Self) }
     }
 }
 
 impl<C: ChannelSpec> AsActorRef for Address<C> {
     type ChannelSpec = C;
 
-    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
+    fn channel_data(&self) -> &Channel<Self::ChannelSpec> {
         &self.channel
     }
 
@@ -37,7 +37,7 @@ impl<C: ChannelSpec> IntoDyn for Address<C> {
         S: ChannelSpec,
     {
         Address {
-            channel: ChannelData::arc_into_dyn_unchecked(self.channel),
+            channel: Channel::arc_into_dyn_unchecked(self.channel),
         }
     }
 }

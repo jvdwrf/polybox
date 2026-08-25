@@ -1,18 +1,42 @@
 use super::*;
-use crate::signals::{self, Event};
+use crate::{
+    registry::Registry,
+    signals::{self, Event},
+};
 use eyeball::SharedObservable;
 use jiff::{SignedDuration, Timestamp, Zoned, tz::TimeZone};
-use std::{any::TypeId, fmt::Debug, hash::Hash, marker::PhantomData, sync::RwLock};
+use std::{
+    any::TypeId,
+    fmt::Debug,
+    hash::Hash,
+    marker::PhantomData,
+    sync::{
+        RwLock,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 use tokio::{select, time::Instant};
 use type_sets::{Contains, Set, TypeSet};
 
+/// The `ChannelData` contained in either:
+/// - [`Address`]: A weak reference to the channel data.
+/// - [`Channel`]: A strong reference to the channel data, which can be used to spawn
+/// a new actor on the same channel.
+/// - [`Inbox`]: A strong reference to the channel data, which can be used to
+/// receive messages
+///
+/// Once all strong references to the channel data are dropped, the actor will be
+/// deregistered from the local registry and the channel data is dropped.
+///
+/// This means, that in order restart an actor, the [`Channel`] handle must be kept
+/// alive.
 #[repr(transparent)]
-pub struct ChannelData<C: ChannelSpec = Set!()> {
+pub struct Channel<C: ChannelSpec = Set!()> {
     _marker: PhantomData<fn() -> C>,
-    inner: InnerChannelData<dyn Queue>,
+    inner: ChannelInner<dyn Queue>,
 }
 
-pub(crate) struct InnerChannelData<Q: ?Sized> {
+pub(crate) struct ChannelInner<Q: ?Sized> {
     pid: Pid,
     signal_queue: ConcurrentQueue<SignalInterface>,
     signal_notifier: Notify,
@@ -22,25 +46,44 @@ pub(crate) struct InnerChannelData<Q: ?Sized> {
     created_at: Instant,
     spawns: RwLock<Vec<Instant>>,
     exits: RwLock<Vec<(Instant, Result<(), ExitError>)>>,
+    strong_count: AtomicUsize,
     msg_queue: Q,
 }
 
-impl<C: ChannelSpec> ChannelData<C> {
-    pub(crate) fn arc_into_dyn_unchecked<S>(self: Arc<Self>) -> Arc<ChannelData<S>>
+impl<C: ChannelSpec> Channel<C> {
+    pub(crate) fn arc_into_dyn_unchecked<S>(self: Arc<Self>) -> Arc<Channel<S>>
     where
         S: ChannelSpec,
     {
-        unsafe { Arc::from_raw(Arc::into_raw(self) as *const ChannelData<S>) }
+        unsafe { Arc::from_raw(Arc::into_raw(self) as *const Channel<S>) }
     }
 
-    pub(crate) fn arc_as_dyn_unchecked<S>(self: &Arc<Self>) -> &Arc<ChannelData<S>>
+    pub(crate) fn arc_as_dyn_unchecked<S>(self: &Arc<Self>) -> &Arc<Channel<S>>
     where
         S: ChannelSpec,
     {
-        unsafe { &*(self as *const Arc<Self> as *const Arc<ChannelData<S>>) }
+        unsafe { &*(self as *const Arc<Self> as *const Arc<Channel<S>>) }
     }
 
-    fn inner(&self) -> &InnerChannelData<dyn Queue> {
+    pub(crate) fn incr_strong_count(&self) {
+        if self.inner().strong_count.fetch_sub(1, Ordering::Release) == 1 {
+            std::sync::atomic::fence(Ordering::Acquire);
+            let addr = Registry::local().remove(self.pid());
+
+            if addr.is_none() {
+                tracing::warn!(
+                    "Channel {} was not found in the registry when dropping the last strong reference",
+                    self.pid()
+                );
+            }
+        }
+    }
+
+    pub(crate) fn decr_strong_count(&self) {
+        self.inner().strong_count.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn inner(&self) -> &ChannelInner<dyn Queue> {
         &self.inner
     }
 
@@ -172,9 +215,9 @@ impl<C: ChannelSpec> ChannelData<C> {
     }
 }
 
-impl<I: Interface> ChannelData<I> {
+impl<I: Interface> Channel<I> {
     pub(super) fn new(pid: Pid) -> Arc<Self> {
-        let inner: Arc<InnerChannelData<dyn Queue>> = Arc::new(InnerChannelData {
+        let inner: Arc<ChannelInner<dyn Queue>> = Arc::new(ChannelInner {
             pid,
             msg_notifier: Notify::new(),
             msg_backpressure_limit: BACKPRESSURE_LIMIT,
@@ -185,12 +228,13 @@ impl<I: Interface> ChannelData<I> {
             created_at: Instant::now(),
             spawns: Default::default(),
             exits: Default::default(),
+            strong_count: AtomicUsize::new(1),
         });
 
         Self::from_arc(inner)
     }
 
-    fn from_arc(inner: Arc<InnerChannelData<dyn Queue>>) -> Arc<Self> {
+    fn from_arc(inner: Arc<ChannelInner<dyn Queue>>) -> Arc<Self> {
         unsafe { Arc::from_raw(Arc::into_raw(inner) as *const Self) }
     }
 
@@ -315,7 +359,7 @@ impl<I: Interface> ChannelData<I> {
     }
 }
 
-impl<C: ChannelSpec> Debug for ChannelData<C> {
+impl<C: ChannelSpec> Debug for Channel<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ChannelData")
             .field("pid", &self.inner().pid)
@@ -325,19 +369,19 @@ impl<C: ChannelSpec> Debug for ChannelData<C> {
     }
 }
 
-impl<C: ChannelSpec> Eq for ChannelData<C> {}
-impl<C: ChannelSpec> PartialEq for ChannelData<C> {
+impl<C: ChannelSpec> Eq for Channel<C> {}
+impl<C: ChannelSpec> PartialEq for Channel<C> {
     fn eq(&self, other: &Self) -> bool {
         self.inner().pid == other.inner().pid
     }
 }
-impl<C: ChannelSpec> Hash for ChannelData<C> {
+impl<C: ChannelSpec> Hash for Channel<C> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.inner().pid.hash(state);
     }
 }
 
-impl<C: ChannelSpec> ActorRef for ChannelData<C> {
+impl<C: ChannelSpec> ActorRef for Channel<C> {
     type ChannelSpec = C;
     type Set = C::Set;
 
@@ -517,7 +561,7 @@ impl<C: ChannelSpec> ActorRef for ChannelData<C> {
     }
 }
 
-impl<M, T> Sends<M> for ChannelData<Set<T>>
+impl<M, T> Sends<M> for Channel<Set<T>>
 where
     M: Message,
     T: TypeSet + Contains<M> + 'static,
@@ -582,7 +626,7 @@ where
     // }
 }
 
-impl<M, I> Sends<M> for ChannelData<I>
+impl<M, I> Sends<M> for Channel<I>
 where
     M: Message,
     I: Interface + TryInto<Envelope<M>> + From<Envelope<M>> + Send + 'static,

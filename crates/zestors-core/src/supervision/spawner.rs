@@ -7,7 +7,7 @@ pub trait Spawnable: Into<DynSpawner> {
 
     fn spawn_on(
         &self,
-        data: Channel<Self::ChannelSpec>,
+        data: ChannelHandle<Self::ChannelSpec>,
     ) -> impl Future<Output = Result<Child<Self::Exit, Self::ChannelSpec>, SpawnError>> + Send;
 }
 
@@ -17,7 +17,7 @@ impl<T: Blueprint> Spawnable for T {
 
     async fn spawn_on(
         &self,
-        data: Channel<Self::ChannelSpec>,
+        data: ChannelHandle<Self::ChannelSpec>,
     ) -> Result<Child<Self::Exit, Self::ChannelSpec>, SpawnError> {
         let runner = self
             .instantiate()
@@ -34,11 +34,17 @@ impl<T: Blueprint> Spawnable for T {
 pub struct DynSpawner(Arc<dyn _Spawnable + Send + Sync + 'static>);
 
 trait _Spawnable: Debug {
-    fn spawn_on_dyn<'a>(&'a self, data: &'a Channel) -> BoxFuture<'a, Result<Child, SpawnError>>;
+    fn spawn_on_dyn<'a>(
+        &'a self,
+        data: &'a ChannelHandle,
+    ) -> BoxFuture<'a, Result<Child, SpawnError>>;
 }
 
 impl<R: Blueprint> _Spawnable for R {
-    fn spawn_on_dyn<'a>(&'a self, data: &'a Channel) -> BoxFuture<'a, Result<Child, SpawnError>> {
+    fn spawn_on_dyn<'a>(
+        &'a self,
+        data: &'a ChannelHandle,
+    ) -> BoxFuture<'a, Result<Child, SpawnError>> {
         Box::pin(async move {
             let runner = self
                 .instantiate()
@@ -62,7 +68,7 @@ impl Spawnable for DynSpawner {
 
     async fn spawn_on(
         &self,
-        data: Channel<Self::ChannelSpec>,
+        data: ChannelHandle<Self::ChannelSpec>,
     ) -> Result<Child<Self::Exit, Self::ChannelSpec>, SpawnError> {
         self.0.spawn_on_dyn(&data).await
     }

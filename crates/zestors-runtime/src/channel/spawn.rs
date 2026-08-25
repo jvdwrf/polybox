@@ -3,7 +3,7 @@ use futures::FutureExt as _;
 use std::panic::AssertUnwindSafe;
 use tracing::Instrument as _;
 
-impl<T: ChannelSpec> Channel<T> {
+impl<T: ChannelSpec> ChannelHandle<T> {
     pub fn spawn<R, F>(
         self,
         spawn_fn: impl FnOnce(Inbox<T>) -> F,
@@ -14,6 +14,8 @@ impl<T: ChannelSpec> Channel<T> {
         F: Future<Output = Result<R, Report>> + Send + 'static,
         F::Output: Send + 'static,
     {
+        let address = self.get_address();
+
         let handle = tokio::spawn({
             let this = self.clone();
             let stream = Inbox::try_new(this.clone())?;
@@ -51,17 +53,17 @@ impl<T: ChannelSpec> Channel<T> {
             .instrument(span)
         });
 
-        Ok(Child::new(handle, Address::new(self.data)))
+        Ok(Child::new(handle, address))
     }
 }
 
 struct AbortBomb<'a, T: ChannelSpec> {
-    channel: &'a Channel<T>,
+    channel: &'a ChannelHandle<T>,
     armed: bool,
 }
 
 impl<'a, T: ChannelSpec> AbortBomb<'a, T> {
-    fn new(channel: &'a Channel<T>) -> Self {
+    fn new(channel: &'a ChannelHandle<T>) -> Self {
         Self {
             channel,
             armed: true,

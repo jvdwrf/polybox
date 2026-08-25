@@ -128,7 +128,7 @@ impl<H: Handler> FullHandlerState<H> {
 impl<H: Handler> AsActorRef for FullHandlerState<H> {
     type ChannelSpec = H::Interface;
 
-    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
+    fn channel_data(&self) -> &Channel<Self::ChannelSpec> {
         self.address.channel_data()
     }
 
@@ -182,7 +182,7 @@ pub struct HandlerState<'a, H: Handler> {
 impl<'a, H: Handler> AsActorRef for HandlerState<'a, H> {
     type ChannelSpec = H::Interface;
 
-    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
+    fn channel_data(&self) -> &Channel<Self::ChannelSpec> {
         self.address.channel_data()
     }
 

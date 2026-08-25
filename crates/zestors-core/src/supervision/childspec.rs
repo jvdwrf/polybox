@@ -28,7 +28,7 @@ impl ChildConfig {
 pub struct ChildSpec<T: Spawnable = DynSpawner> {
     cfg: ChildConfig,
     blueprint: T,
-    channel: Channel<T::ChannelSpec>,
+    channel: ChannelHandle<T::ChannelSpec>,
 }
 
 // Implementations just when T is statically known
@@ -37,7 +37,7 @@ impl<T: Blueprint> ChildSpec<T> {
         Ok(Self {
             cfg: blueprint.generate_config(),
             blueprint: blueprint.into(),
-            channel: Channel::<<T::Actor as Actor>::Interface>::create(id.into())?,
+            channel: ChannelHandle::<<T::Actor as Actor>::Interface>::create(id.into())?,
         })
     }
 
@@ -102,7 +102,7 @@ impl<T: Spawnable> ChildSpec<T> {
 impl<T: Spawnable> AsActorRef for ChildSpec<T> {
     type ChannelSpec = T::ChannelSpec;
 
-    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
+    fn channel_data(&self) -> &Channel<Self::ChannelSpec> {
         &self.channel.channel_data()
     }
 

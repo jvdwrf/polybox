@@ -97,10 +97,6 @@ impl Supervisor {
             supervisee.spec.pid()
         ))?;
         supervisee.child = Some(child);
-        registry.register(supervisee.get_address()).attach(format!(
-            "Failed to register supervisee {}",
-            supervisee.spec.pid()
-        ))?;
         Ok(())
     }
 
@@ -168,14 +164,6 @@ impl Supervisor {
                         tracing::warn!(error = ?e, "Child {id} exited with error. (mode: {mode:?})");
                     }
                 };
-
-                let removed_child = self.registry.remove(id);
-
-                if removed_child.is_none() {
-                    tracing::warn!(
-                        "Child {id} was not found in the registry during deregistration."
-                    );
-                }
 
                 return Ok(());
             };

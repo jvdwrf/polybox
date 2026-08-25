@@ -99,7 +99,7 @@ impl<T, R: ChannelSpec> Child<T, R> {
 impl<T: Send, R: ChannelSpec> AsActorRef for Child<T, R> {
     type ChannelSpec = R;
 
-    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
+    fn channel_data(&self) -> &Channel<Self::ChannelSpec> {
         self.address.channel_data()
     }
 

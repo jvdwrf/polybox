@@ -48,10 +48,6 @@ impl Node {
         let supervisor_child = supervisor_spec.spawn().await?;
         let supervisor_address = supervisor_child.get_address();
 
-        Registry::local()
-            .register(supervisor_spec.get_address())
-            .attach("Root Supervisor failed to register")?;
-
         tokio::spawn(
             NodeActor {
                 supervisor_child,

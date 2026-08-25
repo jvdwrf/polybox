@@ -93,7 +93,7 @@ pub trait ActorRef {
 pub trait AsActorRef {
     type ChannelSpec: ChannelSpec;
 
-    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec>;
+    fn channel_data(&self) -> &Channel<Self::ChannelSpec>;
     fn get_address(&self) -> Address<Self::ChannelSpec>;
 }
 

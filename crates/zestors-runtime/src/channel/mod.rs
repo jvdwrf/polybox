@@ -10,8 +10,8 @@ const KEEP_N_EXITS: usize = 5;
 const SIGNAL_QUEUE_CAPACITY: usize = 1_000_000;
 const MSG_QUEUE_CAPACITY: usize = 1_000_000;
 
-mod channel;
-pub use channel::*;
+mod handle;
+pub use handle::*;
 
 pub mod errors;
 pub(crate) use errors::*;
@@ -62,7 +62,7 @@ where
     F: Future<Output = Result<R, rootcause::Report>> + Send + 'static,
     F::Output: Send + 'static,
 {
-    Ok(Channel::create(pid)?
+    Ok(ChannelHandle::create(pid)?
         .spawn(f)
         .expect("Channel was just created. Must be valid"))
 }
@@ -74,7 +74,7 @@ where
     F: Future<Output = Result<R, rootcause::Report>> + Send + 'static,
     F::Output: Send + 'static,
 {
-    Channel::create(Pid::rand())
+    ChannelHandle::create(Pid::rand())
         .expect("Pid is unique")
         .spawn(f)
         .expect("Only one inbox")

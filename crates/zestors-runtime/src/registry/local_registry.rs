@@ -20,12 +20,11 @@ impl Registry {
         REGISTRY.get_or_init(Self::new)
     }
 
-    pub fn register_or_replace(&self, pid: Pid, address: impl Into<Address>) -> Option<Address> {
-        self.processes.insert(pid, Some(address.into())).flatten()
-    }
-
     /// Add a process to the registry if not already present.
-    pub fn register<T: ChannelSpec>(&self, address: Address<T>) -> Result<(), RegistryAddError<T>> {
+    pub(crate) fn register<T: ChannelSpec>(
+        &self,
+        address: Address<T>,
+    ) -> Result<(), RegistryAddError<T>> {
         let pid = address.pid();
 
         // If the pid is already present and the address is different, return an error.
@@ -45,17 +44,6 @@ impl Registry {
         Ok(())
     }
 
-    pub fn update_pid(&self, old_pid: Pid, new_pid: Pid) {
-        if let Some(entry) = self
-            .processes
-            .remove(&old_pid)
-            .map(|(_, entry)| entry)
-            .flatten()
-        {
-            self.processes.insert(new_pid, Some(entry));
-        }
-    }
-
     pub fn get(&self, pid: &Pid) -> Option<Address> {
         self.processes
             .get(pid)
@@ -70,7 +58,7 @@ impl Registry {
             .map_err(|_| rootcause::report!("Address found for pid: {} but type mismatch", pid))
     }
 
-    pub fn remove(&self, pid: &Pid) -> Option<Address> {
+    pub(crate) fn remove(&self, pid: &Pid) -> Option<Address> {
         self.processes
             .remove(pid)
             .map(|(_, address)| address)
