@@ -1,19 +1,9 @@
+use crate::registry::Registry;
+
 use super::*;
 use jiff::Zoned;
 use std::{fmt::Debug, hash::Hash};
 use type_sets::{Set, TypeSet};
-
-pub trait ChannelSpec: 'static {
-    type Set: TypeSet + 'static;
-}
-
-impl<I: Interface> ChannelSpec for I {
-    type Set = I::Set;
-}
-
-impl<S: TypeSet + 'static> ChannelSpec for Set<S> {
-    type Set = S;
-}
 
 #[repr(transparent)]
 pub struct Channel<C: ChannelSpec = Set!()> {
@@ -21,13 +11,23 @@ pub struct Channel<C: ChannelSpec = Set!()> {
 }
 
 impl<T: ChannelSpec> Channel<T> {
-    pub fn new(pid: Pid) -> Self
+    pub fn create(pid: Pid) -> Result<Self, DuplicatePidError>
     where
         T: Interface,
     {
-        Channel {
+        let channel = Channel {
             data: ChannelData::new(pid),
-        }
+        };
+
+        let address = channel.get_address();
+
+        Registry::local()
+            .register(address)
+            .map_err(|_e| DuplicatePidError {
+                pid: channel.pid().clone(),
+            })?;
+
+        Ok(channel)
     }
 
     pub(crate) fn from_ref(data: &ChannelData<T>) -> &Self {
@@ -90,10 +90,23 @@ impl<T: ChannelSpec> PartialEq for Channel<T> {
     }
 }
 impl<T: ChannelSpec> Eq for Channel<T> {}
+
 impl<T: ChannelSpec> Hash for Channel<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.pid().hash(state);
     }
+}
+
+pub trait ChannelSpec: 'static {
+    type Set: TypeSet + 'static;
+}
+
+impl<I: Interface> ChannelSpec for I {
+    type Set = I::Set;
+}
+
+impl<S: TypeSet + 'static> ChannelSpec for Set<S> {
+    type Set = S;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

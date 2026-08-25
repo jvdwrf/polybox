@@ -111,41 +111,41 @@ async fn main() -> Result<(), Report> {
         .init();
 
     let (spec_a, addr_a) = blueprint(|| MyActor::new("A"))
-        .with_pid("HelloActor")
+        .with_pid("HelloActor")?
         .with_mode(RestartMode::Never)
         .split();
 
     let (spec_b, addr_b) = blueprint(|| MyActor::new("B"))
-        .with_pid("HelloActor2")
+        .with_pid("HelloActor2")?
         .with_mode(RestartMode::Always)
         .split();
 
     let (super_spec_a, _) = Supervisor::blueprint()
         .with_children([spec_a, spec_b])
-        .with_pid("SupervisorA")
+        .with_pid("SupervisorA")?
         .split();
 
     let (spec_c, _) = blueprint(|| MyActor::new("C"))
-        .with_pid("HelloActor3")
+        .with_pid("HelloActor3")?
         .with_mode(RestartMode::Always)
         .split();
 
     let (spec_d, _) = blueprint(|| MyActor::new("D"))
-        .with_pid("HelloActor4")
+        .with_pid("HelloActor4")?
         .with_mode(RestartMode::Always)
         .split();
 
     let (super_spec_b, _) = Supervisor::blueprint()
         .with_children([spec_c, spec_d])
-        .with_pid("SupervisorB")
+        .with_pid("SupervisorB")?
         .split();
 
     let (api_server_spec, _) = ApiServer::blueprint("127.0.0.1:8080".parse().unwrap())
-        .with_pid("ApiServer")
+        .with_pid("ApiServer")?
         .split();
 
     let (dyn_actor_spec, _) = new_actor(async |_: Inbox<MyInterface>| Ok(()))
-        .with_pid("DynActor")
+        .with_pid("DynActor")?
         .split();
 
     let root_supervisor = Supervisor::blueprint()
@@ -155,13 +155,13 @@ async fn main() -> Result<(), Report> {
             api_server_spec,
             dyn_actor_spec,
             blueprint(|| new_actor(async |_: Inbox<MyInterface>| Ok(())))
-                .with_pid("DynBlueprintActor")
+                .with_pid("DynBlueprintActor")?
                 .into(),
             blueprint(|| MyActor::new("E"))
-                .with_pid("DynBlueprintActor2")
+                .with_pid("DynBlueprintActor2")?
                 .into(),
         ])
-        .with_pid("RootSupervisor");
+        .with_pid("RootSupervisor")?;
 
     let root_address = Node::new(root_supervisor).start().await?;
 

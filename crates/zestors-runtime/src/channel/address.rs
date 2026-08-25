@@ -81,7 +81,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_address_downcast_ref() {
-        let child = crate::spawn(Pid::rand(), |_: Inbox<MyInterface>| async move { Ok(()) });
+        let child = crate::spawn(|_: Inbox<MyInterface>| async move { Ok(()) });
         let address = child.address().clone().into_dyn::<Set![]>();
 
         address

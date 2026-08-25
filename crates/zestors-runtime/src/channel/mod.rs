@@ -52,14 +52,30 @@ pub use channel_data::*;
 #[cfg(test)]
 mod tests;
 
-pub fn spawn<T, R, F>(pid: Pid, f: impl FnOnce(Inbox<T>) -> F) -> Child<R, T>
+pub fn spawn_with<T, R, F>(
+    pid: Pid,
+    f: impl FnOnce(Inbox<T>) -> F,
+) -> Result<Child<R, T>, DuplicatePidError>
 where
     T: Interface,
     R: Send + 'static,
     F: Future<Output = Result<R, rootcause::Report>> + Send + 'static,
     F::Output: Send + 'static,
 {
-    Channel::new(pid)
+    Ok(Channel::create(pid)?
         .spawn(f)
-        .expect("Channel was just created. Must be valid")
+        .expect("Channel was just created. Must be valid"))
+}
+
+pub fn spawn<T, R, F>(f: impl FnOnce(Inbox<T>) -> F) -> Child<R, T>
+where
+    T: Interface,
+    R: Send + 'static,
+    F: Future<Output = Result<R, rootcause::Report>> + Send + 'static,
+    F::Output: Send + 'static,
+{
+    Channel::create(Pid::rand())
+        .expect("Pid is unique")
+        .spawn(f)
+        .expect("Only one inbox")
 }

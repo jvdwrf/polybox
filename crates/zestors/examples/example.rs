@@ -6,13 +6,13 @@ use zestors::{
         BasicScheduler, Handle, HandledBy, Handler, HandlerCallback, HandlerMessage, HandlerState,
     },
     prelude::*,
-    spawn,
+    spawn, spawn_with,
     supervision::{ActorExt as _, GetChildren, GetHealth, Health},
 };
 
 #[tokio::main]
 async fn main() {
-    let child = spawn(Pid::rand(), async move |mut stream: Inbox<MyInterface>| {
+    let child = spawn(async move |mut stream: Inbox<MyInterface>| {
         while let Some(msg) = stream.next().await {
             match msg {
                 Event::Signal(signal) => match signal {
@@ -175,7 +175,7 @@ impl Handle<GetChildren> for MyActor {
 async fn test() {
     let child = MyActor::new()
         // .map_actor_exit(|x| x.map(|x| x * 2))
-        .spawn(Pid::rand());
+        .spawn();
     let address = child.address().clone();
 
     address.send(5u32).await.unwrap();

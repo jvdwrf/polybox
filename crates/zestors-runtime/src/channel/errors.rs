@@ -281,3 +281,9 @@ impl<M> From<RequestError<M>> for RequestCheckedError<M> {
         }
     }
 }
+
+#[derive(Debug, thiserror::Error, Clone)]
+#[error("Duplicate PID: {pid} already exists in the registry")]
+pub struct DuplicatePidError {
+    pub pid: Pid,
+}

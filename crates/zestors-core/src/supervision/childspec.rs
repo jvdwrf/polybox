@@ -33,16 +33,16 @@ pub struct ChildSpec<T: Spawnable = DynSpawner> {
 
 // Implementations just when T is statically known
 impl<T: Blueprint> ChildSpec<T> {
-    pub fn new(id: impl Into<Pid>, blueprint: T) -> Self {
-        Self {
+    pub fn create(id: impl Into<Pid>, blueprint: T) -> Result<Self, DuplicatePidError> {
+        Ok(Self {
             cfg: blueprint.generate_config(),
             blueprint: blueprint.into(),
-            channel: Channel::<<T::Actor as Actor>::Interface>::new(id.into()),
-        }
+            channel: Channel::<<T::Actor as Actor>::Interface>::create(id.into())?,
+        })
     }
 
-    pub fn new_uuid(blueprint: T) -> Self {
-        Self::new(Pid::rand(), blueprint)
+    pub fn create_rand_pid(blueprint: T) -> Self {
+        Self::create(Pid::rand(), blueprint).expect("Pid is unique")
     }
 
     pub fn split(self) -> (ChildSpec, Address<<T::Actor as Actor>::Interface>) {
@@ -167,7 +167,7 @@ mod tests {
 
     #[test]
     fn test_childspec_doesnt_panic_on_address_retrieval() {
-        let spec = ChildSpec::new("test", MyActor);
+        let spec = ChildSpec::create("test", MyActor).unwrap();
         let _ = spec.get_address();
     }
 }

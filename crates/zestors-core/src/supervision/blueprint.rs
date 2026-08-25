@@ -50,15 +50,19 @@ pub trait BlueprintExt: Blueprint + Sized {
     where
         Self: Send + Sync + 'static,
     {
-        async { Ok(self.instantiate().await?.spawn(pid)) }
+        async { Ok(self.instantiate().await?.spawn_with(pid)?) }
     }
 
     fn generate_config(&self) -> ChildConfig {
         ChildConfig::new_for_blueprint(self)
     }
 
-    fn with_pid(self, pid: impl Into<Pid>) -> ChildSpec<Self> {
-        ChildSpec::new(pid, self)
+    fn with_pid(self, pid: impl Into<Pid>) -> Result<ChildSpec<Self>, DuplicatePidError> {
+        ChildSpec::create(pid, self)
+    }
+
+    fn with_rand_pid(self) -> ChildSpec<Self> {
+        ChildSpec::create_rand_pid(self)
     }
 }
 impl<T: Blueprint> BlueprintExt for T {}

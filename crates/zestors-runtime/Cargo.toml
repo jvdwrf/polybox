@@ -18,3 +18,4 @@ eyeball.workspace = true
 tracing.workspace = true
 rand.workspace = true
 jiff.workspace = true
+dashmap.workspace = true

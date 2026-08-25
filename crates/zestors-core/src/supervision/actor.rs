@@ -28,8 +28,12 @@ pub trait ActorExt: Actor {
         WrapActor::new(self, mapper)
     }
 
-    fn spawn(self, pid: Pid) -> Child<Self::Exit, Self::Interface> {
-        crate::spawn(pid, |inbox| self.run(inbox))
+    fn spawn_with(self, pid: Pid) -> Result<Child<Self::Exit, Self::Interface>, DuplicatePidError> {
+        crate::spawn_with(pid, |inbox| self.run(inbox))
+    }
+
+    fn spawn(self) -> Child<Self::Exit, Self::Interface> {
+        crate::spawn(|inbox| self.run(inbox))
     }
 }
 impl<T: Actor> ActorExt for T {}

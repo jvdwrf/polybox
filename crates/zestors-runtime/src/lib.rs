@@ -1,9 +1,11 @@
 pub mod channel;
-pub use channel::spawn;
+pub use channel::{spawn, spawn_with};
 
 pub mod messaging;
 
 pub mod signals;
+
+pub mod registry;
 
 #[allow(unused_imports)]
 pub(crate) mod _prelude {
@@ -17,7 +19,7 @@ pub(crate) mod _prelude {
 
 pub mod prelude {
     pub use crate::{
-        channel::{ActorRef as _, Address, Channel, Child, Inbox, IntoDyn as _, Pid, spawn},
+        channel::{ActorRef as _, Address, Channel, Child, Inbox, IntoDyn as _, Pid, spawn_with},
         messaging::{Envelope, Interface, Message, Sends as _, type_sets::Set},
         signals::{Event, Signal},
     };
