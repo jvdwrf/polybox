@@ -1,26 +1,25 @@
-use crate::registry::Registry;
-
 use super::*;
+use crate::registry::Registry;
 use jiff::Zoned;
 use std::{fmt::Debug, hash::Hash};
 use type_sets::{Set, TypeSet};
 
 #[repr(transparent)]
-pub struct ChannelHandle<C: ChannelSpec = Set!()> {
-    data: Arc<Channel<C>>,
+pub struct Channel<C: ChannelSpec = Set!()> {
+    data: ChannelData<C>,
 }
 
-impl<T: ChannelSpec> ChannelHandle<T> {
+impl<T: ChannelSpec> Channel<T> {
     /// Creates a new channel with the given `pid` and registers it in the local registry.
     pub fn create(pid: Pid) -> Result<Self, DuplicatePidError>
     where
         T: Interface,
     {
-        let channel = ChannelHandle {
-            data: Channel::new(pid),
+        let channel = Channel {
+            data: ChannelData::new(pid, 1),
         };
 
-        let address = channel.get_address();
+        let address = channel.address().clone();
 
         Registry::local()
             .register(address)
@@ -32,62 +31,64 @@ impl<T: ChannelSpec> ChannelHandle<T> {
     }
 }
 
-impl<C: ChannelSpec> Drop for ChannelHandle<C> {
+impl<C: ChannelSpec> Drop for Channel<C> {
     fn drop(&mut self) {
-        self.data.incr_strong_count();
+        self.data.decr_strong_count();
     }
 }
 
-impl<C: ChannelSpec> IntoDyn for ChannelHandle<C> {
-    type Ref<T: ChannelSpec> = ChannelHandle<T>;
-
-    fn into_dyn_unchecked<S>(self) -> ChannelHandle<S>
-    where
-        S: ChannelSpec,
-    {
-        unsafe { std::mem::transmute::<ChannelHandle<C>, ChannelHandle<S>>(self) }
-    }
-}
-
-impl<C: ChannelSpec> AsDyn for ChannelHandle<C> {
-    fn as_dyn_unchecked<S>(&self) -> &ChannelHandle<S>
-    where
-        S: ChannelSpec,
-    {
-        unsafe { std::mem::transmute::<&ChannelHandle<C>, &ChannelHandle<S>>(self) }
-    }
-}
-
-impl<C: ChannelSpec> AsActorRef for ChannelHandle<C> {
-    type ChannelSpec = C;
-
-    fn channel_data(&self) -> &Channel<Self::ChannelSpec> {
-        &*self.data
-    }
-}
-
-impl<T: ChannelSpec> Debug for ChannelHandle<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        <Channel<T> as Debug>::fmt(&self.data, f)
-    }
-}
-
-impl<T: ChannelSpec> Clone for ChannelHandle<T> {
+impl<T: ChannelSpec> Clone for Channel<T> {
     fn clone(&self) -> Self {
-        ChannelHandle {
-            data: self.data.clone(),
+        self.channel_data().incr_strong_count();
+
+        Channel {
+            data: self.data.clone_channel(),
         }
     }
 }
 
-impl<T: ChannelSpec> PartialEq for ChannelHandle<T> {
+impl<C: ChannelSpec> IntoDyn for Channel<C> {
+    type Ref<T: ChannelSpec> = Channel<T>;
+
+    fn into_dyn_unchecked<S>(self) -> Channel<S>
+    where
+        S: ChannelSpec,
+    {
+        unsafe { std::mem::transmute::<Channel<C>, Channel<S>>(self) }
+    }
+}
+
+impl<C: ChannelSpec> AsDyn for Channel<C> {
+    fn as_dyn_unchecked<S>(&self) -> &Channel<S>
+    where
+        S: ChannelSpec,
+    {
+        unsafe { std::mem::transmute::<&Channel<C>, &Channel<S>>(self) }
+    }
+}
+
+impl<C: ChannelSpec> AsActorRef for Channel<C> {
+    type ChannelSpec = C;
+
+    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
+        &self.data
+    }
+}
+
+impl<T: ChannelSpec> Debug for Channel<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        <ChannelData<T> as Debug>::fmt(&self.data, f)
+    }
+}
+
+impl<T: ChannelSpec> PartialEq for Channel<T> {
     fn eq(&self, other: &Self) -> bool {
         self.pid() == other.pid()
     }
 }
-impl<T: ChannelSpec> Eq for ChannelHandle<T> {}
+impl<T: ChannelSpec> Eq for Channel<T> {}
 
-impl<T: ChannelSpec> Hash for ChannelHandle<T> {
+impl<T: ChannelSpec> Hash for Channel<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.pid().hash(state);
     }

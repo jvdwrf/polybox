@@ -31,12 +31,12 @@ use type_sets::{Contains, Set, TypeSet};
 /// This means, that in order restart an actor, the [`Channel`] handle must be kept
 /// alive.
 #[repr(transparent)]
-pub struct Channel<C: ChannelSpec = Set!()> {
+pub struct ChannelData<C: ChannelSpec = Set!()> {
+    inner: Arc<ChannelDataInner<dyn Queue>>,
     _marker: PhantomData<fn() -> C>,
-    inner: Arc<ChannelData<dyn Queue>>,
 }
 
-pub(crate) struct ChannelData<Q: ?Sized> {
+pub(crate) struct ChannelDataInner<Q: ?Sized> {
     pid: Pid,
     signal_queue: ConcurrentQueue<SignalInterface>,
     signal_notifier: Notify,
@@ -50,22 +50,8 @@ pub(crate) struct ChannelData<Q: ?Sized> {
     msg_queue: Q,
 }
 
-impl<C: ChannelSpec> Channel<C> {
-    pub(crate) fn incr_strong_count(&self) {
-        if self.inner().strong_count.fetch_sub(1, Ordering::Release) == 1 {
-            std::sync::atomic::fence(Ordering::Acquire);
-            let addr = Registry::local().remove(self.pid());
-
-            if addr.is_none() {
-                tracing::warn!(
-                    "Channel {} was not found in the registry when dropping the last strong reference",
-                    self.pid()
-                );
-            }
-        }
-    }
-
-    pub(crate) fn clone(&self) -> Self {
+impl<C: ChannelSpec> ChannelData<C> {
+    pub(crate) fn clone_channel(&self) -> Self {
         Self {
             _marker: PhantomData,
             inner: self.inner.clone(),
@@ -73,10 +59,42 @@ impl<C: ChannelSpec> Channel<C> {
     }
 
     pub(crate) fn decr_strong_count(&self) {
-        self.inner().strong_count.fetch_add(1, Ordering::Relaxed);
+        let prev_count = self.inner().strong_count.fetch_sub(1, Ordering::Release);
+
+        // fetch_sub returns the PREVIOUS value. If it was 1, it is now 0.
+        if prev_count == 1 {
+            // Synchronize memory access from other threads before cleaning up
+            std::sync::atomic::fence(Ordering::Acquire);
+
+            let removed_address = Registry::local().remove(self.pid());
+
+            if removed_address.is_none() {
+                if cfg!(debug_assertions) {
+                    panic!(
+                        "Channel {} was not found in the registry when dropping the last strong reference",
+                        self.pid()
+                    );
+                } else {
+                    tracing::error!(
+                        "Channel {} was not found in the registry when dropping the last strong reference",
+                        self.pid()
+                    );
+                }
+            }
+        }
     }
 
-    fn inner(&self) -> &ChannelData<dyn Queue> {
+    pub(crate) fn incr_strong_count(&self) {
+        // Relaxed is sufficient because the caller already owns a strong reference
+        let prev_count = self.inner().strong_count.fetch_add(1, Ordering::Relaxed);
+
+        // Prevent integer overflow attack/bug
+        if prev_count > usize::MAX / 2 {
+            std::process::abort();
+        }
+    }
+
+    fn inner(&self) -> &ChannelDataInner<dyn Queue> {
         &self.inner
     }
 
@@ -208,9 +226,9 @@ impl<C: ChannelSpec> Channel<C> {
     }
 }
 
-impl<I: Interface> Channel<I> {
-    pub(super) fn new(pid: Pid) -> Arc<Self> {
-        let inner: Arc<ChannelData<dyn Queue>> = Arc::new(ChannelData {
+impl<I: Interface> ChannelData<I> {
+    pub(super) fn new(pid: Pid, strong_count: usize) -> Self {
+        let inner: Arc<ChannelDataInner<dyn Queue>> = Arc::new(ChannelDataInner {
             pid,
             msg_notifier: Notify::new(),
             msg_backpressure_limit: BACKPRESSURE_LIMIT,
@@ -221,14 +239,13 @@ impl<I: Interface> Channel<I> {
             created_at: Instant::now(),
             spawns: Default::default(),
             exits: Default::default(),
-            strong_count: AtomicUsize::new(1),
+            strong_count: AtomicUsize::new(strong_count),
         });
 
-        Self::from_arc(inner)
-    }
-
-    fn from_arc(inner: Arc<ChannelData<dyn Queue>>) -> Arc<Self> {
-        unsafe { Arc::from_raw(Arc::into_raw(inner) as *const Self) }
+        Self {
+            inner: inner,
+            _marker: PhantomData,
+        }
     }
 
     pub(crate) async fn recv_msg(&self) -> Option<I> {
@@ -352,7 +369,7 @@ impl<I: Interface> Channel<I> {
     }
 }
 
-impl<C: ChannelSpec> Debug for Channel<C> {
+impl<C: ChannelSpec> Debug for ChannelData<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ChannelData")
             .field("pid", &self.inner().pid)
@@ -362,19 +379,19 @@ impl<C: ChannelSpec> Debug for Channel<C> {
     }
 }
 
-impl<C: ChannelSpec> Eq for Channel<C> {}
-impl<C: ChannelSpec> PartialEq for Channel<C> {
+impl<C: ChannelSpec> Eq for ChannelData<C> {}
+impl<C: ChannelSpec> PartialEq for ChannelData<C> {
     fn eq(&self, other: &Self) -> bool {
         self.inner().pid == other.inner().pid
     }
 }
-impl<C: ChannelSpec> Hash for Channel<C> {
+impl<C: ChannelSpec> Hash for ChannelData<C> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.inner().pid.hash(state);
     }
 }
 
-impl<C: ChannelSpec> ActorRef for Channel<C> {
+impl<C: ChannelSpec> ActorRef for ChannelData<C> {
     type ChannelSpec = C;
     type Set = C::Set;
 
@@ -466,8 +483,9 @@ impl<C: ChannelSpec> ActorRef for Channel<C> {
     }
 
     async fn watch_initialization(&self) -> Result<(), ExitStatus> {
+        let mut subscriber = self.inner.status_observer.subscribe();
+
         loop {
-            let mut subscriber = self.inner.status_observer.subscribe();
             let status = self.status();
 
             match status {
@@ -491,8 +509,9 @@ impl<C: ChannelSpec> ActorRef for Channel<C> {
     }
 
     async fn watch_exit(&self) -> Result<(), ExitError> {
+        let mut subscriber = self.inner.status_observer.subscribe();
+
         loop {
-            let mut subscriber = self.inner.status_observer.subscribe();
             let status = self.status();
 
             if let ActorStatus::Exited(exit) = status {
@@ -561,22 +580,16 @@ impl<C: ChannelSpec> ActorRef for Channel<C> {
         self.inner().strong_count.load(Ordering::Relaxed)
     }
 
-    fn handle_count(&self) -> usize {
-        let strong_count = self.strong_count();
-
-        if !self.is_dead() {
-            strong_count.saturating_sub(1)
-        } else {
-            strong_count
-        }
-    }
-
     fn ref_count(&self) -> usize {
         Arc::strong_count(&self.inner)
     }
+
+    fn address(&self) -> &Address<Self::ChannelSpec> {
+        Address::new_ref(self)
+    }
 }
 
-impl<M, T> Sends<M> for Channel<Set<T>>
+impl<M, T> Sends<M> for ChannelData<Set<T>>
 where
     M: Message,
     T: TypeSet + Contains<M> + 'static,
@@ -641,7 +654,7 @@ where
     // }
 }
 
-impl<M, I> Sends<M> for Channel<I>
+impl<M, I> Sends<M> for ChannelData<I>
 where
     M: Message,
     I: Interface + TryInto<Envelope<M>> + From<Envelope<M>> + Send + 'static,

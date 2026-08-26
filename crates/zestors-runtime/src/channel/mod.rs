@@ -62,7 +62,7 @@ where
     F: Future<Output = Result<R, rootcause::Report>> + Send + 'static,
     F::Output: Send + 'static,
 {
-    Ok(ChannelHandle::create(pid)?
+    Ok(Channel::create(pid)?
         .spawn(f)
         .expect("Channel was just created. Must be valid"))
 }
@@ -74,7 +74,7 @@ where
     F: Future<Output = Result<R, rootcause::Report>> + Send + 'static,
     F::Output: Send + 'static,
 {
-    ChannelHandle::create(Pid::rand())
+    Channel::create(Pid::rand())
         .expect("Pid is unique")
         .spawn(f)
         .expect("Only one inbox")

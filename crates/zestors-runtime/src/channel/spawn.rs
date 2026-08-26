@@ -3,7 +3,7 @@ use futures::FutureExt as _;
 use std::panic::AssertUnwindSafe;
 use tracing::Instrument as _;
 
-impl<T: ChannelSpec> ChannelHandle<T> {
+impl<T: ChannelSpec> Channel<T> {
     pub fn spawn<R, F>(
         self,
         spawn_fn: impl FnOnce(Inbox<T>) -> F,
@@ -14,34 +14,35 @@ impl<T: ChannelSpec> ChannelHandle<T> {
         F: Future<Output = Result<R, Report>> + Send + 'static,
         F::Output: Send + 'static,
     {
-        let address = self.get_address();
+        let span = tracing::debug_span!("process", pid = %self.pid());
 
-        let handle = tokio::spawn({
-            let this = self.clone();
-            let stream = Inbox::try_new(this.clone())?;
-            let span = tracing::debug_span!("process", pid = %this.pid());
-            let future = AssertUnwindSafe(spawn_fn(stream)).catch_unwind();
-            this.channel_data().register_spawn();
+        let tokio_handle = tokio::spawn({
+            let inbox = Inbox::try_new(self.clone())?;
+            let address = inbox.address().clone();
+            let mut bomb = AbortBomb::new(address);
+            bomb.address.channel_data().register_spawn();
+            let spawn_future = AssertUnwindSafe(spawn_fn(inbox)).catch_unwind();
 
             async move {
-                let mut bomb = AbortBomb::new(&this);
+                let spawn_result = spawn_future.await;
 
-                let future_result = future.await;
-
-                this.channel_data().drain_messages_and_signals();
-
-                let mapped_result = match future_result {
-                    Ok(val) => {
-                        match &val {
-                            Ok(_) => this.channel_data().register_exit(Ok(())),
-                            Err(_) => this
+                let mapped_result = match spawn_result {
+                    Ok(result) => {
+                        match &result {
+                            Ok(_) => bomb.address.channel_data().register_exit(Ok(())),
+                            Err(_) => bomb
+                                .address
                                 .channel_data()
                                 .register_exit(Err(ExitError::UnhandledError)),
                         };
-                        val
+
+                        result
                     }
+
                     Err(boxed) => {
-                        this.channel_data().register_exit(Err(ExitError::Panicked));
+                        bomb.address
+                            .channel_data()
+                            .register_exit(Err(ExitError::Panicked));
                         std::panic::resume_unwind(boxed);
                     }
                 };
@@ -53,19 +54,19 @@ impl<T: ChannelSpec> ChannelHandle<T> {
             .instrument(span)
         });
 
-        Ok(Child::new(handle, address))
+        Ok(Child::new(tokio_handle, self))
     }
 }
 
-struct AbortBomb<'a, T: ChannelSpec> {
-    channel: &'a ChannelHandle<T>,
+struct AbortBomb<T: ChannelSpec> {
+    address: Address<T>,
     armed: bool,
 }
 
-impl<'a, T: ChannelSpec> AbortBomb<'a, T> {
-    fn new(channel: &'a ChannelHandle<T>) -> Self {
+impl<T: ChannelSpec> AbortBomb<T> {
+    fn new(address: Address<T>) -> Self {
         Self {
-            channel,
+            address,
             armed: true,
         }
     }
@@ -75,18 +76,16 @@ impl<'a, T: ChannelSpec> AbortBomb<'a, T> {
     }
 }
 
-impl<'a, T: ChannelSpec> Drop for AbortBomb<'a, T> {
+impl<T: ChannelSpec> Drop for AbortBomb<T> {
     fn drop(&mut self) {
-        if !self.armed {
-            return;
-        }
+        if self.armed {
+            tracing::debug!("AbortBomb triggered");
 
-        tracing::debug!("AbortBomb triggered");
-
-        if !self.channel.status().is_dead() {
-            self.channel
-                .channel_data()
-                .register_exit(Err(ExitError::Aborted));
+            if !self.address.status().is_dead() {
+                self.address
+                    .channel_data()
+                    .register_exit(Err(ExitError::Aborted));
+            }
         }
     }
 }

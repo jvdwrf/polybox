@@ -3,26 +3,25 @@ use std::{fmt::Debug, hash::Hash};
 
 #[repr(transparent)]
 pub struct Address<C: ChannelSpec = Set!()> {
-    pub(super) channel: Channel<C>,
+    pub(super) channel: ChannelData<C>,
 }
 
 impl<C: ChannelSpec> Address<C> {
-    pub(super) fn new(channel: &Channel<C>) -> Self {
+    pub(super) fn new(channel: &ChannelData<C>) -> Self {
         Self {
-            channel: channel.clone(),
+            channel: channel.clone_channel(),
         }
     }
 
-    pub(super) fn from_ref(channel: &ChannelHandle<C>) -> &Self {
-        // SAFETY: This is safe because Address<T> is a transparent wrapper around Channel<T>
-        unsafe { &*(channel as *const ChannelHandle<C> as *const Self) }
+    pub(super) fn new_ref(channel: &ChannelData<C>) -> &Self {
+        unsafe { std::mem::transmute::<&ChannelData<C>, &Self>(channel) }
     }
 }
 
 impl<C: ChannelSpec> AsActorRef for Address<C> {
     type ChannelSpec = C;
 
-    fn channel_data(&self) -> &Channel<Self::ChannelSpec> {
+    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
         &self.channel
     }
 }
@@ -35,7 +34,7 @@ impl<C: ChannelSpec> IntoDyn for Address<C> {
         S: ChannelSpec,
     {
         Address {
-            channel: unsafe { std::mem::transmute::<Channel<C>, Channel<S>>(self.channel) },
+            channel: unsafe { std::mem::transmute::<ChannelData<C>, ChannelData<S>>(self.channel) },
         }
     }
 }
@@ -43,7 +42,7 @@ impl<C: ChannelSpec> IntoDyn for Address<C> {
 impl<T: ChannelSpec> Clone for Address<T> {
     fn clone(&self) -> Self {
         Self {
-            channel: self.channel.clone(),
+            channel: self.channel.clone_channel(),
         }
     }
 }

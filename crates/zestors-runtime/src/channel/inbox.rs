@@ -2,12 +2,12 @@ use crate::_prelude::*;
 
 #[derive(Debug)]
 pub struct Inbox<T: Interface> {
-    channel: ChannelHandle<T>,
+    channel: Channel<T>,
     initializing: bool,
 }
 
 impl<T: Interface> Inbox<T> {
-    pub(crate) fn try_new(channel: ChannelHandle<T>) -> Result<Self, ConcurrentInboxError> {
+    pub(crate) fn try_new(channel: Channel<T>) -> Result<Self, ConcurrentInboxError> {
         if !channel.status().is_dead() {
             return Err(ConcurrentInboxError);
         }
@@ -16,8 +16,6 @@ impl<T: Interface> Inbox<T> {
             channel,
             initializing: true,
         };
-
-        inbox.channel_data().decr_strong_count();
 
         Ok(inbox)
     }
@@ -41,13 +39,13 @@ impl<T: Interface> Inbox<T> {
 impl<T: Interface> AsActorRef for Inbox<T> {
     type ChannelSpec = T;
 
-    fn channel_data(&self) -> &Channel<Self::ChannelSpec> {
-        self.channel.channel_data()
+    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
+        &self.channel.channel_data()
     }
 }
 
 impl<T: Interface> Drop for Inbox<T> {
     fn drop(&mut self) {
-        self.channel_data().incr_strong_count();
+        self.channel_data().drain_messages_and_signals();
     }
 }

@@ -3,29 +3,21 @@ use futures::FutureExt as _;
 use std::{fmt::Debug, task::Poll, time::Duration};
 
 pub struct Child<T = (), R: ChannelSpec = Set!()> {
-    handle: Option<tokio::task::JoinHandle<Result<T, Report>>>,
+    join: Option<tokio::task::JoinHandle<Result<T, Report>>>,
     attached: bool,
-    address: Address<R>,
+    channel: Channel<R>,
 }
 
 impl<T, R: ChannelSpec> Child<T, R> {
     pub(crate) fn new(
-        handle: tokio::task::JoinHandle<Result<T, Report>>,
-        address: Address<R>,
+        join: tokio::task::JoinHandle<Result<T, Report>>,
+        channel: Channel<R>,
     ) -> Self {
         Self {
-            handle: Some(handle),
+            join: Some(join),
             attached: true,
-            address,
+            channel,
         }
-    }
-
-    pub fn pid(&self) -> &Pid {
-        self.address.pid()
-    }
-
-    pub fn address(&self) -> &Address<R> {
-        &self.address
     }
 
     pub fn abort(&self) {
@@ -36,20 +28,20 @@ impl<T, R: ChannelSpec> Child<T, R> {
         self.handle().is_finished()
     }
 
-    pub fn into_handle(mut self) -> tokio::task::JoinHandle<Result<T, Report>> {
-        self.handle.take().unwrap()
+    pub fn into_join_handle(mut self) -> tokio::task::JoinHandle<Result<T, Report>> {
+        self.join.take().unwrap()
     }
 
-    pub fn into_parts(mut self) -> (tokio::task::JoinHandle<Result<T, Report>>, Address<R>) {
-        (self.handle.take().unwrap(), self.address.clone())
+    pub fn channel(&self) -> &Channel<R> {
+        &self.channel
+    }
+
+    pub fn into_parts(mut self) -> (tokio::task::JoinHandle<Result<T, Report>>, Channel<R>) {
+        (self.join.take().unwrap(), self.channel.clone())
     }
 
     pub fn handle(&self) -> &tokio::task::JoinHandle<Result<T, Report>> {
-        self.handle.as_ref().unwrap()
-    }
-
-    pub fn handle_mut(&mut self) -> &mut tokio::task::JoinHandle<Result<T, Report>> {
-        self.handle.as_mut().unwrap()
+        self.join.as_ref().unwrap()
     }
 
     pub fn attached(mut self) -> Self {
@@ -75,7 +67,7 @@ impl<T, R: ChannelSpec> Child<T, R> {
     }
 
     pub async fn shutdown_abort(mut self, timeout: Duration) -> Result<T, JoinAbortError> {
-        self.address.signal_shutdown();
+        self.channel.signal_shutdown();
 
         let sleep = tokio::time::sleep(timeout);
 
@@ -99,8 +91,8 @@ impl<T, R: ChannelSpec> Child<T, R> {
 impl<T: Send, R: ChannelSpec> AsActorRef for Child<T, R> {
     type ChannelSpec = R;
 
-    fn channel_data(&self) -> &Channel<Self::ChannelSpec> {
-        self.address.channel_data()
+    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
+        self.channel.channel_data()
     }
 }
 
@@ -123,7 +115,7 @@ impl<T, R: ChannelSpec> Future for Child<T, R> {
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Self::Output> {
-        self.handle
+        self.join
             .as_mut()
             .unwrap()
             .poll_unpin(cx)
@@ -137,7 +129,7 @@ impl<T, R: ChannelSpec> Future for Child<T, R> {
 
 impl<T, R: ChannelSpec> Drop for Child<T, R> {
     fn drop(&mut self) {
-        if self.attached && self.handle.is_some() {
+        if self.attached && self.join.is_some() {
             self.abort();
         }
     }
@@ -148,7 +140,7 @@ impl<T, R: ChannelSpec> Debug for Child<T, R> {
         f.debug_struct("Child")
             .field("handle", &std::any::type_name::<T>())
             .field("attached", &self.attached)
-            .field("address", &self.address)
+            .field("address", &self.channel)
             .finish()
     }
 }

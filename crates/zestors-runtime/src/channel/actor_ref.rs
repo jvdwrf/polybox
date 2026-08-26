@@ -46,8 +46,6 @@ pub trait ActorRef {
         }
     }
 
-    fn get_address(&self) -> Address<Self::ChannelSpec>;
-
     fn watch_initialization(&self) -> impl Future<Output = Result<(), ExitStatus>> + Send;
 
     fn watch_exit(&self) -> impl Future<Output = Result<(), ExitError>> + Send;
@@ -95,17 +93,13 @@ pub trait ActorRef {
         self.status().is_dead()
     }
 
-    /// The amount of [`ChannelHandle`]s and [`Inbox`]es in existence for this
+    /// The amount of [`channels`](Channel), [`inboxes`](Inbox) and
+    /// [`children`](Child) in existence for this
     /// channel.
     ///
     /// This amount should only be used as an indication of the number of
     /// active references to the channel.
     fn strong_count(&self) -> usize;
-
-    /// The amount of [`ChannelHandle`]s in existence for this channel.
-    ///
-    /// This amount should only be used as an indication of the number of
-    fn handle_count(&self) -> usize;
 
     /// The total amount of references to this channel, including [`ChannelHandle`]s, [`Inbox`]es and [`Address`]es.
     ///
@@ -117,15 +111,19 @@ pub trait ActorRef {
     ///
     /// This amount should only be used as an indication of the number of
     /// active references to the channel.
-    fn address_count(&self) -> usize {
+    fn weak_count(&self) -> usize {
         self.ref_count().saturating_sub(self.strong_count())
     }
+
+    fn get_address(&self) -> Address<Self::ChannelSpec>;
+
+    fn address(&self) -> &Address<Self::ChannelSpec>;
 }
 
 pub trait AsActorRef {
     type ChannelSpec: ChannelSpec;
 
-    fn channel_data(&self) -> &Channel<Self::ChannelSpec>;
+    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec>;
 }
 
 impl<T: AsActorRef + Sync> ActorRef for T {
@@ -238,11 +236,11 @@ impl<T: AsActorRef + Sync> ActorRef for T {
         self.channel_data().strong_count()
     }
 
-    fn handle_count(&self) -> usize {
-        self.channel_data().handle_count()
-    }
-
     fn ref_count(&self) -> usize {
         self.channel_data().ref_count()
+    }
+
+    fn address(&self) -> &Address<Self::ChannelSpec> {
+        self.channel_data().address()
     }
 }
