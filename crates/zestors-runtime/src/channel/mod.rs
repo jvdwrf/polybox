@@ -10,8 +10,8 @@ const KEEP_N_EXITS: usize = 5;
 const SIGNAL_QUEUE_CAPACITY: usize = 1_000_000;
 const MSG_QUEUE_CAPACITY: usize = 1_000_000;
 
-mod handle;
-pub use handle::*;
+mod channel;
+pub use channel::*;
 
 pub mod errors;
 pub(crate) use errors::*;
@@ -48,6 +48,9 @@ pub use child::*;
 
 mod channel_data;
 pub use channel_data::*;
+
+mod spec;
+pub use spec::*;
 
 #[cfg(test)]
 mod tests;

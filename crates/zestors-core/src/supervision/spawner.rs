@@ -8,7 +8,7 @@ pub trait Start: Into<DynLauncher> {
     fn start_on(
         &self,
         channel: Channel<Self::ChannelSpec>,
-    ) -> impl Future<Output = Result<Child<Self::Exit, Self::ChannelSpec>, StartError>> + Send;
+    ) -> impl Future<Output = Result<Child<Self::Exit, Self::ChannelSpec>, StartOnError>> + Send;
 }
 
 impl<B: Blueprint> Start for B {
@@ -18,11 +18,11 @@ impl<B: Blueprint> Start for B {
     async fn start_on(
         &self,
         channel: Channel<Self::ChannelSpec>,
-    ) -> Result<Child<Self::Exit, Self::ChannelSpec>, StartError> {
+    ) -> Result<Child<Self::Exit, Self::ChannelSpec>, StartOnError> {
         let actor = self
             .instantiate()
             .await
-            .map_err(|x| StartError::Instantiation(x.into()))?;
+            .map_err(|x| StartOnError::Instantiation(x.into()))?;
 
         channel.spawn(|state| actor.run(state)).map_err(Into::into)
     }
@@ -32,16 +32,16 @@ impl<B: Blueprint> Start for B {
 pub struct DynLauncher(Arc<dyn _Spawnable + Send + Sync + 'static>);
 
 trait _Spawnable: Debug {
-    fn spawn_on_dyn<'a>(&'a self, data: &'a Channel) -> BoxFuture<'a, Result<Child, StartError>>;
+    fn spawn_on_dyn<'a>(&'a self, data: &'a Channel) -> BoxFuture<'a, Result<Child, StartOnError>>;
 }
 
 impl<R: Blueprint> _Spawnable for R {
-    fn spawn_on_dyn<'a>(&'a self, data: &'a Channel) -> BoxFuture<'a, Result<Child, StartError>> {
+    fn spawn_on_dyn<'a>(&'a self, data: &'a Channel) -> BoxFuture<'a, Result<Child, StartOnError>> {
         Box::pin(async move {
             let runner = self
                 .instantiate()
                 .await
-                .map_err(|x| StartError::Instantiation(x.into()))?
+                .map_err(|x| StartOnError::Instantiation(x.into()))?
                 .map_actor_exit(|res| res.map(|_| ()));
 
             data.downcast_ref::<<R::Actor as Actor>::Interface>()
@@ -61,7 +61,7 @@ impl Start for DynLauncher {
     async fn start_on(
         &self,
         data: Channel<Self::ChannelSpec>,
-    ) -> Result<Child<Self::Exit, Self::ChannelSpec>, StartError> {
+    ) -> Result<Child<Self::Exit, Self::ChannelSpec>, StartOnError> {
         self.0.spawn_on_dyn(&data).await
     }
 }

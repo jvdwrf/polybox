@@ -86,7 +86,7 @@ impl<T: Start> ChildSpec<T> {
         self
     }
 
-    pub async fn start(&self) -> Result<Child<T::Exit, T::ChannelSpec>, StartError> {
+    pub async fn start(&self) -> Result<Child<T::Exit, T::ChannelSpec>, StartOnError> {
         self.blueprint.start_on(self.channel.clone()).await
     }
 

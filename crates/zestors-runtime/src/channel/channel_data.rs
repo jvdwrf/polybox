@@ -199,7 +199,7 @@ impl<C: ChannelSpec> ChannelData<C> {
         }
     }
 
-    fn signal(&self, signal: SignalInterface) -> bool {
+    fn _signal(&self, signal: SignalInterface) -> bool {
         if matches!(
             self.status(),
             ActorStatus::Exited(_) | ActorStatus::ShuttingDown
@@ -450,27 +450,19 @@ impl<C: ChannelSpec> ActorRef for ChannelData<C> {
             .is_some()
     }
 
-    fn signal_shutdown(&self) -> bool {
-        self.signal(SignalInterface::Shutdown(Envelope::new(
-            signals::Shutdown,
-            (),
-        )))
-    }
+    fn signal(&self, signal: Signal) -> bool {
+        let interface = match signal {
+            Signal::Shutdown => SignalInterface::Shutdown(Envelope::new(signals::Shutdown, ())),
+            Signal::Suspend => SignalInterface::Suspend(Envelope::new(signals::Suspend, ())),
+            Signal::Resume => SignalInterface::Resume(Envelope::new(signals::Resume, ())),
+        };
 
-    fn signal_suspend(&self) -> bool {
-        self.signal(SignalInterface::Suspend(Envelope::new(
-            signals::Suspend,
-            (),
-        )))
-    }
-
-    fn signal_resume(&self) -> bool {
-        self.signal(SignalInterface::Resume(Envelope::new(signals::Resume, ())))
+        self._signal(interface)
     }
 
     fn ping(&self) -> Rx<()> {
         let (tx, rx) = new_request();
-        self.signal(SignalInterface::Ping(Envelope::new(signals::Ping, tx)));
+        self._signal(SignalInterface::Ping(Envelope::new(signals::Ping, tx)));
         rx
     }
 

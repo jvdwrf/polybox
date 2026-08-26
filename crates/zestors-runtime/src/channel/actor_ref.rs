@@ -69,11 +69,19 @@ pub trait ActorRef {
 
     fn reached_backpressure(&self) -> bool;
 
-    fn signal_shutdown(&self) -> bool;
+    fn signal_shutdown(&self) -> bool {
+        self.signal(Signal::Shutdown)
+    }
 
-    fn signal_suspend(&self) -> bool;
+    fn signal_suspend(&self) -> bool {
+        self.signal(Signal::Suspend)
+    }
 
-    fn signal_resume(&self) -> bool;
+    fn signal_resume(&self) -> bool {
+        self.signal(Signal::Resume)
+    }
+
+    fn signal(&self, signal: Signal) -> bool;
 
     fn ping(&self) -> Rx<()>;
 
@@ -91,6 +99,10 @@ pub trait ActorRef {
 
     fn is_dead(&self) -> bool {
         self.status().is_dead()
+    }
+
+    fn is_permanently_dead(&self) -> bool {
+        self.status().is_dead() && self.strong_count() == 0
     }
 
     /// The amount of [`channels`](Channel), [`inboxes`](Inbox) and
@@ -172,16 +184,8 @@ impl<T: AsActorRef + Sync> ActorRef for T {
         self.channel_data().reached_backpressure()
     }
 
-    fn signal_shutdown(&self) -> bool {
-        self.channel_data().signal_shutdown()
-    }
-
-    fn signal_suspend(&self) -> bool {
-        self.channel_data().signal_suspend()
-    }
-
-    fn signal_resume(&self) -> bool {
-        self.channel_data().signal_resume()
+    fn signal(&self, signal: Signal) -> bool {
+        self.channel_data().signal(signal)
     }
 
     fn ping(&self) -> Rx<()> {

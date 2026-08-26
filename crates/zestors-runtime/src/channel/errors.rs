@@ -137,7 +137,7 @@ pub enum ExitError {
 
 #[derive(Debug, Error)]
 #[error("Failed to spawn process: {0}")]
-pub enum StartError {
+pub enum StartOnError {
     #[error("There is already an active process running on this channel.")]
     ConcurrentInbox,
 
@@ -145,9 +145,9 @@ pub enum StartError {
     Instantiation(#[source] ReportAsError),
 }
 
-impl From<ConcurrentInboxError> for StartError {
+impl From<ConcurrentInboxError> for StartOnError {
     fn from(_: ConcurrentInboxError) -> Self {
-        StartError::ConcurrentInbox
+        StartOnError::ConcurrentInbox
     }
 }
 
