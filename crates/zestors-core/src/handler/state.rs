@@ -128,7 +128,7 @@ impl<H: Handler> FullHandlerState<H> {
 impl<H: Handler> ActorOps for FullHandlerState<H> {
     type Ctx = H::Interface;
 
-    fn handle(&self) -> &ActorHandle<Self::Ctx> {
+    fn handle(&self) -> &Channel<Self::Ctx> {
         self.address.handle()
     }
 }
@@ -178,7 +178,7 @@ pub struct HandlerState<'a, H: Handler> {
 impl<'a, H: Handler> ActorOps for HandlerState<'a, H> {
     type Ctx = H::Interface;
 
-    fn handle(&self) -> &ActorHandle<Self::Ctx> {
+    fn handle(&self) -> &Channel<Self::Ctx> {
         self.address.handle()
     }
 }

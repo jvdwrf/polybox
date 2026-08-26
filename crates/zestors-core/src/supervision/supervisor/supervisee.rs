@@ -15,7 +15,7 @@ impl Supervisee {
 impl ActorOps for Supervisee {
     type Ctx = Set<()>;
 
-    fn handle(&self) -> &ActorHandle<Self::Ctx> {
+    fn handle(&self) -> &Channel<Self::Ctx> {
         &self.spec.handle()
     }
 }

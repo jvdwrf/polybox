@@ -76,7 +76,7 @@ impl<M, H> Sends<M> for H
 where
     H: ActorOps + Sync,
     M: Message,
-    ActorHandle<H::Ctx>: _Sends<M>,
+    Channel<H::Ctx>: _Sends<M>,
 {
     async fn send(&self, msg: M) -> Result<MessageReceipt<M>, SendError<M>> {
         self.handle()._send(msg).await

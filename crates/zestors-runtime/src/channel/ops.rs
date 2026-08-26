@@ -1,6 +1,5 @@
-use crate::signals;
-
 use super::*;
+use crate::signals;
 use jiff::{SignedDuration, Timestamp, Zoned, tz::TimeZone};
 use std::{any::TypeId, future::Future};
 use tokio::time::Instant;
@@ -14,7 +13,7 @@ pub trait ActorOps {
     type Ctx: Context;
 
     /// Returns a reference to the [`ActorHandle`] of the associated actor.
-    fn handle(&self) -> &ActorHandle<Self::Ctx>;
+    fn handle(&self) -> &Channel<Self::Ctx>;
 }
 
 /// The core trait for interacting with actors through their [`ActorHandle`].
@@ -246,16 +245,15 @@ pub trait ActorOpsExt: ActorOps + sealed::Sealed {
     }
 
     fn address(&self) -> &Address<Self::Ctx> {
-        Address::new_ref(self.handle())
+        Address::from_ref(self.handle())
+    }
+
+    fn upgrade(&self) -> Option<StrongAddress<Self::Ctx>> {
+        StrongAddress::from_weak(self.handle())
     }
 }
 
 impl<T: ActorOps> ActorOpsExt for T {}
-
-mod sealed {
-    pub trait Sealed {}
-    impl<T: super::ActorOps> Sealed for T {}
-}
 
 #[derive(Clone, Copy)]
 struct Clock {
@@ -283,8 +281,13 @@ impl Clock {
 }
 
 trait ActorOpsExtPriv: ActorOps {
-    fn data(&self) -> &ActorData<dyn Queue> {
+    fn data(&self) -> &ChannelData<dyn Queue> {
         self.handle().data()
     }
 }
 impl<T: ActorOps + ?Sized> ActorOpsExtPriv for T {}
+
+mod sealed {
+    pub trait Sealed {}
+    impl<T: super::ActorOps> Sealed for T {}
+}

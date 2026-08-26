@@ -18,7 +18,7 @@ pub(crate) mod _prelude {
 pub mod prelude {
     pub use crate::{
         channel::{
-            ActorOpsExt as _, Address, Channel, Child, Inbox, IntoDyn as _, Pid, spawn_with,
+            ActorOpsExt as _, Address, StrongAddress, Child, Inbox, IntoDyn as _, Pid, spawn_with,
         },
         messaging::{Envelope, Interface, Message, Sends as _, type_sets::Set},
         signals::{Event, Signal},

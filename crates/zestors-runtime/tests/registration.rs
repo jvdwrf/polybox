@@ -1,6 +1,6 @@
 use std::{assert_matches, time::Duration};
 use zestors_runtime::{
-    channel::{ActorOpsExt as _, ActorStatus, Channel, ExitStatus, Pid},
+    channel::{ActorOpsExt as _, ActorStatus, StrongAddress, ExitStatus, Pid},
     registry::Registry,
     spawn,
 };
@@ -45,7 +45,7 @@ async fn register_and_deregister_refcounts_basics() {
 
 #[tokio::test]
 async fn register_and_deregister_custom() {
-    let channel = Channel::create(Pid::rand()).unwrap();
+    let channel = StrongAddress::create(Pid::rand()).unwrap();
     assert!(Registry::local().get(channel.pid()).is_some());
     let child = channel.clone().spawn(common::simplest_handler).unwrap();
 

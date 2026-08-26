@@ -3,25 +3,25 @@ use std::{fmt::Debug, hash::Hash};
 
 #[repr(transparent)]
 pub struct Address<C: Context = Set!()> {
-    pub(super) channel: ActorHandle<C>,
+    pub(super) channel: Channel<C>,
 }
 
 impl<C: Context> Address<C> {
-    pub(super) fn new(channel: &ActorHandle<C>) -> Self {
+    pub(super) fn new(channel: &Channel<C>) -> Self {
         Self {
-            channel: channel.clone_ref(),
+            channel: channel._clone(),
         }
     }
 
-    pub(super) fn new_ref(channel: &ActorHandle<C>) -> &Self {
-        unsafe { std::mem::transmute::<&ActorHandle<C>, &Self>(channel) }
+    pub(super) fn from_ref(channel: &Channel<C>) -> &Self {
+        unsafe { std::mem::transmute::<&Channel<C>, &Self>(channel) }
     }
 }
 
 impl<C: Context> ActorOps for Address<C> {
     type Ctx = C;
 
-    fn handle(&self) -> &ActorHandle<Self::Ctx> {
+    fn handle(&self) -> &Channel<Self::Ctx> {
         &self.channel
     }
 }
@@ -34,7 +34,7 @@ impl<C: Context> IntoDyn for Address<C> {
         S: Context,
     {
         Address {
-            channel: unsafe { std::mem::transmute::<ActorHandle<C>, ActorHandle<S>>(self.channel) },
+            channel: unsafe { std::mem::transmute::<Channel<C>, Channel<S>>(self.channel) },
         }
     }
 }
@@ -42,7 +42,7 @@ impl<C: Context> IntoDyn for Address<C> {
 impl<T: Context> Clone for Address<T> {
     fn clone(&self) -> Self {
         Self {
-            channel: self.channel.clone_ref(),
+            channel: self.channel._clone(),
         }
     }
 }

@@ -3,7 +3,7 @@ use futures::FutureExt as _;
 use std::panic::AssertUnwindSafe;
 use tracing::Instrument as _;
 
-impl<T: Context> Channel<T> {
+impl<T: Context> StrongAddress<T> {
     pub fn spawn<R, F>(
         self,
         spawn_fn: impl FnOnce(Inbox<T>) -> F,

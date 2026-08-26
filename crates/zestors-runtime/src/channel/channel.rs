@@ -4,19 +4,23 @@ use jiff::Zoned;
 use std::{fmt::Debug, hash::Hash};
 use type_sets::Set;
 
+/// A strong version of [`Address`], which allows the [`Channel`] to spawn
+/// a new task after the previous one has exited. Once all strong references to a
+/// channel are dropped, the channel is permanently closed, and the address is
+/// removed from the [`Registry`].
 #[repr(transparent)]
-pub struct Channel<C: Context = Set!()> {
-    data: ActorHandle<C>,
+pub struct StrongAddress<C: Context = Set!()> {
+    handle: Channel<C>,
 }
 
-impl<T: Context> Channel<T> {
+impl<T: Context> StrongAddress<T> {
     /// Creates a new channel with the given `pid` and registers it in the local registry.
     pub fn create(pid: Pid) -> Result<Self, DuplicatePidError>
     where
         T: Interface,
     {
-        let channel = Channel {
-            data: ActorHandle::new(pid, 1),
+        let channel = StrongAddress {
+            handle: Channel::new(pid, 1),
         };
 
         let address = channel.address().clone();
@@ -29,66 +33,76 @@ impl<T: Context> Channel<T> {
 
         Ok(channel)
     }
-}
 
-impl<C: Context> Drop for Channel<C> {
-    fn drop(&mut self) {
-        self.data.decr_strong_count();
+    pub(crate) fn from_weak(handle: &Channel<T>) -> Option<Self> {
+        if handle.is_permanently_dead() {
+            return None;
+        }
+        handle.incr_strong_count();
+        Some(Self {
+            handle: handle._clone(),
+        })
     }
 }
 
-impl<T: Context> Clone for Channel<T> {
+impl<C: Context> Drop for StrongAddress<C> {
+    fn drop(&mut self) {
+        self.handle.decr_strong_count();
+    }
+}
+
+impl<T: Context> Clone for StrongAddress<T> {
     fn clone(&self) -> Self {
         self.handle().incr_strong_count();
 
-        Channel {
-            data: self.data.clone_ref(),
+        StrongAddress {
+            handle: self.handle._clone(),
         }
     }
 }
 
-impl<C: Context> IntoDyn for Channel<C> {
-    type Ref<T: Context> = Channel<T>;
+impl<C: Context> IntoDyn for StrongAddress<C> {
+    type Ref<T: Context> = StrongAddress<T>;
 
-    fn into_dyn_unchecked<S>(self) -> Channel<S>
+    fn into_dyn_unchecked<S>(self) -> StrongAddress<S>
     where
         S: Context,
     {
-        unsafe { std::mem::transmute::<Channel<C>, Channel<S>>(self) }
+        unsafe { std::mem::transmute::<StrongAddress<C>, StrongAddress<S>>(self) }
     }
 }
 
-impl<C: Context> AsDyn for Channel<C> {
-    fn as_dyn_unchecked<S>(&self) -> &Channel<S>
+impl<C: Context> AsDyn for StrongAddress<C> {
+    fn as_dyn_unchecked<S>(&self) -> &StrongAddress<S>
     where
         S: Context,
     {
-        unsafe { std::mem::transmute::<&Channel<C>, &Channel<S>>(self) }
+        unsafe { std::mem::transmute::<&StrongAddress<C>, &StrongAddress<S>>(self) }
     }
 }
 
-impl<C: Context> ActorOps for Channel<C> {
+impl<C: Context> ActorOps for StrongAddress<C> {
     type Ctx = C;
 
-    fn handle(&self) -> &ActorHandle<Self::Ctx> {
-        &self.data
+    fn handle(&self) -> &Channel<Self::Ctx> {
+        &self.handle
     }
 }
 
-impl<T: Context> Debug for Channel<T> {
+impl<T: Context> Debug for StrongAddress<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        <ActorHandle<T> as Debug>::fmt(&self.data, f)
+        <Channel<T> as Debug>::fmt(&self.handle, f)
     }
 }
 
-impl<T: Context> PartialEq for Channel<T> {
+impl<T: Context> PartialEq for StrongAddress<T> {
     fn eq(&self, other: &Self) -> bool {
         self.pid() == other.pid()
     }
 }
-impl<T: Context> Eq for Channel<T> {}
+impl<T: Context> Eq for StrongAddress<T> {}
 
-impl<T: Context> Hash for Channel<T> {
+impl<T: Context> Hash for StrongAddress<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.pid().hash(state);
     }

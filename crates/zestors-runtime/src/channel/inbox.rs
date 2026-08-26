@@ -2,12 +2,12 @@ use crate::_prelude::*;
 
 #[derive(Debug)]
 pub struct Inbox<T: Interface> {
-    channel: Channel<T>,
+    channel: StrongAddress<T>,
     initializing: bool,
 }
 
 impl<T: Interface> Inbox<T> {
-    pub(crate) fn try_new(channel: Channel<T>) -> Result<Self, ConcurrentInboxError> {
+    pub(crate) fn try_new(channel: StrongAddress<T>) -> Result<Self, ConcurrentInboxError> {
         if !channel.status().is_dead() {
             return Err(ConcurrentInboxError);
         }
@@ -39,7 +39,7 @@ impl<T: Interface> Inbox<T> {
 impl<T: Interface> ActorOps for Inbox<T> {
     type Ctx = T;
 
-    fn handle(&self) -> &ActorHandle<Self::Ctx> {
+    fn handle(&self) -> &Channel<Self::Ctx> {
         &self.channel.handle()
     }
 }

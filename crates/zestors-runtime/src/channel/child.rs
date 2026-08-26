@@ -5,18 +5,18 @@ use std::{fmt::Debug, task::Poll, time::Duration};
 pub struct Child<T = (), R: Context = Set!()> {
     join: Option<tokio::task::JoinHandle<Result<T, Report>>>,
     attached: bool,
-    channel: Channel<R>,
+    address: StrongAddress<R>,
 }
 
 impl<T, R: Context> Child<T, R> {
     pub(crate) fn new(
         join: tokio::task::JoinHandle<Result<T, Report>>,
-        channel: Channel<R>,
+        address: StrongAddress<R>,
     ) -> Self {
         Self {
             join: Some(join),
             attached: true,
-            channel,
+            address,
         }
     }
 
@@ -32,12 +32,8 @@ impl<T, R: Context> Child<T, R> {
         self.join.take().unwrap()
     }
 
-    pub fn channel(&self) -> &Channel<R> {
-        &self.channel
-    }
-
-    pub fn into_parts(mut self) -> (tokio::task::JoinHandle<Result<T, Report>>, Channel<R>) {
-        (self.join.take().unwrap(), self.channel.clone())
+    pub fn into_parts(mut self) -> (tokio::task::JoinHandle<Result<T, Report>>, StrongAddress<R>) {
+        (self.join.take().unwrap(), self.address.clone())
     }
 
     pub fn handle(&self) -> &tokio::task::JoinHandle<Result<T, Report>> {
@@ -66,8 +62,12 @@ impl<T, R: Context> Child<T, R> {
         self.attached
     }
 
+    pub fn strong_address(&self) -> &StrongAddress<R> {
+        &self.address
+    }
+
     pub async fn shutdown_abort(mut self, timeout: Duration) -> Result<T, JoinAbortError> {
-        self.channel.signal_shutdown();
+        self.address.signal_shutdown();
 
         let sleep = tokio::time::sleep(timeout);
 
@@ -91,8 +91,8 @@ impl<T, R: Context> Child<T, R> {
 impl<T: Send, R: Context> ActorOps for Child<T, R> {
     type Ctx = R;
 
-    fn handle(&self) -> &ActorHandle<Self::Ctx> {
-        self.channel.handle()
+    fn handle(&self) -> &Channel<Self::Ctx> {
+        self.address.handle()
     }
 }
 
@@ -140,7 +140,7 @@ impl<T, R: Context> Debug for Child<T, R> {
         f.debug_struct("Child")
             .field("handle", &std::any::type_name::<T>())
             .field("attached", &self.attached)
-            .field("address", &self.channel)
+            .field("address", &self.address)
             .finish()
     }
 }

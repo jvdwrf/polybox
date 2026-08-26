@@ -27,12 +27,12 @@ use type_sets::{Contains, Set, TypeSet};
 /// This means, that in order restart an actor, the [`Channel`] handle must be kept
 /// alive.
 #[repr(transparent)]
-pub struct ActorHandle<C: Context = Set!()> {
-    inner: Arc<ActorData<dyn Queue>>,
+pub struct Channel<C: Context = Set!()> {
+    inner: Arc<ChannelData<dyn Queue>>,
     _ctx: PhantomData<fn() -> C>,
 }
 
-pub(crate) struct ActorData<Q: ?Sized> {
+pub(crate) struct ChannelData<Q: ?Sized> {
     pid: Pid,
     signal_queue: ConcurrentQueue<SignalInterface>,
     signal_notifier: Notify,
@@ -46,8 +46,8 @@ pub(crate) struct ActorData<Q: ?Sized> {
     msg_queue: Q,
 }
 
-impl<C: Context> ActorHandle<C> {
-    pub(crate) fn clone_ref(&self) -> Self {
+impl<C: Context> Channel<C> {
+    pub(crate) fn _clone(&self) -> Self {
         Self {
             _ctx: PhantomData,
             inner: self.inner.clone(),
@@ -90,7 +90,7 @@ impl<C: Context> ActorHandle<C> {
         }
     }
 
-    pub(super) fn data(&self) -> &ActorData<dyn Queue> {
+    pub(super) fn data(&self) -> &ChannelData<dyn Queue> {
         &self.inner
     }
 
@@ -233,9 +233,9 @@ impl<C: Context> ActorHandle<C> {
     }
 }
 
-impl<I: Interface> ActorHandle<I> {
+impl<I: Interface> Channel<I> {
     pub(super) fn new(pid: Pid, strong_count: usize) -> Self {
-        let inner: Arc<ActorData<dyn Queue>> = Arc::new(ActorData {
+        let inner: Arc<ChannelData<dyn Queue>> = Arc::new(ChannelData {
             pid,
             msg_notifier: Notify::new(),
             msg_backpressure_limit: BACKPRESSURE_LIMIT,
@@ -376,7 +376,7 @@ impl<I: Interface> ActorHandle<I> {
     }
 }
 
-impl<C: Context> Debug for ActorHandle<C> {
+impl<C: Context> Debug for Channel<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ChannelData")
             .field("pid", &self.data().pid)
@@ -386,33 +386,33 @@ impl<C: Context> Debug for ActorHandle<C> {
     }
 }
 
-impl<C: Context> Eq for ActorHandle<C> {}
-impl<C: Context> PartialEq for ActorHandle<C> {
+impl<C: Context> Eq for Channel<C> {}
+impl<C: Context> PartialEq for Channel<C> {
     fn eq(&self, other: &Self) -> bool {
         self.data().pid == other.data().pid
     }
 }
-impl<C: Context> Hash for ActorHandle<C> {
+impl<C: Context> Hash for Channel<C> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.data().pid.hash(state);
     }
 }
 
-impl<C: Context> ActorOps for ActorHandle<C> {
+impl<C: Context> ActorOps for Channel<C> {
     type Ctx = C;
 
-    fn handle(&self) -> &ActorHandle<Self::Ctx> {
+    fn handle(&self) -> &Channel<Self::Ctx> {
         self
     }
 }
 
-impl<C: Context> ActorHandle<C> {
+impl<C: Context> Channel<C> {
     pub(crate) fn ref_count(&self) -> usize {
         Arc::strong_count(&self.inner)
     }
 }
 
-impl<M, T> _Sends<M> for ActorHandle<Set<T>>
+impl<M, T> _Sends<M> for Channel<Set<T>>
 where
     M: Message,
     T: TypeSet + Contains<M> + 'static,
@@ -461,7 +461,7 @@ where
     }
 }
 
-impl<M, I> _Sends<M> for ActorHandle<I>
+impl<M, I> _Sends<M> for Channel<I>
 where
     M: Message,
     I: Interface + TryInto<Envelope<M>> + From<Envelope<M>> + Send + 'static,
@@ -509,7 +509,7 @@ where
     }
 }
 
-impl ActorData<dyn Queue> {
+impl ChannelData<dyn Queue> {
     pub fn msg_len(&self) -> usize {
         self.msg_queue.len()
     }

@@ -7,7 +7,7 @@ pub trait Start: Into<DynLauncher> {
 
     fn start_on(
         &self,
-        channel: Channel<Self::Ctx>,
+        channel: StrongAddress<Self::Ctx>,
     ) -> impl Future<Output = Result<Child<Self::Exit, Self::Ctx>, StartOnError>> + Send;
 }
 
@@ -17,7 +17,7 @@ impl<B: Blueprint> Start for B {
 
     async fn start_on(
         &self,
-        channel: Channel<Self::Ctx>,
+        channel: StrongAddress<Self::Ctx>,
     ) -> Result<Child<Self::Exit, Self::Ctx>, StartOnError> {
         let actor = self
             .instantiate()
@@ -32,11 +32,17 @@ impl<B: Blueprint> Start for B {
 pub struct DynLauncher(Arc<dyn _Spawnable + Send + Sync + 'static>);
 
 trait _Spawnable: Debug {
-    fn spawn_on_dyn<'a>(&'a self, data: &'a Channel) -> BoxFuture<'a, Result<Child, StartOnError>>;
+    fn spawn_on_dyn<'a>(
+        &'a self,
+        data: &'a StrongAddress,
+    ) -> BoxFuture<'a, Result<Child, StartOnError>>;
 }
 
 impl<R: Blueprint> _Spawnable for R {
-    fn spawn_on_dyn<'a>(&'a self, data: &'a Channel) -> BoxFuture<'a, Result<Child, StartOnError>> {
+    fn spawn_on_dyn<'a>(
+        &'a self,
+        data: &'a StrongAddress,
+    ) -> BoxFuture<'a, Result<Child, StartOnError>> {
         Box::pin(async move {
             let runner = self
                 .instantiate()
@@ -60,7 +66,7 @@ impl Start for DynLauncher {
 
     async fn start_on(
         &self,
-        data: Channel<Self::Ctx>,
+        data: StrongAddress<Self::Ctx>,
     ) -> Result<Child<Self::Exit, Self::Ctx>, StartOnError> {
         self.0.spawn_on_dyn(&data).await
     }

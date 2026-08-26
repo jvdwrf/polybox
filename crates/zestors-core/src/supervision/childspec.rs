@@ -28,7 +28,7 @@ impl ChildConfig {
 pub struct ChildSpec<T: Start = DynLauncher> {
     cfg: ChildConfig,
     blueprint: T,
-    channel: Channel<T::Ctx>,
+    channel: StrongAddress<T::Ctx>,
 }
 
 // Implementations just when T is statically known
@@ -37,7 +37,7 @@ impl<T: Blueprint> ChildSpec<T> {
         Ok(Self {
             cfg: blueprint.generate_config(),
             blueprint: blueprint.into(),
-            channel: Channel::<<T::Actor as Actor>::Interface>::create(id.into())?,
+            channel: StrongAddress::<<T::Actor as Actor>::Interface>::create(id.into())?,
         })
     }
 
@@ -102,7 +102,7 @@ impl<T: Start> ChildSpec<T> {
 impl<T: Start> ActorOps for ChildSpec<T> {
     type Ctx = T::Ctx;
 
-    fn handle(&self) -> &ActorHandle<Self::Ctx> {
+    fn handle(&self) -> &Channel<Self::Ctx> {
         &self.channel.handle()
     }
 }
