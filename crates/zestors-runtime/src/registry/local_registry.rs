@@ -1,87 +1,119 @@
+use type_sets::TypeSet;
+
 use crate::_prelude::*;
-use dashmap::DashMap;
 use std::sync::OnceLock;
 
+/// A thread-safe global registry mapping process identifiers ([`Pid`]) to their weak handles ([`Address`]).
 #[derive(Debug)]
 pub struct Registry {
-    processes: DashMap<Pid, Option<Address>>,
+    processes: papaya::HashMap<Pid, Address>,
 }
 
 static REGISTRY: OnceLock<Registry> = OnceLock::new();
 
 impl Registry {
+    /// Creates a new, empty process registry.
     fn new() -> Self {
         Self {
-            processes: DashMap::new(),
+            processes: papaya::HashMap::new(),
         }
     }
 
+    /// Returns a reference to the global process registry singleton.
     pub fn local() -> &'static Self {
         REGISTRY.get_or_init(Self::new)
     }
 
-    /// Add a process to the registry if not already present.
-    pub(crate) fn register<T: ChannelSpec>(
+    /// Registers a new process address.
+    ///
+    /// # Errors
+    /// Returns a [`RegistryAddError`] if the [`Pid`] is already registered.
+    pub(crate) fn register<C: ChannelSpec>(
         &self,
-        address: Address<T>,
-    ) -> Result<(), RegistryAddError<T>> {
-        let pid = address.pid();
+        address: Address<C>,
+    ) -> Result<(), RegistryAddError<C>> {
+        let map = self.processes.pin();
 
-        // If the pid is already present and the address is different, return an error.
-        if let Some(val) = self.processes.get(pid)
-            && let Some(val) = val.as_ref()
-            && val.pid() != address.pid()
+        if map
+            .try_insert(address.pid().clone(), address.clone().into_dyn())
+            .is_err()
         {
-            return Err(RegistryAddError {
-                pid: pid.clone(),
-                entry: address,
-            });
+            Err(RegistryAddError { address })
+        } else {
+            Ok(())
         }
-
-        self.processes
-            .insert(pid.clone(), Some(address.into_dyn::<Set<()>>()));
-
-        Ok(())
     }
 
-    pub fn get(&self, pid: &Pid) -> Option<Address> {
-        self.processes
-            .get(pid)
-            .map(|address| address.as_ref().cloned())
-            .flatten()
-    }
-
-    pub fn get_typed<T: Interface>(&self, pid: &Pid) -> Result<Address<T>, Report> {
-        self.get(pid)
-            .ok_or_else(|| rootcause::report!("Address not found for pid: {}", pid))?
-            .downcast::<T>()
-            .map_err(|_| rootcause::report!("Address found for pid: {} but type mismatch", pid))
-    }
-
+    /// Removes and returns the registered [`Address`] for a given [`Pid`].
     pub(crate) fn remove(&self, pid: &Pid) -> Option<Address> {
+        let guard = self.processes.guard();
         self.processes
-            .remove(pid)
-            .map(|(_, address)| address)
-            .flatten()
+            .remove_entry(pid, &guard)
+            .map(|(_pid, addr)| addr.clone())
     }
 
+    /// Fetches an untyped [`Address`] by its [`Pid`], returning `None` if not registered.
+    pub fn get(&self, pid: &Pid) -> Option<Address> {
+        let guard = self.processes.guard();
+        self.processes.get(pid, &guard).cloned()
+    }
+
+    /// Fetches a strongly typed [`Address<C>`] by its [`Pid`].
+    ///
+    /// # Errors
+    /// Returns an error if
+    /// - the process is not found
+    /// - the address type downcast fails
+    pub fn get_typed<I: Interface>(&self, pid: &Pid) -> Result<Address<I>, TypedRegistryError> {
+        self.get(pid)
+            .ok_or_else(|| TypedRegistryError::NotFound(pid.clone()))?
+            .downcast::<I>()
+            .map_err(|_| TypedRegistryError::TypeMismatch(pid.clone()))
+    }
+
+    /// Fetches a dynamically typed [`Address<C>`] by its [`Pid`].
+    ///
+    /// # Errors
+    /// Returns an error if
+    /// - the process is not found
+    /// - the set of types does not match the registered address's type set
+    pub fn get_dyn<C: ChannelSpec + TypeSet>(
+        &self,
+        pid: &Pid,
+    ) -> Result<Address<C>, TypedRegistryError> {
+        self.get(pid)
+            .ok_or_else(|| TypedRegistryError::NotFound(pid.clone()))?
+            .into_dyn_checked::<C>()
+            .map_err(|_| TypedRegistryError::TypeMismatch(pid.clone()))
+    }
+
+    /// Returns `true` if a process with the given [`Pid`] is registered.
     pub fn contains(&self, pid: &Pid) -> bool {
-        self.processes.contains_key(pid)
+        let guard = self.processes.guard();
+        self.processes.contains_key(pid, &guard)
     }
 }
 
+/// Error returned when registering a [`Pid`] that already exists in the [`Registry`].
 #[derive(thiserror::Error)]
-#[error("Failed to add entry for pid {pid}")]
+#[error("Failed to add entry for pid {}", .address.pid())]
 pub struct RegistryAddError<T: ChannelSpec = Set!()> {
-    pid: Pid,
-    entry: Address<T>,
+    address: Address<T>,
 }
 
 impl<T: ChannelSpec> std::fmt::Debug for RegistryAddError<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RegistryAddError")
-            .field("pid", &self.pid)
-            .field("entry", &self.entry)
+            .field("entry", &self.address)
             .finish()
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum TypedRegistryError {
+    #[error("Address not found for pid: {0}")]
+    NotFound(Pid),
+
+    #[error("Address found for pid: {0} but type mismatch")]
+    TypeMismatch(Pid),
 }
