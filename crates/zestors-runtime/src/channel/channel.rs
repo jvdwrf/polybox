@@ -67,7 +67,7 @@ impl<C: Context> AsDyn for Channel<C> {
     }
 }
 
-impl<C: Context> AsActorHandle for Channel<C> {
+impl<C: Context> ActorOps for Channel<C> {
     type Ctx = C;
 
     fn handle(&self) -> &ActorHandle<Self::Ctx> {

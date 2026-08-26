@@ -7,9 +7,9 @@ use tokio::time::Instant;
 
 /// A trait that provides access to the [`ActorHandle`] of an actor.
 ///
-/// Implement this trait, and [`ActorOps`] is automatically implemented for your
+/// Implement this trait, and [`ActorOpsExt`] is automatically implemented for your
 /// type.
-pub trait AsActorHandle {
+pub trait ActorOps {
     /// The [`Context`] of the associated actor.
     type Ctx: Context;
 
@@ -19,8 +19,8 @@ pub trait AsActorHandle {
 
 /// The core trait for interacting with actors through their [`ActorHandle`].
 /// This trait is sealed, and is implemented automatically for any type that
-/// implements [`AsActorHandle`].
-pub trait ActorOps: AsActorHandle + sealed::Sealed {
+/// implements [`ActorOps`].
+pub trait ActorOpsExt: ActorOps + sealed::Sealed {
     /// Same as [`Sends::send`], but checks whether the message type is accepted by the channel.
     fn send_dyn<M: Message>(
         &self,
@@ -66,16 +66,16 @@ pub trait ActorOps: AsActorHandle + sealed::Sealed {
     }
 
     fn pid(&self) -> &Pid {
-        self.handle().data().pid()
+        self.data().pid()
     }
 
     fn status(&self) -> ActorStatus {
-        self.handle().data().status()
+        self.data().status()
     }
 
     fn snapshot(&self) -> ChannelSnapshot {
         let clock = Clock::now();
-        let data = &self.handle().data();
+        let data = &self.data();
 
         ChannelSnapshot {
             pid: data.pid().clone(),
@@ -100,7 +100,7 @@ pub trait ActorOps: AsActorHandle + sealed::Sealed {
         &self,
         check_for: impl FnMut(ActorStatus) -> Option<T> + Send + 'static,
     ) -> impl Future<Output = T> + Send {
-        self.handle().data().watch(check_for)
+        self.data().watch(check_for)
     }
 
     fn watch_initialization(&self) -> impl Future<Output = Result<(), ExitStatus>> + Send {
@@ -131,11 +131,11 @@ pub trait ActorOps: AsActorHandle + sealed::Sealed {
     }
 
     fn members(&self) -> &'static [TypeId] {
-        self.handle().data().members()
+        self.data().members()
     }
 
     fn msg_len(&self) -> usize {
-        self.handle().data().msg_len()
+        self.data().msg_len()
     }
 
     fn msgs_is_empty(&self) -> bool {
@@ -151,7 +151,7 @@ pub trait ActorOps: AsActorHandle + sealed::Sealed {
     }
 
     fn is_interface<I: Interface>(&self) -> bool {
-        self.handle().data().is_interface::<I>()
+        self.data().is_interface::<I>()
     }
 
     fn reached_backpressure(&self) -> bool {
@@ -182,7 +182,7 @@ pub trait ActorOps: AsActorHandle + sealed::Sealed {
             Signal::Resume => SignalInterface::Resume(Envelope::new(signals::Resume, ())),
         };
 
-        self.handle().data().signal(interface)
+        self.data().signal(interface)
     }
 
     fn ping(&self) -> Rx<()> {
@@ -196,15 +196,15 @@ pub trait ActorOps: AsActorHandle + sealed::Sealed {
     }
 
     fn created_at(&self) -> Instant {
-        self.handle().data().created_at()
+        self.data().created_at()
     }
 
     fn last_spawned_at(&self) -> Option<Instant> {
-        self.handle().data().last_spawned_at()
+        self.data().last_spawned_at()
     }
 
     fn spawned_at(&self) -> Vec<Instant> {
-        self.handle().data().spawned_at()
+        self.data().spawned_at()
     }
 
     fn uptime(&self) -> Option<Duration> {
@@ -226,7 +226,7 @@ pub trait ActorOps: AsActorHandle + sealed::Sealed {
     /// This amount should only be used as an indication of the number of
     /// active references to the channel.
     fn strong_count(&self) -> usize {
-        self.handle().data().strong_count()
+        self.data().strong_count()
     }
 
     /// The total amount of references to this channel, including [`ChannelHandle`]s, [`Inbox`]es and [`Address`]es.
@@ -250,11 +250,11 @@ pub trait ActorOps: AsActorHandle + sealed::Sealed {
     }
 }
 
-impl<T: AsActorHandle> ActorOps for T {}
+impl<T: ActorOps> ActorOpsExt for T {}
 
 mod sealed {
     pub trait Sealed {}
-    impl<T: super::AsActorHandle> Sealed for T {}
+    impl<T: super::ActorOps> Sealed for T {}
 }
 
 #[derive(Clone, Copy)]
@@ -281,3 +281,10 @@ impl Clock {
         self.timestamp_at(instant).to_zoned(TimeZone::UTC)
     }
 }
+
+trait ActorOpsExtPriv: ActorOps {
+    fn data(&self) -> &ActorData<dyn Queue> {
+        self.handle().data()
+    }
+}
+impl<T: ActorOps + ?Sized> ActorOpsExtPriv for T {}

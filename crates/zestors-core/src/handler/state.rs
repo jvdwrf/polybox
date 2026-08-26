@@ -125,7 +125,7 @@ impl<H: Handler> FullHandlerState<H> {
     }
 }
 
-impl<H: Handler> AsActorHandle for FullHandlerState<H> {
+impl<H: Handler> ActorOps for FullHandlerState<H> {
     type Ctx = H::Interface;
 
     fn handle(&self) -> &ActorHandle<Self::Ctx> {
@@ -175,7 +175,7 @@ pub struct HandlerState<'a, H: Handler> {
 //     }
 // }
 
-impl<'a, H: Handler> AsActorHandle for HandlerState<'a, H> {
+impl<'a, H: Handler> ActorOps for HandlerState<'a, H> {
     type Ctx = H::Interface;
 
     fn handle(&self) -> &ActorHandle<Self::Ctx> {

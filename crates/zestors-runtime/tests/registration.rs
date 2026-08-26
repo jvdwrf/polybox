@@ -1,6 +1,6 @@
 use std::{assert_matches, time::Duration};
 use zestors_runtime::{
-    channel::{ActorOps as _, ActorStatus, Channel, ExitStatus, Pid},
+    channel::{ActorOpsExt as _, ActorStatus, Channel, ExitStatus, Pid},
     registry::Registry,
     spawn,
 };

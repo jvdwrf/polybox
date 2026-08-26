@@ -398,7 +398,7 @@ impl<C: Context> Hash for ActorHandle<C> {
     }
 }
 
-impl<C: Context> AsActorHandle for ActorHandle<C> {
+impl<C: Context> ActorOps for ActorHandle<C> {
     type Ctx = C;
 
     fn handle(&self) -> &ActorHandle<Self::Ctx> {

@@ -12,7 +12,7 @@ impl Supervisee {
     }
 }
 
-impl AsActorHandle for Supervisee {
+impl ActorOps for Supervisee {
     type Ctx = Set<()>;
 
     fn handle(&self) -> &ActorHandle<Self::Ctx> {

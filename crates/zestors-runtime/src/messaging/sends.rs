@@ -74,7 +74,7 @@ pub(crate) trait _Sends<M: Message>: Sync {
 
 impl<M, H> Sends<M> for H
 where
-    H: AsActorHandle + Sync,
+    H: ActorOps + Sync,
     M: Message,
     ActorHandle<H::Ctx>: _Sends<M>,
 {

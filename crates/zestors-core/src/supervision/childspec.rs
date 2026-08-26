@@ -99,7 +99,7 @@ impl<T: Start> ChildSpec<T> {
     }
 }
 
-impl<T: Start> AsActorHandle for ChildSpec<T> {
+impl<T: Start> ActorOps for ChildSpec<T> {
     type Ctx = T::Ctx;
 
     fn handle(&self) -> &ActorHandle<Self::Ctx> {

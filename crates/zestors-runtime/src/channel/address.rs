@@ -18,7 +18,7 @@ impl<C: Context> Address<C> {
     }
 }
 
-impl<C: Context> AsActorHandle for Address<C> {
+impl<C: Context> ActorOps for Address<C> {
     type Ctx = C;
 
     fn handle(&self) -> &ActorHandle<Self::Ctx> {

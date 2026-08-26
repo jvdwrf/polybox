@@ -88,7 +88,7 @@ impl<T, R: Context> Child<T, R> {
     }
 }
 
-impl<T: Send, R: Context> AsActorHandle for Child<T, R> {
+impl<T: Send, R: Context> ActorOps for Child<T, R> {
     type Ctx = R;
 
     fn handle(&self) -> &ActorHandle<Self::Ctx> {

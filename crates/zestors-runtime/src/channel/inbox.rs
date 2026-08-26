@@ -36,7 +36,7 @@ impl<T: Interface> Inbox<T> {
     }
 }
 
-impl<T: Interface> AsActorHandle for Inbox<T> {
+impl<T: Interface> ActorOps for Inbox<T> {
     type Ctx = T;
 
     fn handle(&self) -> &ActorHandle<Self::Ctx> {
