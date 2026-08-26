@@ -13,6 +13,7 @@ pub struct Supervisor {
     supervisees: IndexMap<Pid, Supervisee>,
     strategy: SupervisionStrategy,
     restart_limiter: RestartLimiter,
+    source: Option<Box<dyn SupervisorSource>>,
 }
 
 impl Supervisor {
@@ -20,6 +21,7 @@ impl Supervisor {
         supervisees: IndexMap<Pid, ChildSpec>,
         strategy: SupervisionStrategy,
         restart_intensity: RestartIntensity,
+        source: Option<Box<dyn SupervisorSource>>,
     ) -> Self {
         Self {
             supervisees: supervisees
@@ -28,6 +30,7 @@ impl Supervisor {
                 .collect(),
             strategy,
             restart_limiter: RestartLimiter::new(restart_intensity),
+            source,
         }
     }
 

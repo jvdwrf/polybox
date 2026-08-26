@@ -1,14 +1,17 @@
 use futures::future::pending;
 use rootcause::Report;
-use std::time::Duration;
+use std::{sync::LazyLock, time::Duration};
 use zestors::{
     HandlerInterface,
     api_server::ApiServer,
+    channel::errors::Cancelled,
     handler::{BasicScheduler, Handle, Handler, HandlerExit, HandlerState},
     node::Node,
     prelude::*,
     signals::RestartMode,
-    supervision::{BlueprintExt, Supervisor, actor_fn, blueprint_fn, task_fn},
+    supervision::{
+        BlueprintExt, InMemorySupervisorSource, Supervisor, actor_fn, blueprint_fn, task_fn,
+    },
 };
 
 #[derive(Interface, HandlerInterface)]
@@ -105,6 +108,9 @@ impl Handle<String> for MyActor {
     }
 }
 
+static ROOT_DYNAMIC_CHILDREN: LazyLock<InMemorySupervisorSource> =
+    LazyLock::new(|| InMemorySupervisorSource::new());
+
 #[tokio::main]
 async fn main() -> Result<(), Report> {
     tracing_subscriber::fmt()
@@ -150,12 +156,26 @@ async fn main() -> Result<(), Report> {
         .split();
 
     let (task_spec, _addr) = task_fn(|mut task_box| async move {
-        task_box
-            .run_until_shutdown(async move {
-                tokio::time::sleep(Duration::from_secs(5)).await;
-                println!("Task completed successfully")
+        let mut completed_part1 = false;
+
+        let res = task_box
+            .run_until_shutdown(async {
+                tokio::time::sleep(Duration::from_secs(2)).await;
+                println!("Task completed part 1");
+                completed_part1 = true;
+
+                tokio::time::sleep(Duration::from_secs(2)).await;
+                println!("Task completed part 2");
             })
-            .await?;
+            .await;
+
+        if let Err(Cancelled) = res {
+            println!("Task was cancelled");
+            if completed_part1 {
+                // Cleanup part1, to reset for the next time this task is ran.
+            }
+            return Err(Cancelled.into());
+        }
 
         Ok(())
     })
@@ -176,18 +196,39 @@ async fn main() -> Result<(), Report> {
                 .with_pid("DynBlueprintActor2")?
                 .into(),
         ])
+        .with_source(|| ROOT_DYNAMIC_CHILDREN.clone())
         .with_pid("RootSupervisor")?;
 
     let root_address = Node::new(root_supervisor).start().await?;
 
     root_address.watch_start().await;
 
+    spawn_tasks_in_background(ROOT_DYNAMIC_CHILDREN.clone());
+
     tracing::info!("All actors started, sending messages...");
 
-    loop {
-        tokio::time::sleep(Duration::from_secs(10)).await;
+    pending().await
+}
 
-        // addr_a.signal_shutdown();
-        // addr_b.signal_shutdown();
-    }
+fn spawn_tasks_in_background(source: InMemorySupervisorSource) {
+    tokio::task::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+
+            source
+                .add(
+                    task_fn(|mut task| async move {
+                        task.run_until_shutdown(async {
+                            tokio::time::sleep(Duration::from_secs(5)).await;
+                            println!("Dynamic task completed");
+                        })
+                        .await?;
+                        Ok(())
+                    })
+                    .with_rand_pid()
+                    .into_dyn(),
+                )
+                .expect("Pid is unique");
+        }
+    });
 }

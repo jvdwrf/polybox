@@ -1,17 +1,11 @@
 use crate::_prelude::*;
 use indexmap::IndexMap;
 
-#[derive(Debug)]
 pub struct SupervisorBlueprint {
     supervisees: IndexMap<Pid, ChildSpec>,
     strategy: SupervisionStrategy,
     restart_intensity: RestartIntensity,
-}
-
-impl Default for SupervisorBlueprint {
-    fn default() -> Self {
-        Self::new()
-    }
+    source_fn: Option<Arc<dyn Fn() -> Box<dyn SupervisorSource> + Send + Sync>>,
 }
 
 impl SupervisorBlueprint {
@@ -20,6 +14,7 @@ impl SupervisorBlueprint {
             supervisees: Default::default(),
             strategy: SupervisionStrategy::default(),
             restart_intensity: RestartIntensity::default(),
+            source_fn: None,
         }
     }
 
@@ -35,6 +30,14 @@ impl SupervisorBlueprint {
 
     pub fn with_child<T: Start + Sync>(mut self, spec: ChildSpec<T>) -> Self {
         self.supervisees.insert(spec.pid().clone(), spec.into_dyn());
+        self
+    }
+
+    pub fn with_source<S>(mut self, source_fn: impl Fn() -> S + Send + Sync + 'static) -> Self
+    where
+        S: SupervisorSource,
+    {
+        self.source_fn = Some(Arc::new(move || Box::new(source_fn())));
         self
     }
 
@@ -92,6 +95,7 @@ impl Blueprint for SupervisorBlueprint {
             self.supervisees.clone(),
             self.strategy,
             self.restart_intensity.clone(),
+            self.source_fn.as_ref().map(|init_source| init_source()),
         ))
     }
 
@@ -101,5 +105,21 @@ impl Blueprint for SupervisorBlueprint {
 
     fn default_init_timeout(&self) -> Duration {
         Duration::from_mins(5)
+    }
+}
+
+impl Debug for SupervisorBlueprint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SupervisorBlueprint")
+            .field("supervisees", &self.supervisees)
+            .field("strategy", &self.strategy)
+            .field("restart_intensity", &self.restart_intensity)
+            .finish()
+    }
+}
+
+impl Default for SupervisorBlueprint {
+    fn default() -> Self {
+        Self::new()
     }
 }

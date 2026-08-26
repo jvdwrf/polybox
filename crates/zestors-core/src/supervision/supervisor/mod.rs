@@ -65,3 +65,6 @@ pub use actor::*;
 
 mod supervisee;
 use supervisee::*;
+
+mod source;
+pub use source::*;
