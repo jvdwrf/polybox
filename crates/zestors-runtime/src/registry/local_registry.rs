@@ -1,7 +1,6 @@
-use type_sets::TypeSet;
-
 use crate::_prelude::*;
 use std::sync::OnceLock;
+use type_sets::TypeSet;
 
 /// A thread-safe global registry mapping process identifiers ([`Pid`]) to their weak handles ([`Address`]).
 #[derive(Debug)]

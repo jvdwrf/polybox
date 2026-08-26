@@ -32,25 +32,32 @@ impl<T: Actor + Clone + Debug + Send + Sync + 'static> Blueprint for T {
 }
 
 pub trait BlueprintExt: Blueprint + Sized {
-    fn into_spawn_fn(self) -> DynSpawner
+    fn into_spawn_fn(self) -> DynLauncher
     where
         Self: Send + Sync + 'static,
     {
-        DynSpawner::new(self)
+        DynLauncher::new(self)
     }
 
-    fn spawn(
+    fn launch_with(
         &self,
         pid: Pid,
     ) -> impl Future<
-        Output = rootcause::Result<
+        Output = Result<
             Child<<Self::Actor as Actor>::Exit, <Self::Actor as Actor>::Interface>,
+            LaunchWithError,
         >,
     > + Send
     where
         Self: Send + Sync + 'static,
     {
-        async { Ok(self.instantiate().await?.spawn_with(pid)?) }
+        async {
+            self.instantiate()
+                .await
+                .map_err(LaunchWithError::InstantiationFailed)?
+                .spawn_with(pid)
+                .map_err(Into::into)
+        }
     }
 
     fn generate_config(&self) -> ChildConfig {
@@ -125,4 +132,17 @@ where
     A: Actor,
 {
     FnBlueprint::new(f)
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum LaunchWithError {
+    #[error("Instantiation failed: {0}")]
+    InstantiationFailed(rootcause::Report),
+
+    #[error("Spawn failed: {0}")]
+    DuplicatePid(
+        #[from]
+        #[source]
+        DuplicatePidError,
+    ),
 }

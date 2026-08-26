@@ -1,14 +1,13 @@
-use rootcause::Report;
 use std::{assert_matches, time::Duration};
 use zestors_runtime::{
-    channel::{ActorRef, ActorStatus, Channel, ExitStatus, Inbox, Pid},
+    channel::{ActorRef, ActorStatus, Channel, ExitStatus, Pid},
     registry::Registry,
     spawn,
 };
 
 #[tokio::test]
 async fn register_and_deregister_refcounts_basics() {
-    let mut child = spawn(handler);
+    let mut child = spawn(common::simplest_handler);
     let pid = child.pid().clone();
 
     assert!(Registry::local().get(&pid).is_some());
@@ -48,11 +47,11 @@ async fn register_and_deregister_refcounts_basics() {
 async fn register_and_deregister_custom() {
     let channel = Channel::create(Pid::rand()).unwrap();
     assert!(Registry::local().get(channel.pid()).is_some());
-    let child = channel.clone().spawn(handler).unwrap();
+    let child = channel.clone().spawn(common::simplest_handler).unwrap();
 
     assert_eq!(channel.strong_count(), 3); // Channel + Child + Inbox
     assert_eq!(channel.weak_count(), 2); // Registry + Spawn
-    assert_matches!(channel.clone().spawn(handler), Err(_));
+    assert_matches!(channel.clone().spawn(common::simplest_handler), Err(_));
 
     child
         .shutdown_abort(Duration::from_millis(10))
@@ -60,7 +59,4 @@ async fn register_and_deregister_custom() {
         .unwrap();
 }
 
-async fn handler(mut inbox: Inbox<()>) -> Result<(), Report> {
-    while let Some(_) = inbox.next().await {}
-    Ok(())
-}
+mod common;

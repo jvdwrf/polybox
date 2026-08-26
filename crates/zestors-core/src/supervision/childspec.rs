@@ -25,7 +25,7 @@ impl ChildConfig {
     }
 }
 
-pub struct ChildSpec<T: Spawnable = DynSpawner> {
+pub struct ChildSpec<T: Launch = DynLauncher> {
     cfg: ChildConfig,
     blueprint: T,
     channel: Channel<T::ChannelSpec>,
@@ -53,7 +53,7 @@ impl<T: Blueprint> ChildSpec<T> {
 
 // Implementations when T can be any type that implements RepeatSpawn
 // (including DynRepeatSpawner)
-impl<T: Spawnable> ChildSpec<T> {
+impl<T: Launch> ChildSpec<T> {
     pub fn cfg(&self) -> &ChildConfig {
         &self.cfg
     }
@@ -86,8 +86,8 @@ impl<T: Spawnable> ChildSpec<T> {
         self
     }
 
-    pub async fn spawn(&self) -> Result<Child<T::Exit, T::ChannelSpec>, SpawnError> {
-        self.blueprint.spawn_on(self.channel.clone()).await
+    pub async fn launch(&self) -> Result<Child<T::Exit, T::ChannelSpec>, LaunchOnError> {
+        self.blueprint.launch_on(self.channel.clone()).await
     }
 
     pub fn into_dyn(self) -> ChildSpec {
@@ -99,7 +99,7 @@ impl<T: Spawnable> ChildSpec<T> {
     }
 }
 
-impl<T: Spawnable> AsActorRef for ChildSpec<T> {
+impl<T: Launch> AsActorRef for ChildSpec<T> {
     type ChannelSpec = T::ChannelSpec;
 
     fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
@@ -107,7 +107,7 @@ impl<T: Spawnable> AsActorRef for ChildSpec<T> {
     }
 }
 
-impl<T: Spawnable + Clone> Clone for ChildSpec<T> {
+impl<T: Launch + Clone> Clone for ChildSpec<T> {
     fn clone(&self) -> Self {
         Self {
             cfg: self.cfg.clone(),
@@ -117,7 +117,7 @@ impl<T: Spawnable + Clone> Clone for ChildSpec<T> {
     }
 }
 
-impl<T: Spawnable + Debug> Debug for ChildSpec<T> {
+impl<T: Launch + Debug> Debug for ChildSpec<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ChildSpec")
             .field("cfg", &self.cfg)
