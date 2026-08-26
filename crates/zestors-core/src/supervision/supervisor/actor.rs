@@ -63,7 +63,7 @@ impl Supervisor {
             .collect()
     }
 
-    pub fn with_child<T: Launch>(mut self, spec: ChildSpec<T>) -> Self
+    pub fn with_child<T: Start>(mut self, spec: ChildSpec<T>) -> Self
     where
         ChildSpec<T>: Into<ChildSpec>,
     {
@@ -71,7 +71,7 @@ impl Supervisor {
         self
     }
 
-    pub fn with_children<T: Launch>(mut self, specs: impl IntoIterator<Item = ChildSpec<T>>) -> Self
+    pub fn with_children<T: Start>(mut self, specs: impl IntoIterator<Item = ChildSpec<T>>) -> Self
     where
         ChildSpec<T>: Into<ChildSpec>,
     {
@@ -84,7 +84,7 @@ impl Supervisor {
     async fn spawn_supervisee(supervisee: &mut Supervisee) -> Result<(), Report> {
         // We only have to add the children to the registry the first time they are spawned,
         // since it will persist across restarts.
-        let child = supervisee.spec.launch().await.attach(format!(
+        let child = supervisee.spec.start().await.attach(format!(
             "Failed to spawn supervisee {}",
             supervisee.spec.pid()
         ))?;
@@ -198,7 +198,7 @@ impl Supervisor {
         for supervisee in supervisees {
             let child = supervisee
                 .spec
-                .launch()
+                .start()
                 .await
                 .expect("Children should all be shut-down now");
             supervisee.child = Some(child);

@@ -32,12 +32,12 @@ impl SupervisorBlueprint {
         self
     }
 
-    pub fn with_child<T: Launch + Sync>(mut self, spec: ChildSpec<T>) -> Self {
+    pub fn with_child<T: Start + Sync>(mut self, spec: ChildSpec<T>) -> Self {
         self.supervisees.insert(spec.pid().clone(), spec.into_dyn());
         self
     }
 
-    pub fn with_children<T: Launch>(
+    pub fn with_children<T: Start>(
         mut self,
         specs: impl IntoIterator<Item = ChildSpec<T>>,
     ) -> Self {

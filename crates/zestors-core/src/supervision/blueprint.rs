@@ -39,13 +39,13 @@ pub trait BlueprintExt: Blueprint + Sized {
         DynLauncher::new(self)
     }
 
-    fn launch_with(
+    fn start_with(
         &self,
         pid: Pid,
     ) -> impl Future<
         Output = Result<
             Child<<Self::Actor as Actor>::Exit, <Self::Actor as Actor>::Interface>,
-            LaunchWithError,
+            StartWithError,
         >,
     > + Send
     where
@@ -54,7 +54,7 @@ pub trait BlueprintExt: Blueprint + Sized {
         async {
             self.instantiate()
                 .await
-                .map_err(LaunchWithError::InstantiationFailed)?
+                .map_err(StartWithError::InstantiationFailed)?
                 .spawn_with(pid)
                 .map_err(Into::into)
         }
@@ -135,7 +135,7 @@ where
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum LaunchWithError {
+pub enum StartWithError {
     #[error("Instantiation failed: {0}")]
     InstantiationFailed(rootcause::Report),
 
