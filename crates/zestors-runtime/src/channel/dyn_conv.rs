@@ -1,23 +1,23 @@
 use super::*;
 use type_sets::{SubsetOf, TypeSet};
 
-pub trait IntoDyn: ActorRef + Sized {
-    type Ref<T: ChannelSpec>;
+pub trait IntoDyn: AsActorHandle + Sized {
+    type Ref<T: Context>;
 
     fn into_dyn_unchecked<S>(self) -> Self::Ref<S>
     where
-        S: ChannelSpec;
+        S: Context;
 
     fn into_dyn<S>(self) -> Self::Ref<S>
     where
-        S: ChannelSpec + SubsetOf<Self::Set>,
+        S: Context + SubsetOf<<Self::Ctx as Context>::Set>,
     {
         self.into_dyn_unchecked()
     }
 
     fn into_dyn_checked<S>(self) -> Result<Self::Ref<S>, Self>
     where
-        S: TypeSet + ChannelSpec,
+        S: TypeSet + Context,
     {
         if self.is_superset_of(S::members()) {
             Ok(self.into_dyn_unchecked())
@@ -41,18 +41,18 @@ pub trait IntoDyn: ActorRef + Sized {
 pub trait AsDyn: IntoDyn {
     fn as_dyn_unchecked<S>(&self) -> &Self::Ref<S>
     where
-        S: ChannelSpec;
+        S: Context;
 
     fn as_dyn<S>(&self) -> &Self::Ref<S>
     where
-        S: ChannelSpec + SubsetOf<Self::Set>,
+        S: Context + SubsetOf<<Self::Ctx as Context>::Set>,
     {
         self.as_dyn_unchecked()
     }
 
     fn as_dyn_checked<S>(&self) -> Option<&Self::Ref<S>>
     where
-        S: TypeSet + ChannelSpec,
+        S: TypeSet + Context,
     {
         if self.is_superset_of(S::members()) {
             Some(self.as_dyn_unchecked())

@@ -1,4 +1,4 @@
-use crate::_prelude::*;
+use crate::{_prelude::*, registry::Registry};
 use bs58::Alphabet;
 use smol_str::SmolStr;
 use std::{borrow::Cow, fmt::Display, sync::Arc};
@@ -26,6 +26,18 @@ impl Pid {
         val.truncate(14);
 
         Self::new(val)
+    }
+
+    pub fn address(&self) -> Option<Address> {
+        Registry::local().get(&self)
+    }
+
+    pub fn typed_address<I: Interface>(&self) -> Result<Address<I>, TypedRegistryError> {
+        Registry::local().get_typed::<I>(self)
+    }
+
+    pub fn dyn_address<C: Context + TypeSet>(&self) -> Result<Address<C>, TypedRegistryError> {
+        Registry::local().get_dyn::<C>(self)
     }
 }
 

@@ -1,6 +1,6 @@
 use std::{assert_matches, time::Duration};
 use zestors_runtime::{
-    channel::{ActorRef, ActorStatus, Channel, ExitStatus, Pid},
+    channel::{ActorOps as _, ActorStatus, Channel, ExitStatus, Pid},
     registry::Registry,
     spawn,
 };
@@ -14,7 +14,7 @@ async fn register_and_deregister_refcounts_basics() {
     assert_eq!(child.strong_count(), 2); // Child + Inbox
     assert_eq!(child.weak_count(), 2); // Registry + Spawn
 
-    let address = child.get_address();
+    let address = child.address().clone();
 
     assert_eq!(child.strong_count(), 2);
     assert_eq!(child.weak_count(), 3);

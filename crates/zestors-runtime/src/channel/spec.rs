@@ -2,14 +2,14 @@ use type_sets::TypeSet;
 
 use super::*;
 
-pub trait ChannelSpec: 'static {
+pub trait Context: 'static {
     type Set: TypeSet + 'static;
 }
 
-impl<I: Interface> ChannelSpec for I {
+impl<I: Interface> Context for I {
     type Set = I::Set;
 }
 
-impl<S: TypeSet + 'static> ChannelSpec for Set<S> {
+impl<S: TypeSet + 'static> Context for Set<S> {
     type Set = S;
 }

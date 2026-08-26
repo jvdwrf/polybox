@@ -97,7 +97,7 @@ impl<O: Send + 'static> Receipt<O> for Rx<O> {
     }
 }
 
-pub(crate) mod sealed {
+mod sealed {
     pub trait Sealed {}
 
     impl Sealed for super::FireAndForget {}

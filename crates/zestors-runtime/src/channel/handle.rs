@@ -1,10 +1,6 @@
 use super::*;
-use crate::{
-    registry::Registry,
-    signals::{self, Event},
-};
+use crate::{registry::Registry, signals::Event};
 use eyeball::SharedObservable;
-use jiff::{SignedDuration, Timestamp, Zoned, tz::TimeZone};
 use std::{
     any::TypeId,
     fmt::Debug,
@@ -31,12 +27,12 @@ use type_sets::{Contains, Set, TypeSet};
 /// This means, that in order restart an actor, the [`Channel`] handle must be kept
 /// alive.
 #[repr(transparent)]
-pub struct ChannelData<C: ChannelSpec = Set!()> {
-    inner: Arc<ChannelDataInner<dyn Queue>>,
-    _marker: PhantomData<fn() -> C>,
+pub struct ActorHandle<C: Context = Set!()> {
+    inner: Arc<ActorData<dyn Queue>>,
+    _ctx: PhantomData<fn() -> C>,
 }
 
-pub(crate) struct ChannelDataInner<Q: ?Sized> {
+pub(crate) struct ActorData<Q: ?Sized> {
     pid: Pid,
     signal_queue: ConcurrentQueue<SignalInterface>,
     signal_notifier: Notify,
@@ -50,16 +46,16 @@ pub(crate) struct ChannelDataInner<Q: ?Sized> {
     msg_queue: Q,
 }
 
-impl<C: ChannelSpec> ChannelData<C> {
-    pub(crate) fn clone_channel(&self) -> Self {
+impl<C: Context> ActorHandle<C> {
+    pub(crate) fn clone_ref(&self) -> Self {
         Self {
-            _marker: PhantomData,
+            _ctx: PhantomData,
             inner: self.inner.clone(),
         }
     }
 
     pub(crate) fn decr_strong_count(&self) {
-        let prev_count = self.inner().strong_count.fetch_sub(1, Ordering::Release);
+        let prev_count = self.data().strong_count.fetch_sub(1, Ordering::Release);
 
         // fetch_sub returns the PREVIOUS value. If it was 1, it is now 0.
         if prev_count == 1 {
@@ -86,7 +82,7 @@ impl<C: ChannelSpec> ChannelData<C> {
 
     pub(crate) fn incr_strong_count(&self) {
         // Relaxed is sufficient because the caller already owns a strong reference
-        let prev_count = self.inner().strong_count.fetch_add(1, Ordering::Relaxed);
+        let prev_count = self.data().strong_count.fetch_add(1, Ordering::Relaxed);
 
         // Prevent integer overflow attack/bug
         if prev_count > usize::MAX / 2 {
@@ -94,18 +90,29 @@ impl<C: ChannelSpec> ChannelData<C> {
         }
     }
 
-    fn inner(&self) -> &ChannelDataInner<dyn Queue> {
+    pub(super) fn data(&self) -> &ActorData<dyn Queue> {
         &self.inner
     }
 
+    pub(super) fn try_push_msg<M: Message>(
+        &self,
+        msg: M,
+    ) -> Result<MessageReceipt<M>, NotAccepted<M>> {
+        self.data().msg_queue.try_push_msg(msg)
+    }
+
+    pub(super) fn msg_notify_one(&self) {
+        self.data().msg_notifier.notify_one();
+    }
+
     pub(super) fn set_status(&self, status: ActorStatus) {
-        self.inner().status_observer.set(status);
+        self.data().status_observer.set(status);
     }
 
     pub(super) fn register_spawn(&self) {
         tracing::debug!("Process spawned");
 
-        let mut spawned_at = self.inner().spawns.write().unwrap();
+        let mut spawned_at = self.data().spawns.write().unwrap();
 
         if spawned_at.len() > KEEP_N_SPAWNS {
             _ = spawned_at.remove(0);
@@ -117,7 +124,7 @@ impl<C: ChannelSpec> ChannelData<C> {
 
     #[expect(unused)]
     pub(super) fn pop_dyn(&self) -> Result<DynEnvelope, PopError> {
-        self.inner().msg_queue.pop_dyn()
+        self.data().msg_queue.pop_dyn()
     }
 
     pub(super) fn register_exit(&self, reason: Result<(), ExitError>) {
@@ -126,7 +133,7 @@ impl<C: ChannelSpec> ChannelData<C> {
             Err(err) => tracing::warn!("Process exited with error: {:?}", err),
         }
 
-        let mut exited_at = self.inner().exits.write().unwrap();
+        let mut exited_at = self.data().exits.write().unwrap();
 
         if exited_at.len() > KEEP_N_EXITS {
             _ = exited_at.remove(0);
@@ -175,7 +182,7 @@ impl<C: ChannelSpec> ChannelData<C> {
     where
         C: Interface,
     {
-        unsafe { &*(&self.inner().msg_queue as *const dyn Queue as *const ConcurrentQueue<C>) }
+        unsafe { &*(&self.data().msg_queue as *const dyn Queue as *const ConcurrentQueue<C>) }
     }
 
     pub(super) fn backpressure(&self) -> &BackPressure {
@@ -183,12 +190,12 @@ impl<C: ChannelSpec> ChannelData<C> {
     }
 
     pub(super) async fn delay_for_backpressure(&self) {
-        let len = self.inner().msg_queue.len();
-        let limit = self.inner().msg_backpressure_limit;
+        let len = self.data().msg_queue.len();
+        let limit = self.data().msg_backpressure_limit;
 
         if let Some(delay) = self.backpressure().delay(
-            self.inner().msg_queue.len(),
-            self.inner().msg_backpressure_limit,
+            self.data().msg_queue.len(),
+            self.data().msg_backpressure_limit,
         ) {
             tracing::warn!(
                 "Backpressure applied: queue occupancy = {:.2}%, delay = {:?}",
@@ -207,9 +214,9 @@ impl<C: ChannelSpec> ChannelData<C> {
             return false;
         }
 
-        match self.inner().signal_queue.push(signal) {
+        match self.data().signal_queue.push(signal) {
             Ok(_) => {
-                self.inner().signal_notifier.notify_one();
+                self.data().signal_notifier.notify_one();
             }
             Err(e) => {
                 tracing::error!(
@@ -226,9 +233,9 @@ impl<C: ChannelSpec> ChannelData<C> {
     }
 }
 
-impl<I: Interface> ChannelData<I> {
+impl<I: Interface> ActorHandle<I> {
     pub(super) fn new(pid: Pid, strong_count: usize) -> Self {
-        let inner: Arc<ChannelDataInner<dyn Queue>> = Arc::new(ChannelDataInner {
+        let inner: Arc<ActorData<dyn Queue>> = Arc::new(ActorData {
             pid,
             msg_notifier: Notify::new(),
             msg_backpressure_limit: BACKPRESSURE_LIMIT,
@@ -243,8 +250,8 @@ impl<I: Interface> ChannelData<I> {
         });
 
         Self {
-            inner: inner,
-            _marker: PhantomData,
+            inner,
+            _ctx: PhantomData,
         }
     }
 
@@ -253,7 +260,7 @@ impl<I: Interface> ChannelData<I> {
             .raw_queue()
             .expect("Channel is not of the expected interface type");
 
-        let mut notify = pin!(self.inner().msg_notifier.notified());
+        let mut notify = pin!(self.data().msg_notifier.notified());
 
         loop {
             notify.as_mut().enable();
@@ -263,7 +270,7 @@ impl<I: Interface> ChannelData<I> {
             }
 
             notify.as_mut().await;
-            notify.set(self.inner().msg_notifier.notified());
+            notify.set(self.data().msg_notifier.notified());
         }
     }
 
@@ -286,7 +293,7 @@ impl<I: Interface> ChannelData<I> {
     }
 
     pub(crate) async fn recv_signal(&self) -> Option<Signal> {
-        let mut notify = pin!(self.inner().signal_notifier.notified());
+        let mut notify = pin!(self.data().signal_notifier.notified());
 
         loop {
             notify.as_mut().enable();
@@ -297,13 +304,13 @@ impl<I: Interface> ChannelData<I> {
 
             notify.as_mut().await;
 
-            notify.set(self.inner().signal_notifier.notified());
+            notify.set(self.data().signal_notifier.notified());
         }
     }
 
     pub(crate) fn pop_signal(&self) -> Option<Signal> {
         loop {
-            match self.inner().signal_queue.pop() {
+            match self.data().signal_queue.pop() {
                 Ok(signal) => match self.handle_signal(signal) {
                     Some(event) => return Some(event),
                     None => continue,
@@ -369,224 +376,48 @@ impl<I: Interface> ChannelData<I> {
     }
 }
 
-impl<C: ChannelSpec> Debug for ChannelData<C> {
+impl<C: Context> Debug for ActorHandle<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ChannelData")
-            .field("pid", &self.inner().pid)
-            .field("status", &self.inner().status_observer.get())
-            .field("len", &self.inner().msg_queue.len())
+            .field("pid", &self.data().pid)
+            .field("status", &self.data().status_observer.get())
+            .field("len", &self.data().msg_queue.len())
             .finish()
     }
 }
 
-impl<C: ChannelSpec> Eq for ChannelData<C> {}
-impl<C: ChannelSpec> PartialEq for ChannelData<C> {
+impl<C: Context> Eq for ActorHandle<C> {}
+impl<C: Context> PartialEq for ActorHandle<C> {
     fn eq(&self, other: &Self) -> bool {
-        self.inner().pid == other.inner().pid
+        self.data().pid == other.data().pid
     }
 }
-impl<C: ChannelSpec> Hash for ChannelData<C> {
+impl<C: Context> Hash for ActorHandle<C> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.inner().pid.hash(state);
+        self.data().pid.hash(state);
     }
 }
 
-impl<C: ChannelSpec> ActorRef for ChannelData<C> {
-    type ChannelSpec = C;
-    type Set = C::Set;
+impl<C: Context> AsActorHandle for ActorHandle<C> {
+    type Ctx = C;
 
-    async fn send_dyn<M: Message>(&self, msg: M) -> Result<MessageReceipt<M>, SendCheckedError<M>> {
-        self.delay_for_backpressure().await;
-        self.send_now_dyn(msg)
+    fn handle(&self) -> &ActorHandle<Self::Ctx> {
+        self
     }
+}
 
-    fn try_send_dyn<M: Message>(
-        &self,
-        msg: M,
-    ) -> Result<MessageReceipt<M>, TrySendCheckedError<M>> {
-        if self.reached_backpressure() {
-            return Err(TrySendCheckedError::Full(msg));
-        }
-
-        self.send_now_dyn(msg).map_err(Into::into)
-    }
-
-    fn send_now_dyn<M: Message>(&self, msg: M) -> Result<MessageReceipt<M>, SendCheckedError<M>> {
-        if !self.status().accepts_messages() {
-            return Err(SendCheckedError::Closed(msg));
-        }
-
-        match self.inner().msg_queue.try_push_msg(msg) {
-            Ok(output) => {
-                self.inner().msg_notifier.notify_one();
-                Ok(output)
-            }
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    async fn request_dyn<M: Message>(&self, msg: M) -> Result<M::Outcome, RequestCheckedError<M>> {
-        Ok(self.send_dyn(msg).await?.wait().await?)
-    }
-
-    fn pid(&self) -> &Pid {
-        &self.inner.pid
-    }
-
-    fn status(&self) -> ActorStatus {
-        self.inner.status_observer.get()
-    }
-
-    fn members(&self) -> &'static [TypeId] {
-        self.inner.msg_queue.members()
-    }
-
-    fn reached_backpressure(&self) -> bool {
-        self.backpressure()
-            .delay(
-                self.inner.msg_queue.len(),
-                self.inner.msg_backpressure_limit,
-            )
-            .is_some()
-    }
-
-    fn signal(&self, signal: Signal) -> bool {
-        let interface = match signal {
-            Signal::Shutdown => SignalInterface::Shutdown(Envelope::new(signals::Shutdown, ())),
-            Signal::Suspend => SignalInterface::Suspend(Envelope::new(signals::Suspend, ())),
-            Signal::Resume => SignalInterface::Resume(Envelope::new(signals::Resume, ())),
-        };
-
-        self._signal(interface)
-    }
-
-    fn ping(&self) -> Rx<()> {
-        let (tx, rx) = new_request();
-        self._signal(SignalInterface::Ping(Envelope::new(signals::Ping, tx)));
-        rx
-    }
-
-    fn is_interface<I: Interface>(&self) -> bool {
-        self.inner.msg_queue.type_id() == TypeId::of::<ConcurrentQueue<I>>()
-    }
-
-    fn msg_len(&self) -> usize {
-        self.inner.msg_queue.len()
-    }
-
-    async fn watch_initialization(&self) -> Result<(), ExitStatus> {
-        let mut subscriber = self.inner.status_observer.subscribe();
-
-        loop {
-            let status = self.status();
-
-            match status {
-                ActorStatus::Running => return Ok(()),
-                ActorStatus::Exited(exit) => {
-                    return Err(exit);
-                }
-                _ => {}
-            }
-
-            let status = subscriber.next().await;
-
-            match status {
-                Some(ActorStatus::Running) => return Ok(()),
-                Some(ActorStatus::Exited(exit)) => {
-                    return Err(exit);
-                }
-                _ => {}
-            }
-        }
-    }
-
-    async fn watch_exit(&self) -> Result<(), ExitError> {
-        let mut subscriber = self.inner.status_observer.subscribe();
-
-        loop {
-            let status = self.status();
-
-            if let ActorStatus::Exited(exit) = status {
-                return exit.into_result();
-            }
-
-            let status = subscriber.next().await;
-
-            if let Some(ActorStatus::Exited(exit)) = status {
-                return exit.into_result();
-            }
-        }
-    }
-
-    fn created_at(&self) -> Instant {
-        self.inner.created_at
-    }
-
-    fn spawned_at(&self) -> Vec<Instant> {
-        let spawned_at = self.inner.spawns.read().unwrap();
-        spawned_at.clone()
-    }
-
-    fn last_spawned_at(&self) -> Option<Instant> {
-        let spawned_at = self.inner.spawns.read().unwrap();
-        spawned_at.last().cloned()
-    }
-
-    fn snapshot(&self) -> ChannelSnapshot {
-        let clock = Clock::now();
-        let channel = &self.inner;
-
-        ChannelSnapshot {
-            pid: channel.pid.clone(),
-            status: channel.status_observer.get(),
-            signal_len: channel.signal_queue.len(),
-            msg_len: channel.msg_queue.len(),
-            spawns: channel
-                .spawns
-                .read()
-                .unwrap()
-                .iter()
-                .map(|instant| clock.zoned_at(instant.clone()))
-                .collect(),
-            exits: channel
-                .exits
-                .read()
-                .unwrap()
-                .iter()
-                .map(|(instant, res)| {
-                    (
-                        clock.zoned_at(instant.clone()),
-                        ExitStatus::from_result(res.clone()),
-                    )
-                })
-                .collect(),
-            created_at: clock.zoned_at(channel.created_at),
-        }
-    }
-
-    fn get_address(&self) -> Address<Self::ChannelSpec> {
-        Address::new(self)
-    }
-
-    fn strong_count(&self) -> usize {
-        self.inner().strong_count.load(Ordering::Relaxed)
-    }
-
-    fn ref_count(&self) -> usize {
+impl<C: Context> ActorHandle<C> {
+    pub(crate) fn ref_count(&self) -> usize {
         Arc::strong_count(&self.inner)
     }
-
-    fn address(&self) -> &Address<Self::ChannelSpec> {
-        Address::new_ref(self)
-    }
 }
 
-impl<M, T> Sends<M> for ChannelData<Set<T>>
+impl<M, T> _Sends<M> for ActorHandle<Set<T>>
 where
     M: Message,
     T: TypeSet + Contains<M> + 'static,
 {
-    async fn send(&self, msg: M) -> Result<MessageReceipt<M>, SendError<M>> {
+    async fn _send(&self, msg: M) -> Result<MessageReceipt<M>, SendError<M>> {
         match self.send_dyn(msg).await {
             Ok(output) => Ok(output),
             Err(SendCheckedError::Closed(msg)) => Err(SendError(msg)),
@@ -600,7 +431,7 @@ where
         }
     }
 
-    fn try_send(&self, msg: M) -> Result<MessageReceipt<M>, TrySendError<M>> {
+    fn _try_send(&self, msg: M) -> Result<MessageReceipt<M>, TrySendError<M>> {
         match self.try_send_dyn(msg) {
             Ok(output) => Ok(output),
             Err(TrySendCheckedError::Closed(msg)) => Err(TrySendError::Closed(msg)),
@@ -615,7 +446,7 @@ where
         }
     }
 
-    fn send_now(&self, msg: M) -> Result<MessageReceipt<M>, SendError<M>> {
+    fn _send_now(&self, msg: M) -> Result<MessageReceipt<M>, SendError<M>> {
         match self.send_now_dyn(msg) {
             Ok(output) => Ok(output),
             Err(SendCheckedError::Closed(msg)) => Err(SendError(msg)),
@@ -628,43 +459,27 @@ where
             }
         }
     }
-
-    // fn force_send(&self, msg: M) -> MessageReceipt<M> {
-    //     match self.inner.msg_queue.try_push_msg(msg) {
-    //         Ok(output) => {
-    //             self.inner.msg_notifier.notify_one();
-    //             output
-    //         }
-    //         Err(NotAccepted(_)) => {
-    //             panic!(
-    //                 "Message type {} not accepted by channel {}",
-    //                 std::any::type_name::<M>(),
-    //                 std::any::type_name::<Self>(),
-    //             );
-    //         }
-    //     }
-    // }
 }
 
-impl<M, I> Sends<M> for ChannelData<I>
+impl<M, I> _Sends<M> for ActorHandle<I>
 where
     M: Message,
     I: Interface + TryInto<Envelope<M>> + From<Envelope<M>> + Send + 'static,
 {
-    async fn send(&self, msg: M) -> Result<MessageReceipt<M>, SendError<M>> {
+    async fn _send(&self, msg: M) -> Result<MessageReceipt<M>, SendError<M>> {
         self.delay_for_backpressure().await;
-        self.send_now(msg)
+        self._send_now(msg)
     }
 
-    fn try_send(&self, msg: M) -> Result<MessageReceipt<M>, TrySendError<M>> {
+    fn _try_send(&self, msg: M) -> Result<MessageReceipt<M>, TrySendError<M>> {
         if self.reached_backpressure() {
             return Err(TrySendError::Full(msg));
         }
 
-        self.send_now(msg).map_err(Into::into)
+        self._send_now(msg).map_err(Into::into)
     }
 
-    fn send_now(&self, msg: M) -> Result<MessageReceipt<M>, SendError<M>> {
+    fn _send_now(&self, msg: M) -> Result<MessageReceipt<M>, SendError<M>> {
         if !self.status().accepts_messages() {
             return Err(SendError(msg));
         }
@@ -692,56 +507,106 @@ where
             }
         }
     }
-
-    // fn force_send(&self, msg: M) -> MessageReceipt<M> {
-    //     // Raw-queue could just be a raw pointer cast, but that requires that a
-    //     // Channel<I: Interface> always has a ConcurrentQueue<I> as its msg_queue,
-    //     // This is currently not guaranteed by the type system.
-    //     if let Some(queue) = self.raw_queue() {
-    //         let (envelope, receipt) = Envelope::new_pair(msg);
-    //         let interface = I::from(envelope);
-
-    //         if let Err(_e) = queue.push(interface) {
-    //             panic!("Queue was full or empty {}", std::any::type_name::<Self>());
-    //         }
-
-    //         receipt
-    //     } else {
-    //         match self.force_send_dyn(msg) {
-    //             Ok(output) => output,
-    //             Err(NotAccepted(_)) => {
-    //                 panic!(
-    //                     "Message type {} not accepted by channel {}",
-    //                     std::any::type_name::<M>(),
-    //                     std::any::type_name::<Self>(),
-    //                 );
-    //             }
-    //         }
-    //     }
-    // }
 }
 
-#[derive(Clone, Copy)]
-struct Clock {
-    instant: Instant,
-    timestamp: Timestamp,
-}
+impl ActorData<dyn Queue> {
+    pub fn msg_len(&self) -> usize {
+        self.msg_queue.len()
+    }
 
-impl Clock {
-    fn now() -> Self {
-        Self {
-            instant: Instant::now(),
-            timestamp: Timestamp::now(),
+    pub fn signal_len(&self) -> usize {
+        self.signal_queue.len()
+    }
+
+    pub fn backpressure_limit(&self) -> usize {
+        self.msg_backpressure_limit
+    }
+
+    pub fn pid(&self) -> &Pid {
+        &self.pid
+    }
+
+    pub fn status(&self) -> ActorStatus {
+        self.status_observer.get()
+    }
+
+    pub fn members(&self) -> &'static [TypeId] {
+        self.msg_queue.members()
+    }
+
+    pub fn signal(&self, signal: SignalInterface) -> bool {
+        if matches!(
+            self.status(),
+            ActorStatus::Exited(_) | ActorStatus::ShuttingDown
+        ) {
+            return false;
+        }
+
+        match self.signal_queue.push(signal) {
+            Ok(_) => {
+                self.signal_notifier.notify_one();
+            }
+            Err(e) => {
+                tracing::error!(
+                    "Signal queue for {} contains more than {} signals. The signal has been lost. Error: {:?}",
+                    std::any::type_name::<Self>(),
+                    SIGNAL_QUEUE_CAPACITY,
+                    e
+                );
+                return false;
+            }
+        }
+
+        true
+    }
+
+    pub fn created_at(&self) -> Instant {
+        self.created_at
+    }
+
+    pub fn last_spawned_at(&self) -> Option<Instant> {
+        let spawned_at = self.spawns.read().unwrap();
+        spawned_at.last().cloned()
+    }
+
+    pub fn spawned_at(&self) -> Vec<Instant> {
+        let spawned_at = self.spawns.read().unwrap();
+        spawned_at.clone()
+    }
+
+    pub fn strong_count(&self) -> usize {
+        self.strong_count.load(Ordering::Relaxed)
+    }
+
+    pub async fn watch<T>(
+        &self,
+        mut check_for: impl FnMut(ActorStatus) -> Option<T> + Send + 'static,
+    ) -> T {
+        let mut subscriber = self.status_observer.subscribe();
+
+        loop {
+            let status = self.status();
+
+            if let Some(result) = check_for(status) {
+                return result;
+            }
+
+            let status = subscriber.next().await;
+
+            if let Some(status) = status {
+                if let Some(result) = check_for(status) {
+                    return result;
+                }
+            }
         }
     }
 
-    fn timestamp_at(self, instant: Instant) -> Timestamp {
-        let elapsed = instant.duration_since(self.instant);
-
-        self.timestamp + SignedDuration::from_nanos(elapsed.as_nanos() as i64)
+    pub fn is_interface<I: Interface>(&self) -> bool {
+        self.msg_queue.type_id() == TypeId::of::<ConcurrentQueue<I>>()
     }
 
-    fn zoned_at(self, instant: Instant) -> Zoned {
-        self.timestamp_at(instant).to_zoned(TimeZone::UTC)
+    pub fn exits(&self) -> Vec<(Instant, Result<(), ExitError>)> {
+        let exits = self.exits.read().unwrap();
+        exits.clone()
     }
 }

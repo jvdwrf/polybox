@@ -58,21 +58,35 @@ pub trait Sends<M: Message>: Sync {
     }
 }
 
-impl<M, T> Sends<M> for T
+/// A private trait for implementation on [`ActorHandle`] only.
+///
+/// There is a blacket-implementation of [`Sends`] for all types that implement
+/// [`ActorHandle`].
+pub(crate) trait _Sends<M: Message>: Sync {
+    fn _send(&self, msg: M)
+    -> impl Future<Output = Result<MessageReceipt<M>, SendError<M>>> + Send;
+    fn _try_send(&self, msg: M) -> Result<MessageReceipt<M>, TrySendError<M>>;
+    fn _send_now(&self, msg: M) -> Result<MessageReceipt<M>, SendError<M>>;
+    fn _request(&self, msg: M) -> impl Future<Output = Result<M::Outcome, RequestError<M>>> + Send {
+        async move { Ok(self._send(msg).await?.wait().await?) }
+    }
+}
+
+impl<M, H> Sends<M> for H
 where
-    T: AsActorRef + Sync,
+    H: AsActorHandle + Sync,
     M: Message,
-    ChannelData<T::ChannelSpec>: Sends<M>,
+    ActorHandle<H::Ctx>: _Sends<M>,
 {
     async fn send(&self, msg: M) -> Result<MessageReceipt<M>, SendError<M>> {
-        self.channel_data().send(msg).await
+        self.handle()._send(msg).await
     }
 
     fn try_send(&self, msg: M) -> Result<MessageReceipt<M>, TrySendError<M>> {
-        self.channel_data().try_send(msg)
+        self.handle()._try_send(msg)
     }
 
     fn send_now(&self, msg: M) -> Result<MessageReceipt<M>, SendError<M>> {
-        self.channel_data().send_now(msg)
+        self.handle()._send_now(msg)
     }
 }

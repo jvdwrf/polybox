@@ -46,7 +46,7 @@ impl Node {
             .map_err(|_| report!("Root Node can only be started once."))?;
 
         let supervisor_child = supervisor_spec.start().await?;
-        let supervisor_address = supervisor_child.get_address();
+        let supervisor_address = supervisor_child.address().clone();
 
         tokio::spawn(
             NodeActor {

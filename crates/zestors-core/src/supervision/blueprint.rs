@@ -1,4 +1,4 @@
-use super::*;
+use crate::_prelude::*;
 use std::future::Future;
 
 pub trait Blueprint: Debug + Send + Sync + 'static {

@@ -2,65 +2,65 @@ use crate::_prelude::*;
 use std::{fmt::Debug, hash::Hash};
 
 #[repr(transparent)]
-pub struct Address<C: ChannelSpec = Set!()> {
-    pub(super) channel: ChannelData<C>,
+pub struct Address<C: Context = Set!()> {
+    pub(super) channel: ActorHandle<C>,
 }
 
-impl<C: ChannelSpec> Address<C> {
-    pub(super) fn new(channel: &ChannelData<C>) -> Self {
+impl<C: Context> Address<C> {
+    pub(super) fn new(channel: &ActorHandle<C>) -> Self {
         Self {
-            channel: channel.clone_channel(),
+            channel: channel.clone_ref(),
         }
     }
 
-    pub(super) fn new_ref(channel: &ChannelData<C>) -> &Self {
-        unsafe { std::mem::transmute::<&ChannelData<C>, &Self>(channel) }
+    pub(super) fn new_ref(channel: &ActorHandle<C>) -> &Self {
+        unsafe { std::mem::transmute::<&ActorHandle<C>, &Self>(channel) }
     }
 }
 
-impl<C: ChannelSpec> AsActorRef for Address<C> {
-    type ChannelSpec = C;
+impl<C: Context> AsActorHandle for Address<C> {
+    type Ctx = C;
 
-    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
+    fn handle(&self) -> &ActorHandle<Self::Ctx> {
         &self.channel
     }
 }
 
-impl<C: ChannelSpec> IntoDyn for Address<C> {
-    type Ref<R: ChannelSpec> = Address<R>;
+impl<C: Context> IntoDyn for Address<C> {
+    type Ref<R: Context> = Address<R>;
 
     fn into_dyn_unchecked<S>(self) -> Address<S>
     where
-        S: ChannelSpec,
+        S: Context,
     {
         Address {
-            channel: unsafe { std::mem::transmute::<ChannelData<C>, ChannelData<S>>(self.channel) },
+            channel: unsafe { std::mem::transmute::<ActorHandle<C>, ActorHandle<S>>(self.channel) },
         }
     }
 }
 
-impl<T: ChannelSpec> Clone for Address<T> {
+impl<T: Context> Clone for Address<T> {
     fn clone(&self) -> Self {
         Self {
-            channel: self.channel.clone_channel(),
+            channel: self.channel.clone_ref(),
         }
     }
 }
 
-impl<T: ChannelSpec> Debug for Address<T> {
+impl<T: Context> Debug for Address<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Address")
             .field("channel", &self.channel)
             .finish()
     }
 }
-impl<T: ChannelSpec> PartialEq for Address<T> {
+impl<T: Context> PartialEq for Address<T> {
     fn eq(&self, other: &Self) -> bool {
         self.channel == other.channel
     }
 }
-impl<T: ChannelSpec> Eq for Address<T> {}
-impl<T: ChannelSpec> Hash for Address<T> {
+impl<T: Context> Eq for Address<T> {}
+impl<T: Context> Hash for Address<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.channel.hash(state);
     }

@@ -1,4 +1,4 @@
-use super::*;
+use crate::_prelude::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChildConfig {
@@ -28,7 +28,7 @@ impl ChildConfig {
 pub struct ChildSpec<T: Start = DynLauncher> {
     cfg: ChildConfig,
     blueprint: T,
-    channel: Channel<T::ChannelSpec>,
+    channel: Channel<T::Ctx>,
 }
 
 // Implementations just when T is statically known
@@ -46,7 +46,7 @@ impl<T: Blueprint> ChildSpec<T> {
     }
 
     pub fn split(self) -> (ChildSpec, Address<<T::Actor as Actor>::Interface>) {
-        let address = self.channel.get_address();
+        let address = self.channel.address().clone();
         (self.into_dyn(), address)
     }
 }
@@ -86,7 +86,7 @@ impl<T: Start> ChildSpec<T> {
         self
     }
 
-    pub async fn start(&self) -> Result<Child<T::Exit, T::ChannelSpec>, StartOnError> {
+    pub async fn start(&self) -> Result<Child<T::Exit, T::Ctx>, StartOnError> {
         self.blueprint.start_on(self.channel.clone()).await
     }
 
@@ -99,11 +99,11 @@ impl<T: Start> ChildSpec<T> {
     }
 }
 
-impl<T: Start> AsActorRef for ChildSpec<T> {
-    type ChannelSpec = T::ChannelSpec;
+impl<T: Start> AsActorHandle for ChildSpec<T> {
+    type Ctx = T::Ctx;
 
-    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
-        &self.channel.channel_data()
+    fn handle(&self) -> &ActorHandle<Self::Ctx> {
+        &self.channel.handle()
     }
 }
 
@@ -164,6 +164,6 @@ mod tests {
     #[test]
     fn test_childspec_doesnt_panic_on_address_retrieval() {
         let spec = ChildSpec::create("test", MyActor).unwrap();
-        let _ = spec.get_address();
+        let _ = spec.address().clone();
     }
 }

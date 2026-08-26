@@ -25,27 +25,27 @@ impl<T: Interface> Inbox<T> {
         if self.initializing {
             debug_assert!(self.status().is_initializing());
             self.initializing = false;
-            self.channel_data().register_initialized();
+            self.handle().register_initialized();
         }
 
-        self.channel_data().next().await
+        self.handle().next().await
     }
 
     pub async fn next_signal(&mut self) -> Option<Signal> {
-        self.channel_data().recv_signal().await
+        self.handle().recv_signal().await
     }
 }
 
-impl<T: Interface> AsActorRef for Inbox<T> {
-    type ChannelSpec = T;
+impl<T: Interface> AsActorHandle for Inbox<T> {
+    type Ctx = T;
 
-    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
-        &self.channel.channel_data()
+    fn handle(&self) -> &ActorHandle<Self::Ctx> {
+        &self.channel.handle()
     }
 }
 
 impl<T: Interface> Drop for Inbox<T> {
     fn drop(&mut self) {
-        self.channel_data().drain_messages_and_signals();
+        self.handle().drain_messages_and_signals();
     }
 }

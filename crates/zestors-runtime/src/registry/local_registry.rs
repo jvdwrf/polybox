@@ -3,6 +3,9 @@ use std::sync::OnceLock;
 use type_sets::TypeSet;
 
 /// A thread-safe global registry mapping process identifiers ([`Pid`]) to their weak handles ([`Address`]).
+///
+/// Processes automatically register themselves in the registry upon creation
+/// and deregister upon termination.
 #[derive(Debug)]
 pub struct Registry {
     processes: papaya::HashMap<Pid, Address>,
@@ -18,6 +21,18 @@ impl Registry {
         }
     }
 
+    pub async fn fetch_addresses(&'static self) -> Vec<Address> {
+        tokio::task::spawn_blocking(|| {
+            self.processes
+                .pin()
+                .iter()
+                .map(|(_pid, addr)| addr.clone())
+                .collect()
+        })
+        .await
+        .expect("No cancel/panic")
+    }
+
     /// Returns a reference to the global process registry singleton.
     pub fn local() -> &'static Self {
         REGISTRY.get_or_init(Self::new)
@@ -27,7 +42,7 @@ impl Registry {
     ///
     /// # Errors
     /// Returns a [`RegistryAddError`] if the [`Pid`] is already registered.
-    pub(crate) fn register<C: ChannelSpec>(
+    pub(crate) fn register<C: Context>(
         &self,
         address: Address<C>,
     ) -> Result<(), RegistryAddError<C>> {
@@ -76,7 +91,7 @@ impl Registry {
     /// Returns an error if
     /// - the process is not found
     /// - the set of types does not match the registered address's type set
-    pub fn get_dyn<C: ChannelSpec + TypeSet>(
+    pub fn get_dyn<C: Context + TypeSet>(
         &self,
         pid: &Pid,
     ) -> Result<Address<C>, TypedRegistryError> {
@@ -96,11 +111,11 @@ impl Registry {
 /// Error returned when registering a [`Pid`] that already exists in the [`Registry`].
 #[derive(thiserror::Error)]
 #[error("Failed to add entry for pid {}", .address.pid())]
-pub struct RegistryAddError<T: ChannelSpec = Set!()> {
+pub struct RegistryAddError<T: Context = Set!()> {
     address: Address<T>,
 }
 
-impl<T: ChannelSpec> std::fmt::Debug for RegistryAddError<T> {
+impl<T: Context> std::fmt::Debug for RegistryAddError<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RegistryAddError")
             .field("entry", &self.address)

@@ -1,5 +1,4 @@
 use crate::_prelude::*;
-use std::sync::Arc;
 
 pub use zestors_runtime::{channel, messaging, registry, signals, spawn, spawn_with};
 
@@ -20,10 +19,11 @@ pub(crate) mod _prelude {
     pub(crate) use serde::{Deserialize, Serialize};
     pub(crate) use std::{
         fmt::{Debug, Display},
+        sync::Arc,
         time::Duration,
     };
 
-    pub(crate) use rootcause::Report;
+    pub(crate) use rootcause::{Report, report};
     pub(crate) use type_sets::Set;
     pub(crate) use zestors_runtime::*;
 }

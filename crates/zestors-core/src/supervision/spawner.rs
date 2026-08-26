@@ -1,24 +1,24 @@
-use super::*;
+use crate::_prelude::*;
 use futures::future::BoxFuture;
 
 pub trait Start: Into<DynLauncher> {
-    type ChannelSpec: ChannelSpec;
+    type Ctx: Context;
     type Exit: Send + 'static;
 
     fn start_on(
         &self,
-        channel: Channel<Self::ChannelSpec>,
-    ) -> impl Future<Output = Result<Child<Self::Exit, Self::ChannelSpec>, StartOnError>> + Send;
+        channel: Channel<Self::Ctx>,
+    ) -> impl Future<Output = Result<Child<Self::Exit, Self::Ctx>, StartOnError>> + Send;
 }
 
 impl<B: Blueprint> Start for B {
-    type ChannelSpec = <B::Actor as Actor>::Interface;
+    type Ctx = <B::Actor as Actor>::Interface;
     type Exit = <B::Actor as Actor>::Exit;
 
     async fn start_on(
         &self,
-        channel: Channel<Self::ChannelSpec>,
-    ) -> Result<Child<Self::Exit, Self::ChannelSpec>, StartOnError> {
+        channel: Channel<Self::Ctx>,
+    ) -> Result<Child<Self::Exit, Self::Ctx>, StartOnError> {
         let actor = self
             .instantiate()
             .await
@@ -55,13 +55,13 @@ impl<R: Blueprint> _Spawnable for R {
 }
 
 impl Start for DynLauncher {
-    type ChannelSpec = Set!();
+    type Ctx = Set!();
     type Exit = ();
 
     async fn start_on(
         &self,
-        data: Channel<Self::ChannelSpec>,
-    ) -> Result<Child<Self::Exit, Self::ChannelSpec>, StartOnError> {
+        data: Channel<Self::Ctx>,
+    ) -> Result<Child<Self::Exit, Self::Ctx>, StartOnError> {
         self.0.spawn_on_dyn(&data).await
     }
 }

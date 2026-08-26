@@ -19,8 +19,8 @@ pub(crate) use errors::*;
 mod backpressure;
 pub use backpressure::*;
 
-mod actor_ref;
-pub use actor_ref::*;
+mod ops;
+pub use ops::*;
 
 mod queue;
 pub use queue::*;
@@ -46,8 +46,8 @@ pub use address::*;
 mod child;
 pub use child::*;
 
-mod channel_data;
-pub use channel_data::*;
+mod handle;
+pub use handle::*;
 
 mod spec;
 pub use spec::*;

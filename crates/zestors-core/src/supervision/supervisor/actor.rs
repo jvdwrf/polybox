@@ -1,4 +1,12 @@
-use super::*;
+use std::{
+    pin::Pin,
+    task::{self, Poll},
+};
+
+use crate::{_prelude::*, supervision::supervisor::Supervisee};
+use futures::{FutureExt as _, Stream, future::join_all, stream::StreamExt as _};
+use indexmap::IndexMap;
+use rootcause::prelude::{IteratorExt as _, ResultExt as _};
 
 #[derive(Debug)]
 pub struct Supervisor {
@@ -43,7 +51,7 @@ impl Supervisor {
     where
         T: Blueprint + Send + Sync + 'static,
     {
-        let address = spec.get_address();
+        let address = spec.address().clone();
 
         self.add_dyn_child(spec.into_dyn());
 
@@ -416,7 +424,7 @@ impl Actor for Supervisor {
 impl Stream for Supervisor {
     type Item = ChildTermination;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Option<Self::Item>> {
         for (id, supervisee) in self.supervisees.iter_mut() {
             if let Some(child) = &mut supervisee.child
                 && let Poll::Ready(exit) = child.poll_unpin(cx)

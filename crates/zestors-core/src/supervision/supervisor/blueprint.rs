@@ -1,4 +1,5 @@
-use super::*;
+use crate::_prelude::*;
+use indexmap::IndexMap;
 
 #[derive(Debug)]
 pub struct SupervisorBlueprint {
@@ -62,7 +63,7 @@ impl SupervisorBlueprint {
     where
         T: Blueprint + Send + Sync + 'static,
     {
-        let address = spec.get_address();
+        let address = spec.address().clone();
 
         self.add_dyn_child(spec.into_dyn());
 

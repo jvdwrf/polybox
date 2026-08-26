@@ -12,10 +12,10 @@ impl Supervisee {
     }
 }
 
-impl AsActorRef for Supervisee {
-    type ChannelSpec = Set<()>;
+impl AsActorHandle for Supervisee {
+    type Ctx = Set<()>;
 
-    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
-        &self.spec.channel_data()
+    fn handle(&self) -> &ActorHandle<Self::Ctx> {
+        &self.spec.handle()
     }
 }

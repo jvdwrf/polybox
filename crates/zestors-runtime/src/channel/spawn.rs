@@ -3,7 +3,7 @@ use futures::FutureExt as _;
 use std::panic::AssertUnwindSafe;
 use tracing::Instrument as _;
 
-impl<T: ChannelSpec> Channel<T> {
+impl<T: Context> Channel<T> {
     pub fn spawn<R, F>(
         self,
         spawn_fn: impl FnOnce(Inbox<T>) -> F,
@@ -20,7 +20,7 @@ impl<T: ChannelSpec> Channel<T> {
             let inbox = Inbox::try_new(self.clone())?;
             let address = inbox.address().clone();
             let mut bomb = AbortBomb::new(address);
-            bomb.address.channel_data().register_spawn();
+            bomb.address.handle().register_spawn();
             let spawn_future = AssertUnwindSafe(spawn_fn(inbox)).catch_unwind();
 
             async move {
@@ -29,10 +29,10 @@ impl<T: ChannelSpec> Channel<T> {
                 let mapped_result = match spawn_result {
                     Ok(result) => {
                         match &result {
-                            Ok(_) => bomb.address.channel_data().register_exit(Ok(())),
+                            Ok(_) => bomb.address.handle().register_exit(Ok(())),
                             Err(_) => bomb
                                 .address
-                                .channel_data()
+                                .handle()
                                 .register_exit(Err(ExitError::UnhandledError)),
                         };
 
@@ -41,7 +41,7 @@ impl<T: ChannelSpec> Channel<T> {
 
                     Err(boxed) => {
                         bomb.address
-                            .channel_data()
+                            .handle()
                             .register_exit(Err(ExitError::Panicked));
                         std::panic::resume_unwind(boxed);
                     }
@@ -58,12 +58,12 @@ impl<T: ChannelSpec> Channel<T> {
     }
 }
 
-struct AbortBomb<T: ChannelSpec> {
+struct AbortBomb<T: Context> {
     address: Address<T>,
     armed: bool,
 }
 
-impl<T: ChannelSpec> AbortBomb<T> {
+impl<T: Context> AbortBomb<T> {
     fn new(address: Address<T>) -> Self {
         Self {
             address,
@@ -76,15 +76,13 @@ impl<T: ChannelSpec> AbortBomb<T> {
     }
 }
 
-impl<T: ChannelSpec> Drop for AbortBomb<T> {
+impl<T: Context> Drop for AbortBomb<T> {
     fn drop(&mut self) {
         if self.armed {
             tracing::debug!("AbortBomb triggered");
 
             if !self.address.status().is_dead() {
-                self.address
-                    .channel_data()
-                    .register_exit(Err(ExitError::Aborted));
+                self.address.handle().register_exit(Err(ExitError::Aborted));
             }
         }
     }

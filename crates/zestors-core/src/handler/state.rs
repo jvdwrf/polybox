@@ -13,7 +13,7 @@ pub(super) struct FullHandlerState<H: Handler> {
 impl<H: Handler> FullHandlerState<H> {
     pub(super) fn new(inbox: Inbox<H::Interface>) -> Self {
         Self {
-            address: inbox.get_address(),
+            address: inbox.address().clone(),
             inbox,
         }
     }
@@ -125,11 +125,11 @@ impl<H: Handler> FullHandlerState<H> {
     }
 }
 
-impl<H: Handler> AsActorRef for FullHandlerState<H> {
-    type ChannelSpec = H::Interface;
+impl<H: Handler> AsActorHandle for FullHandlerState<H> {
+    type Ctx = H::Interface;
 
-    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
-        self.address.channel_data()
+    fn handle(&self) -> &ActorHandle<Self::Ctx> {
+        self.address.handle()
     }
 }
 
@@ -175,10 +175,10 @@ pub struct HandlerState<'a, H: Handler> {
 //     }
 // }
 
-impl<'a, H: Handler> AsActorRef for HandlerState<'a, H> {
-    type ChannelSpec = H::Interface;
+impl<'a, H: Handler> AsActorHandle for HandlerState<'a, H> {
+    type Ctx = H::Interface;
 
-    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
-        self.address.channel_data()
+    fn handle(&self) -> &ActorHandle<Self::Ctx> {
+        self.address.handle()
     }
 }

@@ -9,12 +9,11 @@ use indexmap::IndexMap;
 use rootcause::report;
 use std::time::Duration;
 use zestors_core::{
-    channel::{ActorStatus, ChannelSnapshot, ChannelSpec},
+    channel::{ActorStatus, ChannelSnapshot, Context},
     node::Node,
     prelude::*,
     registry::Registry,
-    signals::RestartMode,
-    supervision::{ChildConfig, ChildDescription, GetChildren, GetHealth, Health, SupervisionTree},
+    supervision::{ChildConfig, ChildDescription, GetChildren, GetHealth, Health},
 };
 
 impl ApiServer {
@@ -104,9 +103,7 @@ async fn get_processes() -> ApiResult<Json<IndexMap<Pid, (ChildConfig, ActorStat
     Ok(Json(results))
 }
 
-async fn get_children(
-    address: &Address<impl ChannelSpec>,
-) -> rootcause::Result<Vec<ChildDescription>> {
+async fn get_children(address: &Address<impl Context>) -> rootcause::Result<Vec<ChildDescription>> {
     Ok(timeout(Duration::from_millis(50), address.request_dyn(GetChildren)).await??)
 }
 

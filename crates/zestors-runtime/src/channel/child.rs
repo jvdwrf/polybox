@@ -2,13 +2,13 @@ use crate::_prelude::*;
 use futures::FutureExt as _;
 use std::{fmt::Debug, task::Poll, time::Duration};
 
-pub struct Child<T = (), R: ChannelSpec = Set!()> {
+pub struct Child<T = (), R: Context = Set!()> {
     join: Option<tokio::task::JoinHandle<Result<T, Report>>>,
     attached: bool,
     channel: Channel<R>,
 }
 
-impl<T, R: ChannelSpec> Child<T, R> {
+impl<T, R: Context> Child<T, R> {
     pub(crate) fn new(
         join: tokio::task::JoinHandle<Result<T, Report>>,
         channel: Channel<R>,
@@ -88,27 +88,27 @@ impl<T, R: ChannelSpec> Child<T, R> {
     }
 }
 
-impl<T: Send, R: ChannelSpec> AsActorRef for Child<T, R> {
-    type ChannelSpec = R;
+impl<T: Send, R: Context> AsActorHandle for Child<T, R> {
+    type Ctx = R;
 
-    fn channel_data(&self) -> &ChannelData<Self::ChannelSpec> {
-        self.channel.channel_data()
+    fn handle(&self) -> &ActorHandle<Self::Ctx> {
+        self.channel.handle()
     }
 }
 
-impl<T: Send, R: ChannelSpec> IntoDyn for Child<T, R> {
-    type Ref<S: ChannelSpec> = Child<T, S>;
+impl<T: Send, R: Context> IntoDyn for Child<T, R> {
+    type Ref<S: Context> = Child<T, S>;
 
     fn into_dyn_unchecked<S>(self) -> Self::Ref<S>
     where
-        S: ChannelSpec,
+        S: Context,
     {
         let (handle, address) = self.into_parts();
         Child::new(handle, address.into_dyn_unchecked())
     }
 }
 
-impl<T, R: ChannelSpec> Future for Child<T, R> {
+impl<T, R: Context> Future for Child<T, R> {
     type Output = Result<T, JoinError>;
 
     fn poll(
@@ -127,7 +127,7 @@ impl<T, R: ChannelSpec> Future for Child<T, R> {
     }
 }
 
-impl<T, R: ChannelSpec> Drop for Child<T, R> {
+impl<T, R: Context> Drop for Child<T, R> {
     fn drop(&mut self) {
         if self.attached && self.join.is_some() {
             self.abort();
@@ -135,7 +135,7 @@ impl<T, R: ChannelSpec> Drop for Child<T, R> {
     }
 }
 
-impl<T, R: ChannelSpec> Debug for Child<T, R> {
+impl<T, R: Context> Debug for Child<T, R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Child")
             .field("handle", &std::any::type_name::<T>())
