@@ -102,10 +102,6 @@ impl<T: Send, R: ChannelSpec> AsActorRef for Child<T, R> {
     fn channel_data(&self) -> &Channel<Self::ChannelSpec> {
         self.address.channel_data()
     }
-
-    fn get_address(&self) -> Address<Self::ChannelSpec> {
-        self.address.get_address()
-    }
 }
 
 impl<T: Send, R: ChannelSpec> IntoDyn for Child<T, R> {

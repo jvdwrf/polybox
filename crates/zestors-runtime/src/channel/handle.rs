@@ -64,10 +64,6 @@ impl<C: ChannelSpec> AsActorRef for ChannelHandle<C> {
     fn channel_data(&self) -> &Channel<Self::ChannelSpec> {
         &*self.data
     }
-
-    fn get_address(&self) -> Address<Self::ChannelSpec> {
-        Address::new(self.data.clone())
-    }
 }
 
 impl<T: ChannelSpec> Debug for ChannelHandle<T> {

@@ -44,10 +44,6 @@ impl<T: Interface> AsActorRef for Inbox<T> {
     fn channel_data(&self) -> &Channel<Self::ChannelSpec> {
         self.channel.channel_data()
     }
-
-    fn get_address(&self) -> Address<Self::ChannelSpec> {
-        self.channel.get_address()
-    }
 }
 
 impl<T: Interface> Drop for Inbox<T> {

@@ -1,14 +1,16 @@
 use crate::_prelude::*;
-use std::{fmt::Debug, hash::Hash, sync::Arc};
+use std::{fmt::Debug, hash::Hash};
 
 #[repr(transparent)]
 pub struct Address<C: ChannelSpec = Set!()> {
-    pub(super) channel: Arc<Channel<C>>,
+    pub(super) channel: Channel<C>,
 }
 
 impl<C: ChannelSpec> Address<C> {
-    pub(super) fn new(channel: Arc<Channel<C>>) -> Self {
-        Self { channel }
+    pub(super) fn new(channel: &Channel<C>) -> Self {
+        Self {
+            channel: channel.clone(),
+        }
     }
 
     pub(super) fn from_ref(channel: &ChannelHandle<C>) -> &Self {
@@ -23,10 +25,6 @@ impl<C: ChannelSpec> AsActorRef for Address<C> {
     fn channel_data(&self) -> &Channel<Self::ChannelSpec> {
         &self.channel
     }
-
-    fn get_address(&self) -> Address<Self::ChannelSpec> {
-        self.clone()
-    }
 }
 
 impl<C: ChannelSpec> IntoDyn for Address<C> {
@@ -37,7 +35,7 @@ impl<C: ChannelSpec> IntoDyn for Address<C> {
         S: ChannelSpec,
     {
         Address {
-            channel: Channel::arc_into_dyn_unchecked(self.channel),
+            channel: unsafe { std::mem::transmute::<Channel<C>, Channel<S>>(self.channel) },
         }
     }
 }

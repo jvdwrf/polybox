@@ -33,10 +33,10 @@ use type_sets::{Contains, Set, TypeSet};
 #[repr(transparent)]
 pub struct Channel<C: ChannelSpec = Set!()> {
     _marker: PhantomData<fn() -> C>,
-    inner: ChannelInner<dyn Queue>,
+    inner: Arc<ChannelData<dyn Queue>>,
 }
 
-pub(crate) struct ChannelInner<Q: ?Sized> {
+pub(crate) struct ChannelData<Q: ?Sized> {
     pid: Pid,
     signal_queue: ConcurrentQueue<SignalInterface>,
     signal_notifier: Notify,
@@ -51,20 +51,6 @@ pub(crate) struct ChannelInner<Q: ?Sized> {
 }
 
 impl<C: ChannelSpec> Channel<C> {
-    pub(crate) fn arc_into_dyn_unchecked<S>(self: Arc<Self>) -> Arc<Channel<S>>
-    where
-        S: ChannelSpec,
-    {
-        unsafe { Arc::from_raw(Arc::into_raw(self) as *const Channel<S>) }
-    }
-
-    pub(crate) fn arc_as_dyn_unchecked<S>(self: &Arc<Self>) -> &Arc<Channel<S>>
-    where
-        S: ChannelSpec,
-    {
-        unsafe { &*(self as *const Arc<Self> as *const Arc<Channel<S>>) }
-    }
-
     pub(crate) fn incr_strong_count(&self) {
         if self.inner().strong_count.fetch_sub(1, Ordering::Release) == 1 {
             std::sync::atomic::fence(Ordering::Acquire);
@@ -79,11 +65,18 @@ impl<C: ChannelSpec> Channel<C> {
         }
     }
 
+    pub(crate) fn clone(&self) -> Self {
+        Self {
+            _marker: PhantomData,
+            inner: self.inner.clone(),
+        }
+    }
+
     pub(crate) fn decr_strong_count(&self) {
         self.inner().strong_count.fetch_add(1, Ordering::Relaxed);
     }
 
-    fn inner(&self) -> &ChannelInner<dyn Queue> {
+    fn inner(&self) -> &ChannelData<dyn Queue> {
         &self.inner
     }
 
@@ -217,7 +210,7 @@ impl<C: ChannelSpec> Channel<C> {
 
 impl<I: Interface> Channel<I> {
     pub(super) fn new(pid: Pid) -> Arc<Self> {
-        let inner: Arc<ChannelInner<dyn Queue>> = Arc::new(ChannelInner {
+        let inner: Arc<ChannelData<dyn Queue>> = Arc::new(ChannelData {
             pid,
             msg_notifier: Notify::new(),
             msg_backpressure_limit: BACKPRESSURE_LIMIT,
@@ -234,7 +227,7 @@ impl<I: Interface> Channel<I> {
         Self::from_arc(inner)
     }
 
-    fn from_arc(inner: Arc<ChannelInner<dyn Queue>>) -> Arc<Self> {
+    fn from_arc(inner: Arc<ChannelData<dyn Queue>>) -> Arc<Self> {
         unsafe { Arc::from_raw(Arc::into_raw(inner) as *const Self) }
     }
 
@@ -558,6 +551,28 @@ impl<C: ChannelSpec> ActorRef for Channel<C> {
                 .collect(),
             created_at: clock.zoned_at(channel.created_at),
         }
+    }
+
+    fn get_address(&self) -> Address<Self::ChannelSpec> {
+        Address::new(self)
+    }
+
+    fn strong_count(&self) -> usize {
+        self.inner().strong_count.load(Ordering::Relaxed)
+    }
+
+    fn handle_count(&self) -> usize {
+        let strong_count = self.strong_count();
+
+        if !self.is_dead() {
+            strong_count.saturating_sub(1)
+        } else {
+            strong_count
+        }
+    }
+
+    fn ref_count(&self) -> usize {
+        Arc::strong_count(&self.inner)
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::_prelude::*;
-use rootcause::{prelude::ResultExt, report};
+use rootcause::report;
 use std::{sync::OnceLock, time::Duration};
 
 pub struct Node {

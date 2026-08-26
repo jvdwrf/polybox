@@ -131,10 +131,6 @@ impl<H: Handler> AsActorRef for FullHandlerState<H> {
     fn channel_data(&self) -> &Channel<Self::ChannelSpec> {
         self.address.channel_data()
     }
-
-    fn get_address(&self) -> Address<Self::ChannelSpec> {
-        self.address.get_address()
-    }
 }
 
 enum InitError {
@@ -184,9 +180,5 @@ impl<'a, H: Handler> AsActorRef for HandlerState<'a, H> {
 
     fn channel_data(&self) -> &Channel<Self::ChannelSpec> {
         self.address.channel_data()
-    }
-
-    fn get_address(&self) -> Address<Self::ChannelSpec> {
-        self.address.get_address()
     }
 }

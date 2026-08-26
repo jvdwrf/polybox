@@ -46,6 +46,8 @@ pub trait ActorRef {
         }
     }
 
+    fn get_address(&self) -> Address<Self::ChannelSpec>;
+
     fn watch_initialization(&self) -> impl Future<Output = Result<(), ExitStatus>> + Send;
 
     fn watch_exit(&self) -> impl Future<Output = Result<(), ExitError>> + Send;
@@ -88,13 +90,42 @@ pub trait ActorRef {
     fn uptime(&self) -> Option<Duration> {
         self.last_spawned_at().map(|instant| instant.elapsed())
     }
+
+    fn is_dead(&self) -> bool {
+        self.status().is_dead()
+    }
+
+    /// The amount of [`ChannelHandle`]s and [`Inbox`]es in existence for this
+    /// channel.
+    ///
+    /// This amount should only be used as an indication of the number of
+    /// active references to the channel.
+    fn strong_count(&self) -> usize;
+
+    /// The amount of [`ChannelHandle`]s in existence for this channel.
+    ///
+    /// This amount should only be used as an indication of the number of
+    fn handle_count(&self) -> usize;
+
+    /// The total amount of references to this channel, including [`ChannelHandle`]s, [`Inbox`]es and [`Address`]es.
+    ///
+    /// This amount should only be used as an indication of the number of
+    /// active references to the channel.
+    fn ref_count(&self) -> usize;
+
+    /// The amount of [`Address`]es in existence for this channel.
+    ///
+    /// This amount should only be used as an indication of the number of
+    /// active references to the channel.
+    fn address_count(&self) -> usize {
+        self.ref_count().saturating_sub(self.strong_count())
+    }
 }
 
 pub trait AsActorRef {
     type ChannelSpec: ChannelSpec;
 
     fn channel_data(&self) -> &Channel<Self::ChannelSpec>;
-    fn get_address(&self) -> Address<Self::ChannelSpec>;
 }
 
 impl<T: AsActorRef + Sync> ActorRef for T {
@@ -110,6 +141,10 @@ impl<T: AsActorRef + Sync> ActorRef for T {
         msg: M,
     ) -> Result<MessageReceipt<M>, TrySendCheckedError<M>> {
         self.channel_data().try_send_dyn(msg)
+    }
+
+    fn get_address(&self) -> Address<Self::ChannelSpec> {
+        self.channel_data().get_address()
     }
 
     fn send_now_dyn<M: Message>(&self, msg: M) -> Result<MessageReceipt<M>, SendCheckedError<M>> {
@@ -197,5 +232,17 @@ impl<T: AsActorRef + Sync> ActorRef for T {
 
     fn snapshot(&self) -> ChannelSnapshot {
         self.channel_data().snapshot()
+    }
+
+    fn strong_count(&self) -> usize {
+        self.channel_data().strong_count()
+    }
+
+    fn handle_count(&self) -> usize {
+        self.channel_data().handle_count()
+    }
+
+    fn ref_count(&self) -> usize {
+        self.channel_data().ref_count()
     }
 }

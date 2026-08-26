@@ -5,7 +5,6 @@ pub struct Supervisor {
     supervisees: IndexMap<Pid, Supervisee>,
     strategy: SupervisionStrategy,
     restart_limiter: RestartLimiter,
-    registry: &'static Registry,
 }
 
 impl Supervisor {
@@ -21,7 +20,6 @@ impl Supervisor {
                 .collect(),
             strategy,
             restart_limiter: RestartLimiter::new(restart_intensity),
-            registry: Registry::local(),
         }
     }
 
@@ -86,10 +84,7 @@ impl Supervisor {
         self
     }
 
-    async fn spawn_supervisee(
-        supervisee: &mut Supervisee,
-        registry: &Registry,
-    ) -> Result<(), Report> {
+    async fn spawn_supervisee(supervisee: &mut Supervisee) -> Result<(), Report> {
         // We only have to add the children to the registry the first time they are spawned,
         // since it will persist across restarts.
         let child = supervisee.spec.spawn().await.attach(format!(
@@ -306,7 +301,7 @@ impl Actor for Supervisor {
             initialization_result = async {
                 // Spawn all supervisees
                 for supervisee in self.supervisees.values_mut() {
-                    if let Err(e) = Self::spawn_supervisee(supervisee, &self.registry).await {
+                    if let Err(e) = Self::spawn_supervisee(supervisee).await {
                         tracing::error!(error = ?e, "Failed to spawn supervisee: {}", supervisee.spec.pid());
 
                         return Err(report!(

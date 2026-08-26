@@ -18,8 +18,4 @@ impl AsActorRef for Supervisee {
     fn channel_data(&self) -> &Channel<Self::ChannelSpec> {
         &self.spec.channel_data()
     }
-
-    fn get_address(&self) -> Address<Self::ChannelSpec> {
-        self.spec.get_address()
-    }
 }

@@ -105,10 +105,6 @@ impl<T: Spawnable> AsActorRef for ChildSpec<T> {
     fn channel_data(&self) -> &Channel<Self::ChannelSpec> {
         &self.channel.channel_data()
     }
-
-    fn get_address(&self) -> Address<Self::ChannelSpec> {
-        self.channel.get_address()
-    }
 }
 
 impl<T: Spawnable + Clone> Clone for ChildSpec<T> {
