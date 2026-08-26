@@ -26,7 +26,7 @@ impl Supervisor {
         Self {
             supervisees: supervisees
                 .into_iter()
-                .map(|(pid, spec)| (pid, Supervisee::new(spec)))
+                .map(|(pid, spec)| (pid, Supervisee::new_static(spec)))
                 .collect(),
             strategy,
             restart_limiter: RestartLimiter::new(restart_intensity),
@@ -38,59 +38,59 @@ impl Supervisor {
         SupervisorBlueprint::new()
     }
 
-    pub fn add_dyn_child(&mut self, spec: ChildSpec) {
-        let supervisee = Supervisee::new(spec);
-        self.supervisees
-            .insert(supervisee.spec.pid().clone(), supervisee);
-    }
+    // pub fn add_dyn_child(&mut self, spec: ChildSpec) {
+    //     let supervisee = Supervisee::new(spec, false);
+    //     self.supervisees
+    //         .insert(supervisee.spec.pid().clone(), supervisee);
+    // }
 
-    pub fn add_dyn_children(&mut self, specs: impl IntoIterator<Item = ChildSpec>) {
-        for spec in specs {
-            self.add_dyn_child(spec);
-        }
-    }
+    // pub fn add_dyn_children(&mut self, specs: impl IntoIterator<Item = ChildSpec>) {
+    //     for spec in specs {
+    //         self.add_dyn_child(spec);
+    //     }
+    // }
 
-    pub fn add_child<T>(&mut self, spec: ChildSpec<T>) -> Address<<T::Actor as Actor>::Interface>
-    where
-        T: Blueprint + Send + Sync + 'static,
-    {
-        let address = spec.address().clone();
+    // pub fn add_child<T>(&mut self, spec: ChildSpec<T>) -> Address<<T::Actor as Actor>::Interface>
+    // where
+    //     T: Blueprint + Send + Sync + 'static,
+    // {
+    //     let address = spec.address().clone();
 
-        self.add_dyn_child(spec.into_dyn());
+    //     self.add_dyn_child(spec.into_dyn());
 
-        address
-    }
+    //     address
+    // }
 
-    pub fn add_children<T>(
-        &mut self,
-        specs: impl IntoIterator<Item = ChildSpec<T>>,
-    ) -> Vec<Address<<T::Actor as Actor>::Interface>>
-    where
-        T: Blueprint + Send + Sync + 'static,
-    {
-        specs
-            .into_iter()
-            .map(|blueprint| self.add_child(blueprint))
-            .collect()
-    }
+    // pub fn add_children<T>(
+    //     &mut self,
+    //     specs: impl IntoIterator<Item = ChildSpec<T>>,
+    // ) -> Vec<Address<<T::Actor as Actor>::Interface>>
+    // where
+    //     T: Blueprint + Send + Sync + 'static,
+    // {
+    //     specs
+    //         .into_iter()
+    //         .map(|blueprint| self.add_child(blueprint))
+    //         .collect()
+    // }
 
-    pub fn with_child<T: Start>(mut self, spec: ChildSpec<T>) -> Self
-    where
-        ChildSpec<T>: Into<ChildSpec>,
-    {
-        self.add_dyn_child(spec.into());
-        self
-    }
+    // pub fn with_child<T: Start>(mut self, spec: ChildSpec<T>) -> Self
+    // where
+    //     ChildSpec<T>: Into<ChildSpec>,
+    // {
+    //     self.add_dyn_child(spec.into());
+    //     self
+    // }
 
-    pub fn with_children<T: Start>(mut self, specs: impl IntoIterator<Item = ChildSpec<T>>) -> Self
-    where
-        ChildSpec<T>: Into<ChildSpec>,
-    {
-        for spec in specs {
-            self.add_dyn_child(spec.into());
-        }
-        self
-    }
+    // pub fn with_children<T: Start>(mut self, specs: impl IntoIterator<Item = ChildSpec<T>>) -> Self
+    // where
+    //     ChildSpec<T>: Into<ChildSpec>,
+    // {
+    //     for spec in specs {
+    //         self.add_dyn_child(spec.into());
+    //     }
+    //     self
+    // }
 
     async fn spawn_supervisee(supervisee: &mut Supervisee) -> Result<(), Report> {
         // We only have to add the children to the registry the first time they are spawned,
@@ -149,15 +149,11 @@ impl Supervisor {
         stream: &mut Inbox<SupervisorInterface>,
     ) -> Result<(), RestartLimitReached> {
         let ChildTermination { id, exit, .. } = &termination;
-        let spec = &self
-            .supervisees
-            .get(id)
-            .expect("child should be present")
-            .spec;
+        let supervisee = &self.supervisees.get(id).expect("child should be present");
 
         // No restart is required -> Deregister the child and return early
         {
-            let mode = spec.cfg().restart_mode;
+            let mode = supervisee.spec.cfg().restart_mode;
             let ((RestartMode::Always, _) | (RestartMode::OnError, Err(_))) = (mode, exit) else {
                 match exit {
                     Ok(_value) => {
@@ -167,6 +163,15 @@ impl Supervisor {
                         tracing::warn!(error = ?e, "Child {id} exited with error. (mode: {mode:?})");
                     }
                 };
+
+                if supervisee.is_dynamic() {
+                    remove_spec_from_source(
+                        &**self.source.as_ref().expect("source should be present"),
+                        id,
+                    )
+                    .await
+                    .ok();
+                }
 
                 return Ok(());
             };
@@ -217,6 +222,8 @@ impl Supervisor {
     }
 
     async fn wait_for_children(&mut self) -> Result<(), Report> {
+        let source = self.source.as_ref();
+
         let futures = self.supervisees.values().map(|supervisee| async move {
             tokio::select! {
                 init_result = supervisee.watch_initialization() => {
@@ -237,6 +244,9 @@ impl Supervisor {
                             init_result,
                             supervisee.spec.cfg().restart_mode
                         );
+
+                        remove_spec_from_source(&**source.unwrap(), supervisee.spec.pid()).await.ok();
+
                         Ok(())
                     }
                 }
@@ -297,6 +307,33 @@ impl Supervisor {
     }
 }
 
+async fn remove_spec_from_source(source: &dyn SupervisorSource, pid: &Pid) -> Result<(), Report> {
+    match source.remove(pid.clone()).await {
+        Ok(Some(_spec)) => {
+            tracing::debug!("Dynamic supervisee {} removed from source", pid);
+            Ok(())
+        }
+        Ok(None) => {
+            tracing::warn!(
+                "Dynamic supervisee {} was not found in source when attempting to remove it",
+                pid
+            );
+            Ok(())
+        }
+        Err(e) => {
+            tracing::error!(
+                error = ?e,
+                "Failed to remove dynamic supervisee {} from source",
+                pid
+            );
+            Err(e.attach(format!(
+                "Failed to remove dynamic supervisee {} from source",
+                pid
+            )))
+        }
+    }
+}
+
 impl Actor for Supervisor {
     type Interface = SupervisorInterface;
     type Exit = ();
@@ -307,6 +344,17 @@ impl Actor for Supervisor {
         // Run the initialization and shutdown signal handling concurrently.
         tokio::select! {
             initialization_result = async {
+                // First, load all dynamic supervisees from the source, if any.
+                if let Some(source) = &mut self.source {
+                    let dyn_children = source.load_all().await.attach("Failed to read dynamic supervisees")?;
+
+                    // Add all dynamic supervisees to the supervisor's supervisee list
+                    for child in dyn_children {
+                        let pid = child.pid().clone();
+                        self.supervisees.insert(pid, Supervisee::new_dynamic(child));
+                    }
+                }
+
                 // Spawn all supervisees
                 for supervisee in self.supervisees.values_mut() {
                     if let Err(e) = Self::spawn_supervisee(supervisee).await {

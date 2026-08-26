@@ -108,9 +108,6 @@ impl Handle<String> for MyActor {
     }
 }
 
-static ROOT_DYNAMIC_CHILDREN: LazyLock<InMemorySupervisorSource> =
-    LazyLock::new(|| InMemorySupervisorSource::new());
-
 #[tokio::main]
 async fn main() -> Result<(), Report> {
     tracing_subscriber::fmt()
@@ -182,6 +179,8 @@ async fn main() -> Result<(), Report> {
     .with_pid("TaskActor")?
     .split();
 
+    let source = InMemorySupervisorSource::new();
+
     let root_supervisor = Supervisor::blueprint()
         .with_children([
             super_spec_a,
@@ -196,14 +195,14 @@ async fn main() -> Result<(), Report> {
                 .with_pid("DynBlueprintActor2")?
                 .into(),
         ])
-        .with_source(|| ROOT_DYNAMIC_CHILDREN.clone())
+        .with_source(source.clone())
         .with_pid("RootSupervisor")?;
 
     let root_address = Node::new(root_supervisor).start().await?;
 
     root_address.watch_start().await;
 
-    spawn_tasks_in_background(ROOT_DYNAMIC_CHILDREN.clone());
+    spawn_tasks_in_background(source);
 
     tracing::info!("All actors started, sending messages...");
 

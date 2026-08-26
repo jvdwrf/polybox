@@ -15,17 +15,17 @@ use tokio::sync::Notify;
 /// [`with_source`](SupervisorBlueprint::with_source) method.
 pub trait SupervisorSource: Debug + Send + 'static {
     /// Returns the next event from the source, or `None` if the source is closed.
-    fn next(&mut self) -> BoxFuture<'_, Option<SupervisorSourceEvent>>;
+    fn next(&self) -> BoxFuture<'_, Option<SupervisorSourceEvent>>;
 
     /// Returns all child specs currently in the source, without clearing the event queue.
-    fn read_all(&mut self) -> BoxFuture<'_, Result<Vec<ChildSpec>, Report>>;
+    fn read_all(&self) -> BoxFuture<'_, Result<Vec<ChildSpec>, Report>>;
 
     /// Returns all child specs currently in the source, and clears the event queue.
-    fn load_all(&mut self) -> BoxFuture<'_, Result<Vec<ChildSpec>, Report>>;
+    fn load_all(&self) -> BoxFuture<'_, Result<Vec<ChildSpec>, Report>>;
 
-    fn remove(&mut self, pid: Pid) -> BoxFuture<'_, Result<Option<ChildSpec>, Report>>;
+    fn remove(&self, pid: Pid) -> BoxFuture<'_, Result<Option<ChildSpec>, Report>>;
 
-    fn add(&mut self, spec: ChildSpec) -> BoxFuture<'_, Result<(), Report>>;
+    fn add(&self, spec: ChildSpec) -> BoxFuture<'_, Result<(), Report>>;
 }
 
 #[derive(Debug, Clone)]
@@ -109,7 +109,7 @@ impl InMemorySupervisorSource {
 }
 
 impl SupervisorSource for InMemorySupervisorSource {
-    fn next(&mut self) -> BoxFuture<'_, Option<SupervisorSourceEvent>> {
+    fn next(&self) -> BoxFuture<'_, Option<SupervisorSourceEvent>> {
         Box::pin(async move {
             loop {
                 // 1. Prepare notification listener *before* checking event queue to avoid race conditions
@@ -126,11 +126,11 @@ impl SupervisorSource for InMemorySupervisorSource {
         })
     }
 
-    fn read_all(&mut self) -> BoxFuture<'_, Result<Vec<ChildSpec>, Report>> {
+    fn read_all(&self) -> BoxFuture<'_, Result<Vec<ChildSpec>, Report>> {
         Box::pin(async move { Ok((*self).read_all()) })
     }
 
-    fn load_all(&mut self) -> BoxFuture<'_, Result<Vec<ChildSpec>, Report>> {
+    fn load_all(&self) -> BoxFuture<'_, Result<Vec<ChildSpec>, Report>> {
         Box::pin(async move {
             let mut inner = self.inner.lock().unwrap();
             inner.events.drain(..);
@@ -138,14 +138,14 @@ impl SupervisorSource for InMemorySupervisorSource {
         })
     }
 
-    fn add(&mut self, spec: ChildSpec) -> BoxFuture<'_, Result<(), Report>> {
+    fn add(&self, spec: ChildSpec) -> BoxFuture<'_, Result<(), Report>> {
         Box::pin(async move {
             (*self).add(spec)?;
             Ok(())
         })
     }
 
-    fn remove(&mut self, pid: Pid) -> BoxFuture<'_, Result<Option<ChildSpec>, Report>> {
+    fn remove(&self, pid: Pid) -> BoxFuture<'_, Result<Option<ChildSpec>, Report>> {
         Box::pin(async move { Ok((*self).remove(pid)) })
     }
 }

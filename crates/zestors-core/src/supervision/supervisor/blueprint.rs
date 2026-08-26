@@ -33,11 +33,19 @@ impl SupervisorBlueprint {
         self
     }
 
-    pub fn with_source<S>(mut self, source_fn: impl Fn() -> S + Send + Sync + 'static) -> Self
+    pub fn with_source_fn<S>(mut self, source_fn: impl Fn() -> S + Send + Sync + 'static) -> Self
     where
         S: SupervisorSource,
     {
         self.source_fn = Some(Arc::new(move || Box::new(source_fn())));
+        self
+    }
+
+    pub fn with_source<S>(mut self, source: S) -> Self
+    where
+        S: SupervisorSource + Clone + Sync,
+    {
+        self.source_fn = Some(Arc::new(move || Box::new(source.clone())));
         self
     }
 
