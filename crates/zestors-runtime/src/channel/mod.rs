@@ -10,8 +10,8 @@ const KEEP_N_EXITS: usize = 5;
 const SIGNAL_QUEUE_CAPACITY: usize = 1_000_000;
 const MSG_QUEUE_CAPACITY: usize = 1_000_000;
 
-mod channel;
-pub use channel::*;
+mod strong;
+pub use strong::*;
 
 pub mod errors;
 pub(crate) use errors::*;
@@ -46,39 +46,11 @@ pub use address::*;
 mod child;
 pub use child::*;
 
-mod handle;
-pub use handle::*;
+mod data;
+pub use data::*;
 
 mod spec;
 pub use spec::*;
 
-#[cfg(test)]
-mod tests;
-
-pub fn spawn_with<T, R, F>(
-    pid: Pid,
-    f: impl FnOnce(Inbox<T>) -> F,
-) -> Result<Child<R, T>, DuplicatePidError>
-where
-    T: Interface,
-    R: Send + 'static,
-    F: Future<Output = Result<R, rootcause::Report>> + Send + 'static,
-    F::Output: Send + 'static,
-{
-    Ok(StrongAddress::create(pid)?
-        .spawn(f)
-        .expect("Channel was just created. Must be valid"))
-}
-
-pub fn spawn<T, R, F>(f: impl FnOnce(Inbox<T>) -> F) -> Child<R, T>
-where
-    T: Interface,
-    R: Send + 'static,
-    F: Future<Output = Result<R, rootcause::Report>> + Send + 'static,
-    F::Output: Send + 'static,
-{
-    StrongAddress::create(Pid::rand())
-        .expect("Pid is unique")
-        .spawn(f)
-        .expect("Only one inbox")
-}
+mod task_box;
+pub use task_box::*;

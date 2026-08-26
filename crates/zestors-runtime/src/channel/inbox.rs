@@ -1,5 +1,11 @@
 use crate::_prelude::*;
 
+/// A reference to a [`Channel`] that can be used to receive messages and signals from the channel.
+///
+/// This is a strong reference ([`StrongAddress`]) to the channel, which means that it will keep
+/// the channel alive as long as it exists.
+///
+/// See the [`Inbox::next`] method for receiving messages and signals from the channel.
 #[derive(Debug)]
 pub struct Inbox<T: Interface> {
     channel: StrongAddress<T>,
@@ -20,6 +26,16 @@ impl<T: Interface> Inbox<T> {
         Ok(inbox)
     }
 
+    /// Returns the next event from the channel, or `None` if the channel has received
+    /// a [`Signal::Shutdown`] signal and has no more messages to process.
+    ///
+    /// If the channel is [`Suspended`](ActorStatus::Suspended), this method will only
+    /// receive [signals](Signal). Only after receiving a [`Signal::Resume`] signal will
+    /// it start receiving messages again.
+    ///
+    /// Upon the first call to `next`, the channel's status will be set to
+    /// [`Running`](ActorStatus::Running), and will count as a completion of the initialization
+    /// phase. For receiving signals without setting the status to running, see [`Inbox::next_signal`].
     pub async fn next(&mut self) -> Option<Event<T>> {
         // If this is the first call to next(), set the status to Running
         if self.initializing {
@@ -31,8 +47,73 @@ impl<T: Interface> Inbox<T> {
         self.handle().next().await
     }
 
+    pub fn try_next(&mut self) -> Option<Event<T>> {
+        self.set_initialized();
+        self.handle().try_next()
+    }
+
+    /// Returns the next signal from the channel, or `None` if the channel has received.
     pub async fn next_signal(&mut self) -> Option<Signal> {
         self.handle().recv_signal().await
+    }
+
+    pub fn is_shutting_down(&self) -> bool {
+        self.status() == ActorStatus::ShuttingDown
+    }
+
+    pub fn set_initialized(&mut self) -> bool {
+        if self.initializing {
+            debug_assert!(self.status().is_initializing());
+            self.initializing = false;
+            self.handle().register_initialized();
+            true
+        } else {
+            false
+        }
+    }
+
+    async fn wait_resume(&mut self) {
+        while let Some(signal) = self.next_signal().await {
+            match signal {
+                Signal::Resume | Signal::Shutdown => break,
+                _ => {}
+            }
+        }
+    }
+
+    pub async fn run_until_shutdown<O>(
+        &mut self,
+        fut: impl Future<Output = O> + Send,
+    ) -> Option<O> {
+        if self.is_shutting_down() {
+            return None;
+        }
+
+        tokio::pin!(fut);
+
+        loop {
+            // If we are currently suspended, pause before polling `fut` again
+            if self.status() == ActorStatus::Suspended {
+                self.wait_resume().await;
+                if self.is_shutting_down() {
+                    return None;
+                }
+            }
+
+            tokio::select! {
+                res = &mut fut => return Some(res),
+                signal = self.next_signal() => match signal {
+                    Some(Signal::Shutdown) | None => return None,
+                    Some(Signal::Suspend) => {
+                        self.wait_resume().await;
+                        if self.is_shutting_down() {
+                            return None;
+                        }
+                    }
+                    Some(_) => {}
+                }
+            }
+        }
     }
 }
 

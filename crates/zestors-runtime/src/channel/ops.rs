@@ -249,7 +249,7 @@ pub trait ActorOpsExt: ActorOps + sealed::Sealed {
     }
 
     fn upgrade(&self) -> Option<StrongAddress<Self::Ctx>> {
-        StrongAddress::from_weak(self.handle())
+        StrongAddress::from_channel_ref(self.handle())
     }
 }
 

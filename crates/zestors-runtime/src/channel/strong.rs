@@ -8,46 +8,48 @@ use type_sets::Set;
 /// a new task after the previous one has exited. Once all strong references to a
 /// channel are dropped, the channel is permanently closed, and the address is
 /// removed from the [`Registry`].
+///
+/// [`Child`] and [`Inbox`] both contain a [`StrongAddress`]. Addresses can
+/// be upgraded to a `StrongAddress`.
 #[repr(transparent)]
 pub struct StrongAddress<C: Context = Set!()> {
-    handle: Channel<C>,
+    channel: Channel<C>,
 }
 
 impl<T: Context> StrongAddress<T> {
-    /// Creates a new channel with the given `pid` and registers it in the local registry.
+    /// Creates a new channel with the given `pid` and registers it in the
+    /// local registry.
     pub fn create(pid: Pid) -> Result<Self, DuplicatePidError>
     where
         T: Interface,
     {
-        let channel = StrongAddress {
-            handle: Channel::new(pid, 1),
+        let this = StrongAddress {
+            channel: Channel::new(pid, 1),
         };
 
-        let address = channel.address().clone();
-
         Registry::local()
-            .register(address)
+            .register(this.address().clone())
             .map_err(|_e| DuplicatePidError {
-                pid: channel.pid().clone(),
+                pid: this.pid().clone(),
             })?;
 
-        Ok(channel)
+        Ok(this)
     }
 
-    pub(crate) fn from_weak(handle: &Channel<T>) -> Option<Self> {
+    pub(crate) fn from_channel_ref(handle: &Channel<T>) -> Option<Self> {
         if handle.is_permanently_dead() {
             return None;
         }
         handle.incr_strong_count();
         Some(Self {
-            handle: handle._clone(),
+            channel: handle._clone(),
         })
     }
 }
 
 impl<C: Context> Drop for StrongAddress<C> {
     fn drop(&mut self) {
-        self.handle.decr_strong_count();
+        self.channel.decr_strong_count();
     }
 }
 
@@ -56,7 +58,7 @@ impl<T: Context> Clone for StrongAddress<T> {
         self.handle().incr_strong_count();
 
         StrongAddress {
-            handle: self.handle._clone(),
+            channel: self.channel._clone(),
         }
     }
 }
@@ -85,13 +87,13 @@ impl<C: Context> ActorOps for StrongAddress<C> {
     type Ctx = C;
 
     fn handle(&self) -> &Channel<Self::Ctx> {
-        &self.handle
+        &self.channel
     }
 }
 
 impl<T: Context> Debug for StrongAddress<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        <Channel<T> as Debug>::fmt(&self.handle, f)
+        <Channel<T> as Debug>::fmt(&self.channel, f)
     }
 }
 

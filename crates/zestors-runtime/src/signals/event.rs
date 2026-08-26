@@ -8,7 +8,7 @@ pub enum Event<M> {
 
 /// A signal that can be sent to an actor to control its behavior. Signals take
 /// precedence over messages, and are processed before any messages in the actor's queue.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Serialize, Deserialize)]
 pub enum Signal {
     Shutdown,
     Suspend,

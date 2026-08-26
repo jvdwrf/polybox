@@ -3,6 +3,7 @@ use crate::{registry::Registry, signals::Event};
 use eyeball::SharedObservable;
 use std::{
     any::TypeId,
+    convert::Infallible,
     fmt::Debug,
     hash::Hash,
     marker::PhantomData,
@@ -235,6 +236,11 @@ impl<C: Context> Channel<C> {
 
 impl<I: Interface> Channel<I> {
     pub(super) fn new(pid: Pid, strong_count: usize) -> Self {
+        let msg_queue_capacity = match TypeId::of::<I>() == TypeId::of::<Infallible>() {
+            true => 0,
+            false => MSG_QUEUE_CAPACITY,
+        };
+
         let inner: Arc<ChannelData<dyn Queue>> = Arc::new(ChannelData {
             pid,
             msg_notifier: Notify::new(),
@@ -242,7 +248,7 @@ impl<I: Interface> Channel<I> {
             signal_queue: ConcurrentQueue::bounded(SIGNAL_QUEUE_CAPACITY),
             signal_notifier: Notify::new(),
             status_observer: SharedObservable::new(ActorStatus::Exited(ExitStatus::Normal)),
-            msg_queue: ConcurrentQueue::<I>::bounded(MSG_QUEUE_CAPACITY),
+            msg_queue: ConcurrentQueue::<I>::bounded(msg_queue_capacity),
             created_at: Instant::now(),
             spawns: Default::default(),
             exits: Default::default(),
@@ -357,21 +363,34 @@ impl<I: Interface> Channel<I> {
     }
 
     pub(crate) async fn next(&self) -> Option<Event<I>> {
-        if self.status() == ActorStatus::Suspended {
-            return self.recv_signal().await.map(Event::Signal);
+        match self.status() {
+            ActorStatus::Suspended => self.recv_signal().await.map(Event::Signal),
+            ActorStatus::Exited(_) | ActorStatus::ShuttingDown if self.msgs_is_empty() => None,
+            _ => {
+                select! {
+                    biased;
+
+                    Some(signal) = self.recv_signal() => Some(Event::Signal(signal)),
+                    Some(msg) = self.recv_msg() => Some(Event::Message(msg)),
+                    else => None,
+                }
+            }
         }
+    }
 
-        // If the actor is shutting down and there are no more messages, return None
-        if self.status() == ActorStatus::ShuttingDown && self.msgs_is_empty() {
-            return None;
-        }
-
-        select! {
-            biased;
-
-            Some(msg) = self.recv_msg() => Some(Event::Message(msg)),
-            Some(signal) = self.recv_signal() => Some(Event::Signal(signal)),
-            else => None,
+    pub(crate) fn try_next(&self) -> Option<Event<I>> {
+        match self.status() {
+            ActorStatus::Suspended => self.pop_signal().map(Event::Signal),
+            ActorStatus::Exited(_) | ActorStatus::ShuttingDown if self.msgs_is_empty() => None,
+            _ => {
+                if let Some(signal) = self.pop_signal() {
+                    Some(Event::Signal(signal))
+                } else if let Some(msg) = self.pop_msg() {
+                    Some(Event::Message(msg))
+                } else {
+                    None
+                }
+            }
         }
     }
 }

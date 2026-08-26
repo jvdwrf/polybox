@@ -1,7 +1,79 @@
 use super::*;
 use futures::FutureExt as _;
-use std::panic::AssertUnwindSafe;
+use std::{convert::Infallible, panic::AssertUnwindSafe};
 use tracing::Instrument as _;
+
+/// Same as [`spawn_with`], but spawns a process that cannot accept messages.
+pub fn spawn_task_with<E, F>(
+    pid: Pid,
+    f: impl FnOnce(TaskBox) -> F,
+) -> Result<Child<E>, DuplicatePidError>
+where
+    E: Send + 'static,
+    F: Future<Output = Result<E, rootcause::Report>> + Send + 'static,
+    F::Output: Send + 'static,
+{
+    Ok(StrongAddress::create(pid)?
+        .spawn_task(f)
+        .expect("Channel was just created. Must be valid")
+        .into_dyn())
+}
+
+/// Same as [`spawn`], but spawns a process that cannot accept messages.
+pub fn spawn_task<E, F>(f: impl FnOnce(TaskBox) -> F) -> Child<E>
+where
+    E: Send + 'static,
+    F: Future<Output = Result<E, rootcause::Report>> + Send + 'static,
+    F::Output: Send + 'static,
+{
+    spawn_task_with(Pid::rand(), f).expect("Pid is unique")
+}
+
+/// Spawns a process on a new [`Channel`] with the given [`Pid`], and registers
+/// it in the [`Registry`].
+///
+/// Can fail if the pid is already registered.
+pub fn spawn_with<T, E, F>(
+    pid: Pid,
+    f: impl FnOnce(Inbox<T>) -> F,
+) -> Result<Child<E, T>, DuplicatePidError>
+where
+    T: Interface,
+    E: Send + 'static,
+    F: Future<Output = Result<E, rootcause::Report>> + Send + 'static,
+    F::Output: Send + 'static,
+{
+    Ok(StrongAddress::create(pid)?
+        .spawn(f)
+        .expect("Channel was just created. Must be valid"))
+}
+
+/// Spawns a process on a new [`Channel`] with a random [`Pid`], and registers
+/// it in the [`Registry`].
+pub fn spawn<T, E, F>(f: impl FnOnce(Inbox<T>) -> F) -> Child<E, T>
+where
+    T: Interface,
+    E: Send + 'static,
+    F: Future<Output = Result<E, rootcause::Report>> + Send + 'static,
+    F::Output: Send + 'static,
+{
+    spawn_with(Pid::rand(), f).expect("Pid is unique")
+}
+
+impl StrongAddress<Infallible> {
+    pub fn spawn_task<E, F>(
+        self,
+        f: impl FnOnce(TaskBox) -> F,
+    ) -> Result<Child<E>, ConcurrentInboxError>
+    where
+        E: Send + 'static,
+        F: Future<Output = Result<E, rootcause::Report>> + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        self.spawn(|inbox| f(TaskBox::new(inbox)))
+            .map(|child| child.into_dyn())
+    }
+}
 
 impl<T: Context> StrongAddress<T> {
     pub fn spawn<R, F>(

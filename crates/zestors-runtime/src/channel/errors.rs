@@ -182,15 +182,15 @@ impl From<tokio::task::JoinError> for JoinError {
     }
 }
 
-impl From<JoinAbortError> for JoinError {
-    fn from(err: JoinAbortError) -> Self {
+impl From<ShutdownAbortError> for JoinError {
+    fn from(err: ShutdownAbortError) -> Self {
         err.error
     }
 }
 
 impl JoinError {
-    pub(super) fn into_aborted(self, aborted: bool, timeout: Duration) -> JoinAbortError {
-        JoinAbortError {
+    pub(super) fn into_join_abort(self, aborted: bool, timeout: Duration) -> ShutdownAbortError {
+        ShutdownAbortError {
             aborted,
             timeout,
             error: self,
@@ -199,13 +199,13 @@ impl JoinError {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub struct JoinAbortError {
+pub struct ShutdownAbortError {
     pub aborted: bool,
     pub timeout: Duration,
     pub error: JoinError,
 }
 
-impl Display for JoinAbortError {
+impl Display for ShutdownAbortError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.aborted {
             write!(
