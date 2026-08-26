@@ -7,24 +7,21 @@ use tracing::Instrument as _;
 pub fn spawn_task_with<E, F>(
     pid: Pid,
     f: impl FnOnce(TaskBox) -> F,
-) -> Result<Child<E>, DuplicatePidError>
+) -> Result<Child<E, Infallible>, DuplicatePidError>
 where
     E: Send + 'static,
     F: Future<Output = Result<E, rootcause::Report>> + Send + 'static,
-    F::Output: Send + 'static,
 {
     Ok(StrongAddress::create(pid)?
         .spawn_task(f)
-        .expect("Channel was just created. Must be valid")
-        .into_dyn())
+        .expect("Channel was just created. Must be valid"))
 }
 
 /// Same as [`spawn`], but spawns a process that cannot accept messages.
-pub fn spawn_task<E, F>(f: impl FnOnce(TaskBox) -> F) -> Child<E>
+pub fn spawn_task<E, F>(f: impl FnOnce(TaskBox) -> F) -> Child<E, Infallible>
 where
     E: Send + 'static,
     F: Future<Output = Result<E, rootcause::Report>> + Send + 'static,
-    F::Output: Send + 'static,
 {
     spawn_task_with(Pid::rand(), f).expect("Pid is unique")
 }
@@ -41,7 +38,6 @@ where
     T: Interface,
     E: Send + 'static,
     F: Future<Output = Result<E, rootcause::Report>> + Send + 'static,
-    F::Output: Send + 'static,
 {
     Ok(StrongAddress::create(pid)?
         .spawn(f)
@@ -55,7 +51,6 @@ where
     T: Interface,
     E: Send + 'static,
     F: Future<Output = Result<E, rootcause::Report>> + Send + 'static,
-    F::Output: Send + 'static,
 {
     spawn_with(Pid::rand(), f).expect("Pid is unique")
 }
@@ -64,14 +59,12 @@ impl StrongAddress<Infallible> {
     pub fn spawn_task<E, F>(
         self,
         f: impl FnOnce(TaskBox) -> F,
-    ) -> Result<Child<E>, ConcurrentInboxError>
+    ) -> Result<Child<E, Infallible>, ConcurrentInboxError>
     where
         E: Send + 'static,
         F: Future<Output = Result<E, rootcause::Report>> + Send + 'static,
-        F::Output: Send + 'static,
     {
-        self.spawn(|inbox| f(TaskBox::new(inbox)))
-            .map(|child| child.into_dyn())
+        self.spawn(|inbox| f(inbox.into_task_box()))
     }
 }
 
@@ -84,7 +77,6 @@ impl<T: Context> StrongAddress<T> {
         T: Interface,
         R: Send + 'static,
         F: Future<Output = Result<R, Report>> + Send + 'static,
-        F::Output: Send + 'static,
     {
         let span = tracing::debug_span!("process", pid = %self.pid());
 

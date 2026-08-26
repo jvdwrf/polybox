@@ -1,3 +1,5 @@
+use std::convert::Infallible;
+
 use crate::_prelude::*;
 
 /// A reference to a [`Channel`] that can be used to receive messages and signals from the channel.
@@ -10,6 +12,12 @@ use crate::_prelude::*;
 pub struct Inbox<T: Interface> {
     channel: StrongAddress<T>,
     initializing: bool,
+}
+
+impl Inbox<Infallible> {
+    pub fn into_task_box(self) -> TaskBox {
+        TaskBox::new(self)
+    }
 }
 
 impl<T: Interface> Inbox<T> {
@@ -84,9 +92,9 @@ impl<T: Interface> Inbox<T> {
     pub async fn run_until_shutdown<O>(
         &mut self,
         fut: impl Future<Output = O> + Send,
-    ) -> Option<O> {
+    ) -> Result<O, Cancelled> {
         if self.is_shutting_down() {
-            return None;
+            return Err(Cancelled);
         }
 
         tokio::pin!(fut);
@@ -96,18 +104,18 @@ impl<T: Interface> Inbox<T> {
             if self.status() == ActorStatus::Suspended {
                 self.wait_resume().await;
                 if self.is_shutting_down() {
-                    return None;
+                    return Err(Cancelled);
                 }
             }
 
             tokio::select! {
-                res = &mut fut => return Some(res),
+                res = &mut fut => return Ok(res),
                 signal = self.next_signal() => match signal {
-                    Some(Signal::Shutdown) | None => return None,
+                    Some(Signal::Shutdown) | None => return Err(Cancelled),
                     Some(Signal::Suspend) => {
                         self.wait_resume().await;
                         if self.is_shutting_down() {
-                            return None;
+                            return Err(Cancelled);
                         }
                     }
                     Some(_) => {}

@@ -1,3 +1,4 @@
+use futures::future::pending;
 use rootcause::Report;
 use std::time::Duration;
 use zestors::{
@@ -7,7 +8,7 @@ use zestors::{
     node::Node,
     prelude::*,
     signals::RestartMode,
-    supervision::{BlueprintExt, Supervisor, blueprint, new_actor},
+    supervision::{BlueprintExt, Supervisor, actor_fn, blueprint_fn, task_fn},
 };
 
 #[derive(Interface, HandlerInterface)]
@@ -110,43 +111,56 @@ async fn main() -> Result<(), Report> {
         .with_max_level(tracing::Level::DEBUG)
         .init();
 
-    let (spec_a, addr_a) = blueprint(|| MyActor::new("A"))
+    let (spec_a, _addr) = blueprint_fn(|| MyActor::new("A"))
         .with_pid("HelloActor")?
         .with_mode(RestartMode::Never)
         .split();
 
-    let (spec_b, addr_b) = blueprint(|| MyActor::new("B"))
+    let (spec_b, _addr) = blueprint_fn(|| MyActor::new("B"))
         .with_pid("HelloActor2")?
         .with_mode(RestartMode::Always)
         .split();
 
-    let (super_spec_a, _) = Supervisor::blueprint()
+    let (super_spec_a, _addr) = Supervisor::blueprint()
         .with_children([spec_a, spec_b])
         .with_pid("SupervisorA")?
         .split();
 
-    let (spec_c, _) = blueprint(|| MyActor::new("C"))
+    let (spec_c, _addr) = blueprint_fn(|| MyActor::new("C"))
         .with_pid("HelloActor3")?
         .with_mode(RestartMode::Always)
         .split();
 
-    let (spec_d, _) = blueprint(|| MyActor::new("D"))
+    let (spec_d, _addr) = blueprint_fn(|| MyActor::new("D"))
         .with_pid("HelloActor4")?
         .with_mode(RestartMode::Always)
         .split();
 
-    let (super_spec_b, _) = Supervisor::blueprint()
+    let (super_spec_b, _addr) = Supervisor::blueprint()
         .with_children([spec_c, spec_d])
         .with_pid("SupervisorB")?
         .split();
 
-    let (api_server_spec, _) = ApiServer::blueprint("127.0.0.1:8080".parse().unwrap())
+    let (api_server_spec, _addr) = ApiServer::blueprint("127.0.0.1:8080".parse().unwrap())
         .with_pid("ApiServer")?
         .split();
 
-    let (dyn_actor_spec, _) = new_actor(async |_: Inbox<MyInterface>| Ok(()))
+    let (dyn_actor_spec, _addr) = actor_fn(async |_: Inbox<MyInterface>| Ok(()))
         .with_pid("DynActor")?
         .split();
+
+    let (task_spec, _addr) = task_fn(|mut task_box| async move {
+        task_box
+            .run_until_shutdown(async move {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                println!("Task completed successfully")
+            })
+            .await?;
+
+        Ok(())
+    })
+    .with_pid("TaskActor")?
+    .split();
 
     let root_supervisor = Supervisor::blueprint()
         .with_children([
@@ -154,10 +168,11 @@ async fn main() -> Result<(), Report> {
             super_spec_b,
             api_server_spec,
             dyn_actor_spec,
-            blueprint(|| new_actor(async |_: Inbox<MyInterface>| Ok(())))
+            task_spec,
+            blueprint_fn(|| actor_fn(async |_: Inbox<MyInterface>| Ok(())))
                 .with_pid("DynBlueprintActor")?
                 .into(),
-            blueprint(|| MyActor::new("E"))
+            blueprint_fn(|| MyActor::new("E"))
                 .with_pid("DynBlueprintActor2")?
                 .into(),
         ])

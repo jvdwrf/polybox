@@ -1,5 +1,5 @@
 use crate::_prelude::*;
-use std::future::Future;
+use std::{future::Future, sync::Mutex};
 
 pub trait Blueprint: Debug + Send + Sync + 'static {
     type Actor: Actor;
@@ -80,6 +80,7 @@ where
     A: Actor,
 {
     f: F,
+    restart_mode: RestartMode,
 }
 
 impl<F, A> FnBlueprint<F, A>
@@ -88,7 +89,15 @@ where
     A: Actor,
 {
     pub fn new(f: F) -> Self {
-        Self { f }
+        Self {
+            f,
+            restart_mode: RestartMode::default(),
+        }
+    }
+
+    pub fn with_restart_mode(mut self, restart_mode: RestartMode) -> Self {
+        self.restart_mode = restart_mode;
+        self
     }
 }
 
@@ -101,6 +110,10 @@ where
 
     async fn instantiate(&self) -> rootcause::Result<Self::Actor> {
         Ok((self.f)())
+    }
+
+    fn default_restart_mode(&self) -> RestartMode {
+        self.restart_mode
     }
 }
 
@@ -122,11 +135,14 @@ where
     A: Actor,
 {
     fn clone(&self) -> Self {
-        Self { f: self.f.clone() }
+        Self {
+            f: self.f.clone(),
+            restart_mode: self.restart_mode,
+        }
     }
 }
 
-pub fn blueprint<F, A>(f: F) -> FnBlueprint<F, A>
+pub fn blueprint_fn<F, A>(f: F) -> FnBlueprint<F, A>
 where
     F: Fn() -> A + Send + Sync + 'static,
     A: Actor,

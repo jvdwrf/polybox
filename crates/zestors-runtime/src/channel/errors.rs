@@ -287,3 +287,7 @@ impl<M> From<RequestError<M>> for RequestCheckedError<M> {
 pub struct DuplicatePidError {
     pub pid: Pid,
 }
+
+#[derive(Debug, thiserror::Error, Clone)]
+#[error("The operation was cancelled")]
+pub struct Cancelled;

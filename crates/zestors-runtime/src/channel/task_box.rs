@@ -50,7 +50,7 @@ impl TaskBox {
     pub async fn run_until_shutdown<O>(
         &mut self,
         fut: impl Future<Output = O> + Send,
-    ) -> Option<O> {
+    ) -> Result<O, Cancelled> {
         self.inbox.run_until_shutdown(fut).await
     }
 }

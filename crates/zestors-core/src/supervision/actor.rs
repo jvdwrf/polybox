@@ -1,3 +1,5 @@
+use std::convert::Infallible;
+
 use crate::_prelude::*;
 
 pub trait Actor: Send + Sized + 'static {
@@ -208,7 +210,7 @@ where
     }
 }
 
-pub fn new_actor<F, Fut, I, E>(f: F) -> FnActor<F, Fut, I, E>
+pub fn actor_fn<F, Fut, I, E>(f: F) -> FnActor<F, Fut, I, E>
 where
     F: FnOnce(Inbox<I>) -> Fut + Send + 'static,
     Fut: Future<Output = Result<E, Report>> + Send + 'static,
@@ -216,4 +218,81 @@ where
     E: Send + 'static,
 {
     FnActor::new(f)
+}
+
+pub struct FnTask<F, Fut, E>
+where
+    F: FnOnce(TaskBox) -> Fut + Send + 'static,
+    Fut: Future<Output = Result<E, Report>> + Send + 'static,
+    E: Send + 'static,
+{
+    f: F,
+    _phantom: std::marker::PhantomData<fn() -> (E, Fut)>,
+}
+
+impl<F, Fut, E> FnTask<F, Fut, E>
+where
+    F: FnOnce(TaskBox) -> Fut + Send + 'static,
+    Fut: Future<Output = Result<E, Report>> + Send + 'static,
+    E: Send + 'static,
+{
+    pub fn new(f: F) -> Self {
+        Self {
+            f,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<F, Fut, E> Actor for FnTask<F, Fut, E>
+where
+    F: FnOnce(TaskBox) -> Fut + Send + 'static,
+    Fut: Future<Output = Result<E, Report>> + Send + 'static,
+    E: Send + 'static,
+{
+    type Interface = Infallible;
+    type Exit = E;
+
+    fn run(
+        self,
+        state: Inbox<Self::Interface>,
+    ) -> impl Future<Output = Result<Self::Exit, Report>> + Send + 'static {
+        (self.f)(state.into_task_box())
+    }
+}
+
+impl<F, Fut, E> Debug for FnTask<F, Fut, E>
+where
+    F: FnOnce(TaskBox) -> Fut + Send + 'static,
+    Fut: Future<Output = Result<E, Report>> + Send + 'static,
+    E: Send + 'static,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FnTask")
+            .field("exit", &std::any::type_name::<E>())
+            .finish()
+    }
+}
+
+impl<F, Fut, E> Clone for FnTask<F, Fut, E>
+where
+    F: Clone + FnOnce(TaskBox) -> Fut + Send + 'static,
+    Fut: Future<Output = Result<E, Report>> + Send + 'static,
+    E: Send + 'static,
+{
+    fn clone(&self) -> Self {
+        Self {
+            f: self.f.clone(),
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+pub fn task_fn<F, Fut, E>(f: F) -> FnTask<F, Fut, E>
+where
+    F: FnOnce(TaskBox) -> Fut + Send + 'static,
+    Fut: Future<Output = Result<E, Report>> + Send + 'static,
+    E: Send + 'static,
+{
+    FnTask::new(f)
 }
