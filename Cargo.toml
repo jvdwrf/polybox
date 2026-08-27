@@ -1,13 +1,13 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/codegen",
-    "crates/type-sets",
-    "crates/zestors",
-    "crates/inspector",
-    "crates/zestors-runtime",
-    "crates/api-server",
-    "crates/zestors-core",
+  "crates/codegen",
+  "crates/type-sets",
+  "crates/zestors",
+  "crates/inspector",
+  "crates/zestors-runtime",
+  "crates/api-server",
+  "crates/zestors-core",
 ]
 
 [workspace.dependencies]
