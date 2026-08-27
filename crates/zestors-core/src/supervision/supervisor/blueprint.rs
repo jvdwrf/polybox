@@ -18,6 +18,18 @@ impl SupervisorBlueprint {
         }
     }
 
+    pub fn one_for_one() -> Self {
+        Self::new().with_strategy(SupervisionStrategy::OneForOne)
+    }
+
+    pub fn one_for_all() -> Self {
+        Self::new().with_strategy(SupervisionStrategy::OneForAll)
+    }
+
+    pub fn rest_for_one() -> Self {
+        Self::new().with_strategy(SupervisionStrategy::RestForOne)
+    }
+
     pub fn with_strategy(mut self, strategy: SupervisionStrategy) -> Self {
         self.strategy = strategy;
         self

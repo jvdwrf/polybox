@@ -25,7 +25,7 @@ impl ChildConfig {
     }
 }
 
-pub struct ChildSpec<T: Start = DynLauncher> {
+pub struct ChildSpec<T: Start = DynStarter> {
     cfg: ChildConfig,
     blueprint: T,
     channel: StrongAddress<T::Ctx>,

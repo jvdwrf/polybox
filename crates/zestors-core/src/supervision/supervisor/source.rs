@@ -13,7 +13,7 @@ use tokio::sync::Notify;
 ///
 /// A source can be passed to a [`SupervisorBlueprint`] using the
 /// [`with_source`](SupervisorBlueprint::with_source) method.
-pub trait SupervisorSource: Debug + Send + 'static {
+pub trait SupervisorSource: Debug + Send + Sync + 'static {
     /// Returns the next event from the source, or `None` if the source is closed.
     fn next(&self) -> BoxFuture<'_, Option<SupervisorSourceEvent>>;
 
@@ -30,8 +30,8 @@ pub trait SupervisorSource: Debug + Send + 'static {
 
 #[derive(Debug, Clone)]
 pub enum SupervisorSourceEvent {
-    Add(ChildSpec),
-    Remove(Pid),
+    Added(ChildSpec),
+    Removed(Pid),
 }
 
 #[derive(Debug, Clone)]
@@ -64,7 +64,9 @@ impl InMemorySupervisorSource {
         }
 
         inner.children.insert(pid, dyn_spec.clone());
-        inner.events.push_back(SupervisorSourceEvent::Add(dyn_spec));
+        inner
+            .events
+            .push_back(SupervisorSourceEvent::Added(dyn_spec));
 
         self.notify.notify_one();
         Ok(())
@@ -76,7 +78,7 @@ impl InMemorySupervisorSource {
         if let Some(spec) = inner.children.shift_remove(&pid) {
             inner
                 .events
-                .push_back(SupervisorSourceEvent::Remove(pid.clone()));
+                .push_back(SupervisorSourceEvent::Removed(pid.clone()));
 
             self.notify.notify_one();
             Some(spec)

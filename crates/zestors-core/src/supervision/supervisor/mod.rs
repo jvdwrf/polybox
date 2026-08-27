@@ -19,7 +19,7 @@ impl Default for SupervisionStrategy {
 #[error("Terminal child error: {id}, error: {error:?}")]
 pub struct RestartLimitReached {
     pub id: Pid,
-    pub error: Option<JoinError>,
+    pub error: Option<Report>,
 }
 
 #[derive(Debug, thiserror::Error)]

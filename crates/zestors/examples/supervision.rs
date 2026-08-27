@@ -10,7 +10,8 @@ use zestors::{
     prelude::*,
     signals::RestartMode,
     supervision::{
-        BlueprintExt, InMemorySupervisorSource, Supervisor, actor_fn, blueprint_fn, task_fn,
+        BlueprintExt, InMemorySupervisorSource, Supervisor, SupervisorBlueprint, actor_fn,
+        blueprint_fn, task_fn,
     },
 };
 
@@ -181,7 +182,7 @@ async fn main() -> Result<(), Report> {
 
     let source = InMemorySupervisorSource::new();
 
-    let root_supervisor = Supervisor::blueprint()
+    let root_supervisor = SupervisorBlueprint::one_for_one()
         .with_children([
             super_spec_a,
             super_spec_b,

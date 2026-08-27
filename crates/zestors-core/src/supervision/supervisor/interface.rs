@@ -1,7 +1,7 @@
 use super::*;
 
 #[derive(Message, Debug)]
-#[msg(path = crate)]
+#[msg(path = crate, reply = "Result<(), DuplicatePidError>")]
 pub struct RegisterChild(pub ChildSpec);
 
 #[derive(Message, Debug)]

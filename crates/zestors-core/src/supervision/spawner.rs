@@ -1,7 +1,7 @@
 use crate::_prelude::*;
 use futures::future::BoxFuture;
 
-pub trait Start: Into<DynLauncher> {
+pub trait Start: Into<DynStarter> {
     type Ctx: Context;
     type Exit: Send + 'static;
 
@@ -29,7 +29,7 @@ impl<B: Blueprint> Start for B {
 }
 
 #[derive(Debug, Clone)]
-pub struct DynLauncher(Arc<dyn _Spawnable + Send + Sync + 'static>);
+pub struct DynStarter(Arc<dyn _Spawnable + Send + Sync + 'static>);
 
 trait _Spawnable: Debug {
     fn spawn_on_dyn<'a>(
@@ -60,7 +60,7 @@ impl<R: Blueprint> _Spawnable for R {
     }
 }
 
-impl Start for DynLauncher {
+impl Start for DynStarter {
     type Ctx = Set!();
     type Exit = ();
 
@@ -72,16 +72,16 @@ impl Start for DynLauncher {
     }
 }
 
-impl DynLauncher {
+impl DynStarter {
     pub fn new<R>(blueprint: R) -> Self
     where
         R: Blueprint + Send + Sync + 'static,
     {
-        DynLauncher(Arc::new(blueprint))
+        DynStarter(Arc::new(blueprint))
     }
 }
 
-impl<R> From<R> for DynLauncher
+impl<R> From<R> for DynStarter
 where
     R: Blueprint + Send + Sync + 'static,
 {

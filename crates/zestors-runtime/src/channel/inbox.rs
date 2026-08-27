@@ -55,6 +55,13 @@ impl<T: Interface> Inbox<T> {
         self.handle().next().await
     }
 
+    pub async fn next_with_init(&mut self, init: bool) -> Option<Event<T>> {
+        match init {
+            true => self.next().await,
+            false => self.handle().next().await,
+        }
+    }
+
     pub fn try_next(&mut self) -> Option<Event<T>> {
         self.set_initialized();
         self.handle().try_next()

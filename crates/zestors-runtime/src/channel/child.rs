@@ -1,6 +1,6 @@
 use crate::_prelude::*;
 use futures::FutureExt as _;
-use std::{fmt::Debug, task::Poll, time::Duration};
+use std::{fmt::Debug, pin::Pin, task::Poll, time::Duration};
 
 /// A unique handle to a child process spawned on a [`Channel`]. By default,
 /// dropping a `Child` will abort the child process. To prevent this, call [`Child::detach`].
@@ -93,9 +93,13 @@ impl<E, C: Context> Child<E, C> {
             }
         }
     }
+
+    pub fn into_shutdown(self, duration: Duration) -> ExitingChild<E, C> {
+        ExitingChild::new(self, duration)
+    }
 }
 
-impl<T: Send, R: Context> ActorOps for Child<T, R> {
+impl<T, R: Context> ActorOps for Child<T, R> {
     type Ctx = R;
 
     fn handle(&self) -> &Channel<Self::Ctx> {
@@ -103,7 +107,7 @@ impl<T: Send, R: Context> ActorOps for Child<T, R> {
     }
 }
 
-impl<T: Send, R: Context> IntoDyn for Child<T, R> {
+impl<T, R: Context> IntoDyn for Child<T, R> {
     type Ref<S: Context> = Child<T, S>;
 
     fn into_dyn_unchecked<S>(self) -> Self::Ref<S>
@@ -118,19 +122,23 @@ impl<T: Send, R: Context> IntoDyn for Child<T, R> {
 impl<T, R: Context> Future for Child<T, R> {
     type Output = Result<T, JoinError>;
 
-    fn poll(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> Poll<Self::Output> {
-        self.join
-            .as_mut()
-            .unwrap()
-            .poll_unpin(cx)
-            .map(|res| match res {
+    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        // 1. Defend against polling after completion
+        let Some(join) = self.join.as_mut() else {
+            panic!("Child polled after completion");
+        };
+
+        // 2. Poll the join handle first
+        if let Poll::Ready(res) = join.poll_unpin(cx) {
+            self.join.take();
+            return Poll::Ready(match res {
                 Ok(Ok(value)) => Ok(value),
                 Ok(Err(err)) => Err(JoinError::UnhandledError(err)),
                 Err(join_err) => Err(join_err.into()),
-            })
+            });
+        }
+
+        Poll::Pending
     }
 }
 
@@ -149,5 +157,53 @@ impl<T, R: Context> Debug for Child<T, R> {
             .field("attached", &self.attached)
             .field("address", &self.address)
             .finish()
+    }
+}
+
+pub struct ExitingChild<E = (), C: Context = Set!()> {
+    child: Child<E, C>,
+    abort_after: Pin<Box<tokio::time::Sleep>>,
+}
+
+impl<E, C: Context> ExitingChild<E, C> {
+    pub fn new(child: Child<E, C>, duration: Duration) -> Self {
+        child.signal_shutdown();
+
+        Self {
+            child,
+            abort_after: Box::pin(tokio::time::sleep(duration)),
+        }
+    }
+
+    pub fn into_inner(self) -> Child<E, C> {
+        self.child
+    }
+
+    pub fn child(&self) -> &Child<E, C> {
+        &self.child
+    }
+
+    pub fn child_mut(&mut self) -> &mut Child<E, C> {
+        &mut self.child
+    }
+}
+
+impl<E, C: Context> Future for ExitingChild<E, C> {
+    type Output = Result<E, JoinError>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        if let Poll::Ready(res) = self.child.poll_unpin(cx) {
+            return Poll::Ready(res);
+        }
+
+        if self.abort_after.poll_unpin(cx).is_ready() {
+            self.child.abort();
+
+            if let Poll::Ready(res) = self.child.poll_unpin(cx) {
+                return Poll::Ready(res);
+            }
+        }
+
+        Poll::Pending
     }
 }

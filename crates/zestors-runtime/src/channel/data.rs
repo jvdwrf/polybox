@@ -294,7 +294,7 @@ impl<I: Interface> Channel<I> {
         }
 
         while let Some(signal) = self.pop_signal() {
-            drop(signal);
+            let _ = signal;
         }
     }
 

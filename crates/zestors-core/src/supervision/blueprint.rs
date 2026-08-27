@@ -32,11 +32,11 @@ impl<T: Actor + Clone + Debug + Send + Sync + 'static> Blueprint for T {
 }
 
 pub trait BlueprintExt: Blueprint + Sized {
-    fn into_spawn_fn(self) -> DynLauncher
+    fn into_spawn_fn(self) -> DynStarter
     where
         Self: Send + Sync + 'static,
     {
-        DynLauncher::new(self)
+        DynStarter::new(self)
     }
 
     fn start_with(
