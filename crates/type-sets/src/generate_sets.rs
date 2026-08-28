@@ -13,7 +13,7 @@ macro_rules! generate_sets {
         }
     )*) => {
         // Trait definitions
-        mod _priv {
+        pub(crate) mod _priv {
             use super::*;
             $(
                 /// A private trait that defines the set of types contained in a type set.
@@ -22,27 +22,21 @@ macro_rules! generate_sets {
         }
         pub(crate) use _priv::*;
 
-        // Struct definitions
-        $(
-            /// A [`TypeSet`] of `n` types.
-            ///
-            /// Look at the [`Set`] macro for a more convenient way to define type sets.
-            // pub struct $struct<$($el),*>(PhantomData<fn() -> ($($el),*)>);
-            pub(crate) type $struct<$($el),*> = ($($el,)*);
-        )*
-
         // Subset implementations
         $(
             #[diagnostic::do_not_recommend]
             impl<S: ?Sized, $($el),*> SubsetOf<S> for dyn $trait<$($el),*>
-                where S: $trait<$($el),*>
+                // where S: $trait<$($el),*>
+                where S: $(
+                    Contains1<$el> +
+                )*
             {}
         )*
 
         // TypeSet implementations
         $(
             #[diagnostic::do_not_recommend]
-            impl<$($el),*> TypeSet for $struct<$($el,)*>
+            impl<$($el),*> TypeSet for ($($el,)*)
             {
                 type Set = dyn $trait<$($el),*>;
 
@@ -212,5 +206,28 @@ impl TypeSet for Set0 {
 
     fn members() -> &'static [TypeId] {
         &[]
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn is_superset<T: ?Sized, R: ?Sized>()
+    where
+        T: SupersetOf<R>,
+    {
+    }
+
+    fn is_subset<T: ?Sized, R: ?Sized>()
+    where
+        T: SubsetOf<R>,
+    {
+    }
+
+    fn test() {
+        is_subset::<dyn Contains3<u8, u16, u32>, dyn Contains4<u8, u16, u64, u32>>();
+
+        is_subset::<(u8, u32), (u8, u16, u64, u32)>();
     }
 }
